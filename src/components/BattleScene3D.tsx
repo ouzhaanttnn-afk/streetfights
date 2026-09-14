@@ -124,6 +124,10 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
       camera.position.x = Math.sin(time * 0.001) * 0.15;
       camera.position.y = 2.8 + Math.cos(time * 0.0012) * 0.08;
 
+      // Dynamic stage lighting intensity & flash on combat hits
+      stageLight.intensity = 2.2 + Math.sin(time * 0.004) * 0.5 + (screenShake > 0 ? screenShake * 0.4 : 0);
+      stageLight.position.x = Math.sin(time * 0.002) * 2;
+
       if (screenShake > 0) {
         camera.position.x += (Math.random() - 0.5) * screenShake * 0.04;
         camera.position.y += (Math.random() - 0.5) * screenShake * 0.04;

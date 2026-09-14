@@ -34,7 +34,9 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
   const animFrameRef = useRef<number | null>(null);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const particlesRef = useRef<{ x: number; y: number; vx: number; vy: number; color: string; life: number; size: number }[]>([]);
+  const calloutsRef = useRef<{ id: string; text: string; x: number; y: number; color: string; scale: number; rot: number; createdAt: number; duration: number }[]>([]);
   const screenShakeRef = useRef<number>(0);
+  const hitStopTimerRef = useRef<number>(0);
 
   // Fighter poses
   const playerPoseRef = useRef({ xOffset: 0, animState: 'idle', stateTimer: 0, attackType: 'punch' });
@@ -57,6 +59,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     opponentHpRef.current = stage.opponent.stats.maxHp;
     playerRageRef.current = 0;
     isMatchOverRef.current = false;
+    hitStopTimerRef.current = 0;
     setMatchStatus('fighting');
     setShowReviveAd(false);
     setComboStreak(0);
@@ -77,6 +80,20 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       type,
       createdAt: Date.now(),
       duration: 800,
+    });
+  };
+
+  const addCallout = (text: string, x: number, y: number, color: string = '#fef08a') => {
+    calloutsRef.current.push({
+      id: Math.random().toString(),
+      text,
+      x,
+      y,
+      color,
+      scale: 0.2,
+      rot: (Math.random() - 0.5) * 0.35,
+      createdAt: Date.now(),
+      duration: 650,
     });
   };
 
@@ -154,12 +171,23 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       addFloatingText(`+${healAmount} HP`, 85, 90, '#10b981', 'heal');
     }
 
-    if (isSpecialRage || isCrit) {
+    if (isSpecialRage) {
+      soundFx.playCritHit();
+      screenShakeRef.current = 12;
+      setScreenShakeVal(12);
+      hitStopTimerRef.current = 70; // 70ms AAA Hit-Stop Freeze
+      spawnHitParticles(235, 110, '#fbbf24', 24);
+      addCallout('SUPER VOLE!', 210, 60, '#fde047');
+      addFloatingText(`${t('superCrit', state.lang)} ${finalDmg}`, 235, 78, '#fbbf24', 'crit');
+    } else if (isCrit) {
       soundFx.playCritHit();
       screenShakeRef.current = 8;
       setScreenShakeVal(8);
+      hitStopTimerRef.current = 45; // 45ms Hit-Stop Freeze
       spawnHitParticles(235, 110, '#fbbf24', 16);
-      addFloatingText(isSpecialRage ? `${t('superCrit', state.lang)} ${finalDmg}` : `${t('crit', state.lang)} -${finalDmg}`, 235, 78, '#fbbf24', 'crit');
+      const critCallouts = ['CRUNCH!', 'POW!', 'SMASH!', 'BOOM!'];
+      addCallout(critCallouts[Math.floor(Math.random() * critCallouts.length)], 225, 65, '#f59e0b');
+      addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 235, 78, '#fbbf24', 'crit');
     } else {
       soundFx.playPunch();
       screenShakeRef.current = 3;
@@ -210,9 +238,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
     if (isCrit) {
       soundFx.playCritHit();
-      screenShakeRef.current = 6;
-      setScreenShakeVal(6);
-      spawnHitParticles(85, 110, '#f97316', 10);
+      screenShakeRef.current = 7;
+      setScreenShakeVal(7);
+      hitStopTimerRef.current = 40;
+      spawnHitParticles(85, 110, '#f97316', 12);
+      addCallout('OUCH!', 95, 65, '#ef4444');
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 85, 78, '#ef4444', 'crit');
     } else {
       soundFx.playPunch();
@@ -231,6 +261,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     isMatchOverRef.current = true;
     setMatchStatus('victory');
     soundFx.playVictoryFanfare();
+    addCallout('PERFECT KO!', 160, 75, '#fbbf24');
 
     if (stageRef.current.isBoss) {
       confetti({
@@ -295,9 +326,16 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       const dt = Math.min(50, currentTime - lastTime);
       lastTime = currentTime;
 
-      const simDt = dt * state.battleSpeed;
+      // Handle Hit-Stop Freeze Frame
+      let isHitStopActive = false;
+      if (hitStopTimerRef.current > 0) {
+        hitStopTimerRef.current -= dt;
+        isHitStopActive = true;
+      }
 
-      if (!isMatchOverRef.current && state.autoBattle) {
+      const simDt = isHitStopActive ? 0 : dt * state.battleSpeed;
+
+      if (!isMatchOverRef.current && state.autoBattle && !isHitStopActive) {
         playerCooldownRef.current -= simDt;
         opponentCooldownRef.current -= simDt;
 
@@ -344,7 +382,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         setScreenShakeVal(screenShakeRef.current);
       }
 
-      drawScene(ctx, currentTime);
+      drawScene(ctx, currentTime, isHitStopActive);
 
       animFrameRef.current = requestAnimationFrame(loop);
     };
@@ -356,17 +394,45 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     };
   }, [state.battleSpeed, state.autoBattle, state.playerFighter.stats]);
 
-  const drawScene = (ctx: CanvasRenderingContext2D, time: number) => {
+  const drawScene = (ctx: CanvasRenderingContext2D, time: number, isHitStop: boolean) => {
     const width = 360;
-    const height = 205;
+    const height = 215;
 
     ctx.save();
     ctx.clearRect(0, 0, width, height);
+
+    // Dynamic Camera Zoom & Punch-in during Hit-Stop or Super Move
+    const isSpecialVole = playerPoseRef.current.animState === 'attacking' && playerPoseRef.current.attackType === 'special';
+    if (isHitStop || isSpecialVole) {
+      ctx.translate(width * 0.5, height * 0.5);
+      const zoomFactor = isSpecialVole ? 1.07 : 1.05;
+      ctx.scale(zoomFactor, zoomFactor);
+      ctx.translate(-width * 0.5, -height * 0.5);
+    }
 
     if (screenShakeRef.current > 0) {
       const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 2;
       const shakeY = (Math.random() - 0.5) * screenShakeRef.current * 2;
       ctx.translate(shakeX, shakeY);
+    }
+
+    // Manga / Arcade Radial Speed Lines during Super Move or Heavy Hit-Stop
+    if (isSpecialVole || (isHitStop && screenShakeRef.current > 6)) {
+      ctx.save();
+      const centerX = 210;
+      const centerY = 130;
+      ctx.strokeStyle = isSpecialVole ? 'rgba(251, 191, 36, 0.45)' : 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 16; i++) {
+        const angle = (i / 16) * Math.PI * 2 + (time * 0.005);
+        const r1 = 65 + (i % 3) * 15;
+        const r2 = 260;
+        ctx.beginPath();
+        ctx.moveTo(centerX + Math.cos(angle) * r1, centerY + Math.sin(angle) * r1);
+        ctx.lineTo(centerX + Math.cos(angle) * r2, centerY + Math.sin(angle) * r2);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     // Shadows on 3D floor
@@ -385,7 +451,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     // Player Aura FX
     drawPlayerAura(ctx, 85 + playerPoseRef.current.xOffset, 138 + pIdleBob, state.playerFighter.avatarStyle.auraEffect, time);
 
-    // Player Fighter
+    // Player Fighter (with Full Live Paperdoll)
     drawFighter(
       ctx,
       85 + playerPoseRef.current.xOffset,
@@ -394,7 +460,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       state.playerFighter.avatarStyle,
       playerPoseRef.current.animState,
       playerPoseRef.current.attackType,
-      state.playerFighter.equipped
+      state.playerFighter.equipped,
+      time
     );
 
     // Opponent Fighter
@@ -406,28 +473,30 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       stageRef.current.opponent.avatarStyle,
       opponentPoseRef.current.animState,
       opponentPoseRef.current.attackType,
-      null
+      null,
+      time
     );
 
-    // Special Ball FX
-    if (playerPoseRef.current.animState === 'attacking' && playerPoseRef.current.attackType === 'special') {
+    // Special Ball FX (Orbiting / Shot)
+    if (isSpecialVole) {
       const ballProgress = 1 - (playerPoseRef.current.stateTimer / 180);
       const ballX = 85 + ballProgress * 150;
       const ballY = 130 - Math.sin(ballProgress * Math.PI) * 45;
       const ballColor = state.playerFighter.avatarStyle.ballColor || '#f59e0b';
 
-      const grad = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 22);
+      const grad = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 24);
       grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.4, ballColor);
+      grad.addColorStop(0.35, ballColor);
+      grad.addColorStop(0.7, '#f43f5e');
       grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(ballX, ballY, 22, 0, Math.PI * 2);
+      ctx.arc(ballX, ballY, 24, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = ballColor;
       ctx.beginPath();
-      ctx.arc(ballX, ballY, 8, 0, Math.PI * 2);
+      ctx.arc(ballX, ballY, 9, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -452,6 +521,41 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.fill();
     }
     ctx.globalAlpha = 1.0;
+
+    // Manga Onomatopoeia Callouts
+    for (let i = calloutsRef.current.length - 1; i >= 0; i--) {
+      const c = calloutsRef.current[i];
+      const age = now - c.createdAt;
+      if (age > c.duration) {
+        calloutsRef.current.splice(i, 1);
+        continue;
+      }
+
+      const progress = age / c.duration;
+      const alpha = progress < 0.7 ? 1 : (1 - (progress - 0.7) / 0.3);
+      const scale = progress < 0.2 ? 0.3 + (progress / 0.2) * 0.9 : 1.2 - (progress - 0.2) * 0.2;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.translate(c.x, c.y - progress * 15);
+      ctx.rotate(c.rot);
+      ctx.scale(scale, scale);
+
+      ctx.font = '900 italic 16px "Impact", "Arial Black", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Thick black comic outline
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4.5;
+      ctx.lineJoin = 'miter';
+      ctx.strokeText(c.text, 0, 0);
+
+      // Bright fill
+      ctx.fillStyle = c.color;
+      ctx.fillText(c.text, 0, 0);
+      ctx.restore();
+    }
 
     // Floating Numbers
     for (let i = floatingTextsRef.current.length - 1; i >= 0; i--) {
@@ -530,13 +634,38 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     avatar: GameStateData['playerFighter']['avatarStyle'],
     animState: string,
     attackType: string,
-    equipped: GameStateData['playerFighter']['equipped'] | null
+    equipped: GameStateData['playerFighter']['equipped'] | null,
+    time: number
   ) => {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(dir, 1);
 
     const isStriking = animState === 'attacking';
+
+    // 0. Orbiting Striker Ball Companion (if equipped weapon or high tier)
+    if (equipped?.weapon) {
+      const orbAngle = time * 0.004;
+      const orbX = Math.cos(orbAngle) * 26;
+      const orbY = -30 + Math.sin(orbAngle) * 12;
+      
+      // Orb flame trail
+      ctx.save();
+      const orbGrad = ctx.createRadialGradient(orbX, orbY, 1, orbX, orbY, 10);
+      orbGrad.addColorStop(0, '#ffffff');
+      orbGrad.addColorStop(0.5, '#f59e0b');
+      orbGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      ctx.fillStyle = orbGrad;
+      ctx.beginPath();
+      ctx.arc(orbX, orbY, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(orbX, orbY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // 1. Legs
     ctx.fillStyle = avatar.bodyColor;
@@ -546,28 +675,64 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.translate(4, -10);
       ctx.rotate(0.9);
       ctx.fillRect(0, 0, 6, 16);
+      
+      // Cleat sparks on kick
+      if (equipped?.boots) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(4, 14, 4, 4);
+      }
       ctx.restore();
     } else {
       ctx.fillRect(2, -12, 6, 14);
     }
 
-    // Shoes
-    ctx.fillStyle = equipped?.boots ? '#f59e0b' : avatar.shoeColor;
-    ctx.fillRect(-9, 0, 8, 4);
-    if (!isStriking || attackType !== 'kick') {
-      ctx.fillRect(1, 0, 8, 4);
+    // Shoes / Golden Striker Cleats
+    if (equipped?.boots) {
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(-9, 0, 9, 4);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-6, 2, 4, 2);
+      if (!isStriking || attackType !== 'kick') {
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(1, 0, 9, 4);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(4, 2, 4, 2);
+      }
+    } else {
+      ctx.fillStyle = avatar.shoeColor;
+      ctx.fillRect(-9, 0, 8, 4);
+      if (!isStriking || attackType !== 'kick') {
+        ctx.fillRect(1, 0, 8, 4);
+      }
     }
 
-    // 2. Torso
+    // 2. Torso (Jersey / Karate Gi / Robe)
     ctx.fillStyle = avatar.bodyColor;
     ctx.beginPath();
     ctx.roundRect(-10, -32, 20, 22, 4);
     ctx.fill();
 
-    // Belt
+    // Robe Gold Embroidery Trim
+    if (equipped?.robe) {
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(-9, -31, 18, 20);
+      // Chest badge
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(0, -22, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Heavyweight Champion Gold Belt
     if (equipped?.belt) {
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(-10, -14, 20, 5);
+      // Gold Buckle Plate
       ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(-10, -13, 20, 4);
+      ctx.fillRect(-5, -15, 10, 7);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-2, -13, 4, 3);
     }
 
     // 3. Head & Skin
@@ -576,7 +741,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     ctx.arc(0, -42, 10, 0, Math.PI * 2);
     ctx.fill();
 
-    // Mouthguard
+    // Mouthguard / Face Armor
     if (equipped?.mouth) {
       ctx.fillStyle = '#10b981';
       ctx.fillRect(-2, -38, 7, 3);
@@ -602,18 +767,60 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.fill();
     }
 
+    // Head Equipment: Golden Crown / Champion Headband
+    if (equipped?.head) {
+      ctx.save();
+      // Gold 3-Point Crown
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(-9, -49);
+      ctx.lineTo(-9, -58);
+      ctx.lineTo(-4, -52);
+      ctx.lineTo(0, -60);
+      ctx.lineTo(4, -52);
+      ctx.lineTo(9, -58);
+      ctx.lineTo(9, -49);
+      ctx.closePath();
+      ctx.fill();
+
+      // Ruby Centerpiece Gem
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(0, -52, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Eyes
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(3, -43, 3, 3);
 
-    // 4. Arms & Gloves
+    // 4. Arms & Glowing Power Gloves
     ctx.fillStyle = avatar.skinTone;
     if (isStriking && (attackType === 'punch' || attackType === 'special')) {
       ctx.fillRect(2, -28, 18, 5.5);
-      ctx.fillStyle = equipped?.gloves ? '#ef4444' : avatar.gloveColor;
-      ctx.beginPath();
-      ctx.arc(22, -26, 7.5, 0, Math.PI * 2);
-      ctx.fill();
+
+      if (equipped?.gloves) {
+        // Glowing Elemental Energy Fist
+        const fistGrad = ctx.createRadialGradient(23, -26, 2, 23, -26, 12);
+        fistGrad.addColorStop(0, '#ffffff');
+        fistGrad.addColorStop(0.4, '#ef4444');
+        fistGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+        ctx.fillStyle = fistGrad;
+        ctx.beginPath();
+        ctx.arc(23, -26, 11, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(23, -26, 7.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = avatar.gloveColor;
+        ctx.beginPath();
+        ctx.arc(22, -26, 7.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.fillStyle = avatar.skinTone;
       ctx.fillRect(-6, -26, 6, 10);
@@ -621,11 +828,26 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.fillRect(-4, -28, 6, 12);
       ctx.fillRect(4, -30, 6, 12);
 
-      ctx.fillStyle = equipped?.gloves ? '#ef4444' : avatar.gloveColor;
-      ctx.beginPath();
-      ctx.arc(0, -28, 5.5, 0, Math.PI * 2);
-      ctx.arc(8, -30, 5.5, 0, Math.PI * 2);
-      ctx.fill();
+      if (equipped?.gloves) {
+        // Glowing gloves resting
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(0, -28, 6.5, 0, Math.PI * 2);
+        ctx.arc(8, -30, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(0, -28, 2.5, 0, Math.PI * 2);
+        ctx.arc(8, -30, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = avatar.gloveColor;
+        ctx.beginPath();
+        ctx.arc(0, -28, 5.5, 0, Math.PI * 2);
+        ctx.arc(8, -30, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     ctx.restore();

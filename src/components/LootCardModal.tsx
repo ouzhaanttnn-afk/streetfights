@@ -28,16 +28,42 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
       {/* 3D Enhanced Loot Card Box */}
-      <div className={`relative w-full max-w-sm rounded-3xl border-2 ${rarity.borderColor} ${rarity.bgColor} p-5 shadow-2xl flex flex-col items-center text-center text-white overflow-hidden game-card`}>
+      <div className={`relative w-full max-w-sm rounded-3xl border-2 ${rarity.borderColor} ${rarity.bgColor} p-5 shadow-2xl flex flex-col items-center text-center text-white overflow-hidden game-card ${
+        ['epic', 'legendary', 'mythic'].includes(item.rarity) ? 'holographic-card ring-2 ring-amber-400/40 shadow-amber-500/20' : ''
+      }`}>
         
+        {/* Rotating Godrays Light Beams for Rare+ Items */}
+        {['rare', 'epic', 'legendary', 'mythic'].includes(item.rarity) && (
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-[340px] h-[340px] pointer-events-none opacity-25 godrays-spin -z-0">
+            <svg viewBox="0 0 200 200" className="w-full h-full text-amber-300">
+              <defs>
+                <radialGradient id="godrayGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="currentColor" stopOpacity="0.8" />
+                  <stop offset="70%" stopColor="currentColor" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <g fill="url(#godrayGrad)">
+                {[...Array(12)].map((_, i) => (
+                  <polygon
+                    key={i}
+                    points="100,100 85,0 115,0"
+                    transform={`rotate(${i * 30} 100 100)`}
+                  />
+                ))}
+              </g>
+            </svg>
+          </div>
+        )}
+
         {/* Glow Header */}
-        <div className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-black tracking-widest uppercase mb-1 shadow-sm">
+        <div className="relative z-10 flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-black tracking-widest uppercase mb-1 shadow-sm">
           <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
           <span>{t('newDrop', state.lang)} • {item.slot.toUpperCase()}</span>
         </div>
 
         {/* 3D WebGL Turntable Interactive Item Model */}
-        <div className="relative my-1 flex items-center justify-center">
+        <div className="relative z-10 my-1 flex items-center justify-center">
           <ThreeItemViewer slot={item.slot} rarity={item.rarity} size={140} />
           <span className="absolute bottom-0 text-[8px] text-zinc-400 font-mono tracking-wider opacity-70 bg-black/50 px-2 py-0.5 rounded-full border border-white/5">
             DRAG TO ROTATE 3D

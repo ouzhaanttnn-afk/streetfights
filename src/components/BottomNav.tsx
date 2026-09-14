@@ -7,9 +7,9 @@ import {
   Shirt, 
   Zap, 
   Dumbbell, 
-  ShoppingBag,
+  ShoppingBag, 
   Swords, 
-  Terminal
+  Terminal 
 } from 'lucide-react';
 
 interface BottomNavProps {
@@ -28,7 +28,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, lang }) => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-neutral-900/95 backdrop-blur border-t border-zinc-800 px-1 py-1.5 flex items-center justify-around z-40 select-none shadow-2xl">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto dock-nav px-1.5 py-2 flex items-center justify-around z-40 select-none">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -37,18 +37,22 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, lang }) => {
           <button
             key={tab.id}
             onClick={() => gameManager.setActiveTab(tab.id)}
-            className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all active:scale-95 ${
+            className={`flex-1 py-1 flex flex-col items-center justify-center gap-0.5 rounded-2xl transition-all active:scale-90 ${
               isActive
-                ? 'text-amber-400 font-extrabold'
+                ? 'text-amber-300 font-black'
                 : 'text-zinc-500 hover:text-zinc-300 font-medium'
             }`}
           >
-            <div className={`p-1 rounded-lg transition-colors ${
-              isActive ? 'bg-amber-400/10' : ''
+            <div className={`p-1.5 rounded-xl transition-all duration-200 ${
+              isActive 
+                ? 'bg-gradient-to-b from-amber-400/25 to-amber-500/10 text-amber-300 border border-amber-400/50 shadow-md shadow-amber-500/20 scale-105' 
+                : 'bg-transparent border border-transparent'
             }`}>
-              <Icon className="w-4 h-4" />
+              <Icon className="w-4 h-4 drop-shadow" />
             </div>
-            <span className="text-[9px] tracking-tight uppercase truncate max-w-[55px]">
+            <span className={`text-[9px] tracking-tight uppercase truncate max-w-[55px] font-mono mt-0.5 ${
+              isActive ? 'text-amber-300 font-black' : 'text-zinc-400'
+            }`}>
               {t(tab.labelKey, lang)}
             </span>
           </button>

@@ -43,23 +43,23 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
   const dmgMinutesLeft = Math.ceil((state.doubleDamageUntil - Date.now()) / 60000);
 
   return (
-    <div className="w-full flex flex-col p-3 bg-neutral-950 space-y-3.5 pb-28">
+    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-28">
       
       {/* 1. Rewarded Video Ads Center Banner */}
-      <div className="game-card rounded-2xl p-3.5 shadow-xl border border-amber-500/30 space-y-2.5">
+      <div className="game-card rounded-3xl p-4 shadow-2xl border border-amber-500/30 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-black text-amber-300 tracking-wider flex items-center gap-1.5 uppercase">
-            <Tv className="w-4 h-4 text-amber-400" />
+          <h3 className="text-xs font-black text-amber-300 tracking-wider flex items-center gap-2 uppercase">
+            <Tv className="w-4 h-4 text-amber-400 drop-shadow" />
             {t('adCenter', state.lang)}
           </h3>
           {isDoubleDmgActive && (
-            <span className="text-[10px] font-black text-rose-300 bg-rose-950 px-2 py-0.5 rounded-full border border-rose-600/40 flex items-center gap-1 animate-pulse shadow-sm">
+            <span className="text-[10px] font-black text-rose-300 bg-rose-950/80 px-2.5 py-0.5 rounded-full border border-rose-500/40 flex items-center gap-1 animate-pulse shadow-sm">
               <Zap className="w-3 h-3 text-rose-400" /> 2x DMG ({dmgMinutesLeft}m)
             </span>
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2.5">
           {/* Ad 1: Free Gems */}
           <button
             onClick={() => gameManager.openRewardedAd({
@@ -67,11 +67,11 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
               title: t('adFreeGems', state.lang),
               rewardDesc: '+50 Gems & +1,000 Coins',
             })}
-            className="p-2 rounded-2xl bg-gradient-to-b from-cyan-950/60 to-neutral-950 border border-cyan-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-md hover:border-cyan-400"
+            className="p-3 rounded-2xl bg-gradient-to-b from-cyan-950/60 via-black to-neutral-950 border border-cyan-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-cyan-400 group"
           >
-            <Gem className="w-5 h-5 text-cyan-400 mb-1 drop-shadow" />
+            <Gem className="w-6 h-6 text-cyan-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
             <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adFreeGems', state.lang)}</span>
-            <span className="text-[8px] font-mono text-cyan-300 mt-1 bg-cyan-950/80 px-2 py-0.5 rounded-lg border border-cyan-600/30">+50 💎</span>
+            <span className="text-[9px] font-mono font-bold text-cyan-300 mt-1.5 bg-cyan-950/90 px-2.5 py-0.5 rounded-lg border border-cyan-500/40">+50 💎</span>
           </button>
 
           {/* Ad 2: 2x Damage Buff */}
@@ -81,11 +81,11 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
               title: t('adDoubleDmg', state.lang),
               rewardDesc: '2x Striking Attack Power for 10 min',
             })}
-            className="p-2 rounded-2xl bg-gradient-to-b from-rose-950/60 to-neutral-950 border border-rose-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-md hover:border-rose-400"
+            className="p-3 rounded-2xl bg-gradient-to-b from-rose-950/60 via-black to-neutral-950 border border-rose-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-rose-400 group"
           >
-            <Zap className="w-5 h-5 text-rose-400 mb-1 drop-shadow" />
+            <Zap className="w-6 h-6 text-rose-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
             <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adDoubleDmg', state.lang)}</span>
-            <span className="text-[8px] font-mono text-rose-300 mt-1 bg-rose-950/80 px-2 py-0.5 rounded-lg border border-rose-600/30">⚡ 2x ATK</span>
+            <span className="text-[9px] font-mono font-bold text-rose-300 mt-1.5 bg-rose-950/90 px-2.5 py-0.5 rounded-lg border border-rose-500/40">⚡ 2x ATK</span>
           </button>
 
           {/* Ad 3: Mystery Chest */}
@@ -95,30 +95,30 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
               title: t('adMysteryChest', state.lang),
               rewardDesc: 'Guaranteed Rare / Epic / Legendary Item Drop',
             })}
-            className="p-2 rounded-2xl bg-gradient-to-b from-amber-950/60 to-neutral-950 border border-amber-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-md hover:border-amber-400"
+            className="p-3 rounded-2xl bg-gradient-to-b from-amber-950/60 via-black to-neutral-950 border border-amber-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-amber-400 group"
           >
-            <Sparkles className="w-5 h-5 text-amber-400 mb-1 drop-shadow" />
+            <Sparkles className="w-6 h-6 text-amber-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform animate-spin" />
             <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adMysteryChest', state.lang)}</span>
-            <span className="text-[8px] font-mono text-amber-300 mt-1 bg-amber-950/80 px-2 py-0.5 rounded-lg border border-amber-600/30">🎁 DROP</span>
+            <span className="text-[9px] font-mono font-bold text-amber-300 mt-1.5 bg-amber-950/90 px-2.5 py-0.5 rounded-lg border border-amber-500/40">🎁 DROP</span>
           </button>
         </div>
       </div>
 
       {/* 2. Cosmetics Locker & Category Tabs */}
-      <div className="game-card rounded-2xl p-3.5 shadow-xl border border-white/10 space-y-3">
+      <div className="game-card rounded-3xl p-4 shadow-2xl border border-white/10 space-y-3.5">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-black text-zinc-200 tracking-wider flex items-center gap-1.5 uppercase">
-            <ShoppingBag className="w-4 h-4 text-purple-400" />
+          <h3 className="text-xs font-black text-zinc-100 tracking-wider flex items-center gap-2 uppercase">
+            <ShoppingBag className="w-4 h-4 text-purple-400 drop-shadow" />
             {t('shopTitle', state.lang)}
           </h3>
           <div className="flex items-center gap-2 text-xs font-mono font-black">
-            <span className="text-amber-400">🪙 {state.coins}</span>
-            <span className="text-cyan-400">💎 {state.gems}</span>
+            <span className="text-amber-300 bg-black/60 px-2.5 py-0.5 rounded-lg border border-amber-500/30">🪙 {state.coins.toLocaleString()}</span>
+            <span className="text-cyan-300 bg-black/60 px-2.5 py-0.5 rounded-lg border border-cyan-500/30">💎 {state.gems.toLocaleString()}</span>
           </div>
         </div>
 
         {/* Category Pills */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isSelected = activeCategory === cat.id;
@@ -127,10 +127,10 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black shrink-0 flex items-center gap-1.5 border transition-all active:scale-95 ${
+                className={`px-3.5 py-2 rounded-2xl text-xs font-black shrink-0 flex items-center gap-1.5 border transition-all active:scale-95 ${
                   isSelected
-                    ? 'game-btn-cyan text-white border-cyan-300 shadow-md'
-                    : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:border-zinc-600'
+                    ? 'game-btn-cyan text-white border-cyan-300 shadow-lg'
+                    : 'bg-neutral-900 text-zinc-400 border-zinc-800 hover:border-zinc-700'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -141,7 +141,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
         </div>
 
         {/* Cosmetics List */}
-        <div className="space-y-2 pt-1">
+        <div className="space-y-2.5 pt-1">
           {filteredCosmetics.map((item) => {
             const owned = state.unlockedCosmetics.includes(item.id);
             const equipped = isEquipped(item);
@@ -152,52 +152,52 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
             return (
               <div
                 key={item.id}
-                className={`rounded-2xl border p-3 flex items-center justify-between transition-all shadow-sm ${
+                className={`rounded-3xl border p-3.5 flex items-center justify-between transition-all shadow-md ${
                   equipped
-                    ? 'bg-gradient-to-r from-purple-950/60 to-neutral-900 border-purple-500 shadow-lg shadow-purple-500/10'
+                    ? 'bg-gradient-to-r from-purple-950/70 via-neutral-900 to-neutral-950 border-purple-500 shadow-lg shadow-purple-500/20'
                     : owned
-                      ? 'bg-neutral-900/80 border-zinc-800'
-                      : 'bg-neutral-950/60 border-zinc-900'
+                      ? 'bg-neutral-900/90 border-zinc-800'
+                      : 'bg-neutral-950/70 border-zinc-900'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3.5">
                   <div
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs border border-white/20 shadow-inner"
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xs border border-white/20 shadow-inner"
                     style={{ backgroundColor: item.visualData.color || '#1e1b4b' }}
                   >
                     {item.visualData.auraEffect ? (
                       <Sparkles className="w-6 h-6 text-amber-300 animate-spin" />
                     ) : (
-                      <span className="text-white text-lg drop-shadow">🥊</span>
+                      <span className="text-white text-xl drop-shadow">🥊</span>
                     )}
                   </div>
 
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-black text-zinc-100">
+                      <h4 className="text-xs font-black text-zinc-100 tracking-tight">
                         {item.name}
                       </h4>
                       {equipped && (
-                        <span className="px-1.5 py-0.2 bg-purple-600 text-white font-black text-[9px] rounded uppercase shadow-sm">
+                        <span className="px-2 py-0.5 bg-purple-600 text-white font-black text-[9px] rounded-md uppercase shadow-sm">
                           {t('equippedSkin', state.lang)}
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-zinc-400 mt-0.5 max-w-[190px] truncate">
+                    <p className="text-[10px] text-zinc-400 mt-0.5 max-w-[185px] truncate">
                       {item.description}
                     </p>
                   </div>
                 </div>
 
                 {equipped ? (
-                  <div className="px-3 py-1.5 rounded-xl bg-purple-950 border border-purple-600 text-purple-300 font-bold text-xs flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" />
+                  <div className="px-3.5 py-2 rounded-2xl bg-purple-950 border border-purple-500 text-purple-300 font-black text-xs flex items-center gap-1.5 shadow-sm">
+                    <Check className="w-4 h-4" />
                     <span>{t('equippedSkin', state.lang)}</span>
                   </div>
                 ) : owned ? (
                   <button
                     onClick={() => gameManager.equipCosmetic(item)}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs border border-zinc-700 active:scale-95 transition-all shadow-sm"
+                    className="px-3.5 py-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-black text-xs border border-zinc-700 active:scale-95 transition-all shadow-md"
                   >
                     {t('equipSkin', state.lang)}
                   </button>
@@ -205,7 +205,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
                   <button
                     onClick={() => gameManager.buyCosmetic(item)}
                     disabled={!canBuy}
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1 border transition-all active:scale-95 ${
+                    className={`px-3.5 py-2 rounded-2xl font-black text-xs flex items-center gap-1 border transition-all active:scale-95 ${
                       canBuy
                         ? 'game-btn-gold text-black border-amber-300 shadow-md'
                         : 'bg-zinc-800/60 text-zinc-600 border-zinc-800 cursor-not-allowed'

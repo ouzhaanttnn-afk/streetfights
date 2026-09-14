@@ -21,29 +21,30 @@ interface StatBarProps {
 
 export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
   const statItems = [
-    { label: t('stat_hp', lang), value: stats.hp, icon: Heart, color: 'text-emerald-400', bg: 'bg-gradient-to-b from-emerald-950/40 to-neutral-900 border-emerald-500/20' },
-    { label: t('stat_atk', lang), value: stats.atk, icon: Flame, color: 'text-rose-400', bg: 'bg-gradient-to-b from-rose-950/40 to-neutral-900 border-rose-500/20' },
-    { label: t('stat_def', lang), value: stats.def, icon: Shield, color: 'text-sky-400', bg: 'bg-gradient-to-b from-sky-950/40 to-neutral-900 border-sky-500/20' },
-    { label: t('stat_spd', lang), value: stats.spd, icon: Footprints, color: 'text-amber-400', bg: 'bg-gradient-to-b from-amber-950/40 to-neutral-900 border-amber-500/20' },
-    { label: t('stat_crit', lang), value: `${stats.critRate}%`, icon: Crosshair, color: 'text-purple-400', bg: 'bg-gradient-to-b from-purple-950/40 to-neutral-900 border-purple-500/20' },
-    { label: t('stat_cmb', lang), value: `${stats.comboRate}%`, icon: Zap, color: 'text-yellow-400', bg: 'bg-gradient-to-b from-yellow-950/40 to-neutral-900 border-yellow-500/20' },
-    { label: t('stat_dge', lang), value: `${stats.dodgeRate}%`, icon: Wind, color: 'text-cyan-400', bg: 'bg-gradient-to-b from-cyan-950/40 to-neutral-900 border-cyan-500/20' },
-    { label: t('stat_vamp', lang), value: `${stats.lifesteal}%`, icon: HeartPulse, color: 'text-pink-400', bg: 'bg-gradient-to-b from-pink-950/40 to-neutral-900 border-pink-500/20' },
+    { label: t('stat_hp', lang), value: stats.hp, icon: Heart, color: 'text-emerald-400', glow: 'shadow-emerald-500/10' },
+    { label: t('stat_atk', lang), value: stats.atk, icon: Flame, color: 'text-rose-400', glow: 'shadow-rose-500/10' },
+    { label: t('stat_def', lang), value: stats.def, icon: Shield, color: 'text-sky-400', glow: 'shadow-sky-500/10' },
+    { label: t('stat_spd', lang), value: stats.spd, icon: Footprints, color: 'text-amber-400', glow: 'shadow-amber-500/10' },
+    { label: t('stat_crit', lang), value: `${stats.critRate}%`, icon: Crosshair, color: 'text-purple-400', glow: 'shadow-purple-500/10' },
+    { label: t('stat_cmb', lang), value: `${stats.comboRate}%`, icon: Zap, color: 'text-yellow-400', glow: 'shadow-yellow-500/10' },
+    { label: t('stat_dge', lang), value: `${stats.dodgeRate}%`, icon: Wind, color: 'text-cyan-400', glow: 'shadow-cyan-500/10' },
+    { label: t('stat_vamp', lang), value: `${stats.lifesteal}%`, icon: HeartPulse, color: 'text-pink-400', glow: 'shadow-pink-500/10' },
   ];
 
   return (
-    <div className="bg-neutral-900/90 backdrop-blur border-b border-zinc-800/80 px-3 py-2 select-none shadow-md">
+    <div className="bg-[#0b0c13]/90 backdrop-blur-md border-b border-white/10 px-3 py-2.5 select-none shadow-md">
       {/* Top row: Power Score Rating Bar */}
-      <div className="flex items-center justify-between mb-1.5 px-0.5">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-300">
-          <div className="p-1 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30">
+      <div className="flex items-center justify-between mb-2 px-0.5">
+        <div className="flex items-center gap-2 text-xs font-black text-zinc-300">
+          <div className="p-1 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm">
             <Trophy className="w-3.5 h-3.5" />
           </div>
-          <span className="tracking-wide uppercase font-extrabold">{t('powerScore', lang)}</span>
+          <span className="tracking-wider uppercase text-zinc-200">{t('powerScore', lang)}</span>
         </div>
-        <div className="flex items-center gap-1 text-xs font-black font-mono tracking-wider text-amber-300 bg-gradient-to-r from-amber-950/90 to-neutral-900 px-2.5 py-0.5 rounded-lg border border-amber-500/40 shadow-inner">
-          <Sparkles className="w-3 h-3 text-amber-400" />
-          <span>{stats.powerScore.toLocaleString()}</span>
+        
+        <div className="flex items-center gap-1.5 text-xs font-black font-mono tracking-wider text-amber-300 bg-gradient-to-r from-amber-950/80 via-black to-amber-950/80 px-3 py-1 rounded-xl border border-amber-500/40 shadow-inner">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+          <span className="text-[13px]">{stats.powerScore.toLocaleString()}</span>
         </div>
       </div>
 
@@ -54,13 +55,13 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
           return (
             <div
               key={item.label}
-              className={`flex items-center justify-between px-2 py-1 rounded-xl border ${item.bg} shadow-sm transition-all hover:border-zinc-600`}
+              className={`flex items-center justify-between px-2 py-1.5 rounded-xl bg-black/40 border border-white/5 shadow-sm ${item.glow} transition-all hover:border-white/15`}
             >
               <div className="flex items-center gap-1 text-[9px] font-bold text-zinc-400">
                 <Icon className={`w-3 h-3 ${item.color}`} />
-                <span>{item.label}</span>
+                <span className="tracking-tight">{item.label}</span>
               </div>
-              <span className={`text-[10px] font-extrabold font-mono ${item.color}`}>
+              <span className={`text-[10px] font-black font-mono ${item.color}`}>
                 {item.value}
               </span>
             </div>

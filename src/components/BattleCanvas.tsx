@@ -637,28 +637,34 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
   const oppHpPct = Math.max(0, Math.min(100, (opponentHpDisplay / oppStats.maxHp) * 100));
 
   return (
-    <div className="relative w-full bg-neutral-950 flex flex-col border-b border-zinc-800/80 select-none">
-      {/* Top Combat HUD */}
-      <div className="px-3 pt-2.5 pb-2 bg-gradient-to-b from-neutral-900 to-neutral-950 backdrop-blur border-b border-white/5 flex items-center justify-between text-xs z-20">
+    <div className="relative w-full bg-[#06070a] flex flex-col border-b border-white/10 select-none">
+      {/* Top Combat HUD with Frosted Titanium Panel */}
+      <div className="px-3 pt-3 pb-2.5 bg-gradient-to-b from-[#10121a]/95 to-[#08090e]/95 backdrop-blur-md border-b border-white/10 flex items-center justify-between text-xs z-20 shadow-lg">
         {/* Player Header Info */}
-        <div className="flex-1 pr-2">
-          <div className="flex items-center justify-between font-bold text-zinc-100 truncate">
-            <span className="truncate">{state.playerFighter.name}</span>
-            <span className="text-[10px] text-amber-400 font-mono ml-1 font-black">★ Lv.{state.playerLevel}</span>
+        <div className="flex-1 pr-2.5">
+          <div className="flex items-center justify-between font-black text-zinc-100 truncate">
+            <span className="truncate tracking-wide text-xs">{state.playerFighter.name}</span>
+            <span className="text-[10px] text-amber-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-amber-500/30">★ Lv.{state.playerLevel}</span>
           </div>
-          <div className="relative w-full h-3.5 bg-neutral-950 rounded-full overflow-hidden mt-1 border border-emerald-500/30 shadow-inner">
+          
+          {/* Angled Modern HP Gauge */}
+          <div className="relative w-full h-4 bg-black/80 rounded-xl overflow-hidden mt-1 border border-emerald-500/40 shadow-inner p-0.5">
             <div
-              className="h-full bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-400 transition-all duration-100 ease-out"
+              className="h-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-300 rounded-lg transition-all duration-150 ease-out shadow-sm shadow-emerald-400/50"
               style={{ width: `${playerHpPct}%` }}
             />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono text-white drop-shadow">
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
               {playerHpDisplay} / {pStats.maxHp}
             </span>
           </div>
-          <div className="relative w-full h-1.5 bg-neutral-950 rounded-full overflow-hidden mt-0.5 border border-amber-500/20">
+
+          {/* Electric Rage Bar */}
+          <div className="relative w-full h-1.5 bg-black/80 rounded-full overflow-hidden mt-1 border border-amber-500/30">
             <div
               className={`h-full transition-all duration-150 ${
-                playerRageDisplay >= 100 ? 'bg-gradient-to-r from-amber-400 to-yellow-300 animate-pulse' : 'bg-amber-600'
+                playerRageDisplay >= 100 
+                  ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 animate-pulse shadow-sm shadow-amber-400' 
+                  : 'bg-gradient-to-r from-amber-600 to-amber-500'
               }`}
               style={{ width: `${playerRageDisplay}%` }}
             />
@@ -666,40 +672,45 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         </div>
 
         {/* Center Stage VS Badge */}
-        <div className="flex flex-col items-center px-1.5">
-          <span className="font-black text-[11px] bg-gradient-to-r from-amber-400 via-yellow-300 to-orange-400 bg-clip-text text-transparent drop-shadow">
+        <div className="flex flex-col items-center px-2">
+          <span className="font-black text-[12px] bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent drop-shadow font-mono tracking-tight">
             {currentStageData.displayStage}
           </span>
-          <div className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-md ${
-            currentStageData.isBoss ? 'game-btn-crimson text-white animate-pulse' : 'bg-neutral-800 text-zinc-300 border border-white/10'
+          <div className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-lg ${
+            currentStageData.isBoss 
+              ? 'game-btn-crimson text-white animate-pulse border border-rose-400' 
+              : 'bg-neutral-900 text-zinc-300 border border-white/15'
           }`}>
             {currentStageData.isBoss ? t('boss', state.lang) : t('vs', state.lang)}
           </div>
         </div>
 
         {/* Opponent Header Info */}
-        <div className="flex-1 pl-2 text-right">
-          <div className="flex items-center justify-between font-bold text-zinc-100 truncate flex-row-reverse">
-            <span className="truncate">{currentStageData.opponent.name}</span>
-            <span className="text-[10px] text-rose-400 font-mono mr-1 font-black">★ Lv.{currentStageData.opponent.level}</span>
+        <div className="flex-1 pl-2.5 text-right">
+          <div className="flex items-center justify-between font-black text-zinc-100 truncate flex-row-reverse">
+            <span className="truncate tracking-wide text-xs">{currentStageData.opponent.name}</span>
+            <span className="text-[10px] text-rose-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-rose-500/30 mr-1">★ Lv.{currentStageData.opponent.level}</span>
           </div>
-          <div className="relative w-full h-3.5 bg-neutral-950 rounded-full overflow-hidden mt-1 border border-rose-500/30 shadow-inner">
+
+          {/* Opponent HP Gauge */}
+          <div className="relative w-full h-4 bg-black/80 rounded-xl overflow-hidden mt-1 border border-rose-500/40 shadow-inner p-0.5">
             <div
-              className="h-full bg-gradient-to-r from-rose-500 to-rose-600 transition-all duration-100 ease-out float-right"
+              className="h-full bg-gradient-to-r from-rose-600 via-rose-500 to-red-400 rounded-lg transition-all duration-150 ease-out float-right shadow-sm shadow-rose-500/50"
               style={{ width: `${oppHpPct}%` }}
             />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono text-white drop-shadow">
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
               {opponentHpDisplay} / {oppStats.maxHp}
             </span>
           </div>
-          <div className="text-[9px] text-zinc-400 truncate mt-0.5 italic">
+
+          <div className="text-[9px] text-zinc-400 truncate mt-1 italic font-medium">
             "{currentStageData.opponent.dialogue}"
           </div>
         </div>
       </div>
 
       {/* 2.5D Hybrid WebGL Viewport */}
-      <div className="relative w-full flex justify-center bg-black overflow-hidden h-[205px]">
+      <div className="relative w-full flex justify-center bg-black overflow-hidden h-[215px]">
         {/* 1. 3D WebGL Arena Backdrop */}
         <BattleScene3D environment={currentStageData.environment} screenShake={screenShakeVal} />
 
@@ -707,14 +718,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         <canvas
           ref={canvasRef}
           width={360}
-          height={205}
-          className="w-full max-w-[420px] h-[205px] block object-contain z-10"
+          height={215}
+          className="w-full max-w-[420px] h-[215px] block object-contain z-10"
         />
 
         {/* Combo Streak Multiplier Badge */}
         {comboStreak > 1 && (
-          <div className="absolute top-2 left-3 px-2 py-0.5 rounded-lg bg-black/60 border border-amber-500/40 text-[10px] font-black font-mono text-amber-400 animate-bounce shadow-md flex items-center gap-1 z-20">
-            <Zap className="w-3 h-3 text-amber-400" />
+          <div className="absolute top-2.5 left-3 px-2.5 py-1 rounded-xl bg-black/75 border border-amber-400 text-[11px] font-black font-mono text-amber-300 animate-bounce shadow-xl flex items-center gap-1.5 z-20 backdrop-blur-sm">
+            <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
             <span>x{comboStreak} COMBO!</span>
           </div>
         )}
@@ -723,9 +734,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         {playerRageDisplay >= 100 && (
           <button
             onClick={handleManualRage}
-            className="absolute bottom-3 left-3 px-3.5 py-1.5 game-btn-gold text-black font-black text-xs rounded-full shadow-xl animate-bounce active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-20"
+            className="absolute bottom-3 left-3 px-4 py-2 game-btn-gold text-black font-black text-xs rounded-2xl shadow-2xl animate-bounce active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-20 border border-amber-300/80"
           >
-            {t('superMove', state.lang)}
+            <Zap className="w-4 h-4 text-black" />
+            <span>{t('superMove', state.lang)}</span>
           </button>
         )}
 
@@ -733,7 +745,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         {showReviveAd && (
           <button
             onClick={handleReviveWithAd}
-            className="absolute bottom-3 right-3 px-3.5 py-2 game-btn-crimson text-white font-black text-xs rounded-2xl shadow-xl border border-rose-300 flex items-center gap-1.5 animate-pulse active:scale-95 transition-transform z-30"
+            className="absolute bottom-3 right-3 px-4 py-2.5 game-btn-crimson text-white font-black text-xs rounded-2xl shadow-2xl border border-rose-300 flex items-center gap-1.5 animate-pulse active:scale-95 transition-transform z-30"
           >
             <Tv className="w-4 h-4" />
             <span>{t('adRevive', state.lang)}</span>
@@ -742,9 +754,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
         {/* Match Result Overlay */}
         {matchStatus !== 'fighting' && !showReviveAd && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none z-20">
-            <span className={`text-2xl font-black italic tracking-wider drop-shadow-2xl ${
-              matchStatus === 'victory' ? 'text-amber-400' : 'text-rose-500'
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center pointer-events-none z-20">
+            <span className={`text-3xl font-black italic tracking-wider drop-shadow-2xl ${
+              matchStatus === 'victory' 
+                ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent' 
+                : 'text-rose-500'
             }`}>
               {matchStatus === 'victory' ? (currentStageData.isBoss ? t('bossDefeated', state.lang) : t('victory', state.lang)) : t('knockout', state.lang)}
             </span>

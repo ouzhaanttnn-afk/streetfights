@@ -21,7 +21,7 @@ export const CheatsTab: React.FC<CheatsTabProps> = ({ state }) => {
   const rarities: (Rarity | 'none')[] = ['none', 'common', 'uncommon', 'rare', 'epic'];
 
   return (
-    <div className="flex-1 flex flex-col p-3 bg-neutral-950 overflow-y-auto space-y-4 select-none pb-20">
+    <div className="w-full flex flex-col p-3 bg-neutral-950 space-y-4 pb-28">
       
       {/* Header */}
       <div className="bg-gradient-to-r from-purple-950/60 to-neutral-900 border border-purple-600/30 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">

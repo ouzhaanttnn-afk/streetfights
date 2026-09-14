@@ -29,7 +29,7 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
   const highestTotal = (state.highestWorld - 1) * 10 + state.highestSubStage;
 
   return (
-    <div className="flex-1 flex flex-col p-3 bg-neutral-950 overflow-y-auto space-y-3.5 select-none pb-20">
+    <div className="w-full flex flex-col p-3 bg-neutral-950 space-y-3.5 pb-28">
       
       {/* World Selector Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">

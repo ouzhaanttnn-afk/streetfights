@@ -35,7 +35,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-3 bg-neutral-950 overflow-y-auto space-y-3.5 select-none pb-20">
+    <div className="w-full flex flex-col p-3 bg-neutral-950 space-y-3.5 pb-28">
       
       {/* Header Banner */}
       <div className="game-card rounded-2xl p-3.5 flex items-center justify-between shadow-xl border border-white/10">

@@ -11,16 +11,21 @@
   html, body {
     width: 100%;
     min-height: 100%;
+    min-height: 100dvh;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     background-color: #06070a;
     color: #f8fafc;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
+    overscroll-behavior-y: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   body {
     overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior-y: none;
   }
 
   /* Sleek Modern Scrollbar */

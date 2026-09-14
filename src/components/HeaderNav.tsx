@@ -25,7 +25,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   const xpPct = Math.min(100, Math.round((state.playerXp / state.playerMaxXp) * 100));
 
   return (
-    <header className="glass-panel border-b border-white/10 px-3 py-2.5 flex items-center justify-between select-none z-20 shadow-xl sticky top-0">
+    <header className="glass-panel border-b border-white/10 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 flex items-center justify-between select-none z-20 shadow-xl sticky top-0 backdrop-blur-xl">
       {/* Player Level & XP Indicator */}
       <div className="flex items-center gap-2.5">
         <div className="relative flex items-center justify-center w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 text-black font-black text-xs shadow-lg shadow-amber-500/25 border border-amber-300/50">

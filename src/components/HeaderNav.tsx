@@ -23,9 +23,17 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 }) => {
   const xpPct = Math.min(100, Math.round((state.playerXp / state.playerMaxXp) * 100));
 
+  // Compact top padding: env(safe-area-inset-top) handles the exact iOS status bar / 
+  // Dynamic Island hardware zone, then we add only 6px breathing room below it.
+  // On devices without a notch/island, safe-area-inset-top is 0 so we get just 6px.
+  const topPadding = 'calc(env(safe-area-inset-top, 0px) + 6px)';
+
   return (
-    <header className="glass-panel border-b border-white/10 px-2 sm:px-3 pt-1 pb-1 flex items-center justify-between select-none z-30 shadow-xl sticky top-0 backdrop-blur-2xl h-[48px] max-h-[50px] shrink-0">
-      {/* LEFT HUD: Level badge & compact XP bar (Dynamic Island Left Wing) */}
+    <header
+      className="glass-panel border-b border-white/10 px-2.5 pb-1.5 flex items-center justify-between select-none z-30 shadow-xl sticky top-0 backdrop-blur-2xl shrink-0"
+      style={{ paddingTop: topPadding }}
+    >
+      {/* LEFT: Level badge + XP */}
       <div className="flex items-center gap-1.5 min-w-0 shrink-0">
         <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 text-black font-black text-[11px] shadow-sm shadow-amber-500/30 border border-amber-300/60 shrink-0">
           <span>{state.playerLevel}</span>
@@ -39,7 +47,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
               {xpPct}%
             </span>
           </div>
-          <div className="w-14 sm:w-18 h-1 bg-black/70 rounded-full overflow-hidden mt-0.5 border border-white/10 shadow-inner">
+          <div className="w-16 sm:w-20 h-1 bg-black/70 rounded-full overflow-hidden mt-0.5 border border-white/10 shadow-inner">
             <div
               className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 transition-all duration-300 ease-out"
               style={{ width: `${xpPct}%` }}
@@ -48,14 +56,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         </div>
       </div>
 
-      {/* CENTER GAP: Dynamic Island Safe Zone (Left untouched for hardware notch / island) */}
-      <div 
-        className="w-[100px] xs:w-[115px] sm:w-[130px] h-full shrink-0 pointer-events-none flex items-center justify-center"
-        aria-hidden="true"
-      />
-
-      {/* RIGHT HUD: Currencies & Fast Action Controls (Dynamic Island Right Wing) */}
-      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      {/* RIGHT: Currencies + Quick Actions */}
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap-reverse justify-end">
         {/* Coins */}
         <div className="flex items-center gap-0.5 bg-black/60 border border-amber-500/30 px-1.5 py-0.5 rounded-lg shadow-inner">
           <Coins className="w-2.5 h-2.5 text-amber-400 shrink-0" />
@@ -72,7 +74,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           </span>
         </div>
 
-        {/* Speed Toggle (1x / 2x / 3x) */}
+        {/* Speed Toggle */}
         <button
           onClick={() => gameManager.cycleBattleSpeed()}
           className="px-1.5 py-0.5 bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-[9px] font-black font-mono text-amber-400 rounded-lg border border-white/10 flex items-center gap-0.5 transition-all shadow-sm"
@@ -82,7 +84,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           <span>{state.battleSpeed}X</span>
         </button>
 
-        {/* Daily Reward Modal Trigger */}
+        {/* Daily */}
         <button
           onClick={() => gameManager.openDailyLogin()}
           className="p-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-black rounded-lg border border-amber-300/60 transition-all shadow-sm flex items-center justify-center relative"
@@ -92,7 +94,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
         </button>
 
-        {/* Lucky Wheel Modal Trigger */}
+        {/* Spin */}
         <button
           onClick={() => gameManager.openLuckyWheel()}
           className="p-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white rounded-lg border border-cyan-300/60 transition-all shadow-sm flex items-center justify-center"
@@ -101,7 +103,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           <Sparkles className="w-3 h-3 text-yellow-200" />
         </button>
 
-        {/* Settings / Menu */}
+        {/* Settings */}
         <button
           onClick={onOpenSettings}
           className="p-1 bg-neutral-900/90 hover:bg-neutral-800 active:scale-95 text-zinc-400 hover:text-white rounded-lg border border-white/10 transition-all shadow-sm flex items-center justify-center"

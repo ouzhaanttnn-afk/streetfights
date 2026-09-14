@@ -3,8 +3,9 @@ import { ArenaEnvironment, FloatingText, Stage } from '../types/game';
 import { GameStateData, gameManager } from '../core/gameState';
 import { soundFx } from '../core/audio';
 import { t } from '../i18n/translations';
+import { BattleScene3D } from './BattleScene3D';
 import confetti from 'canvas-confetti';
-import { Tv, Flame, Zap, Shield, Sparkles } from 'lucide-react';
+import { Tv, Zap } from 'lucide-react';
 
 interface BattleCanvasProps {
   state: GameStateData;
@@ -27,6 +28,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
   const [matchStatus, setMatchStatus] = useState<'fighting' | 'victory' | 'defeat'>('fighting');
   const [showReviveAd, setShowReviveAd] = useState<boolean>(false);
   const [comboStreak, setComboStreak] = useState<number>(0);
+  const [screenShakeVal, setScreenShakeVal] = useState<number>(0);
 
   // Animation state
   const animFrameRef = useRef<number | null>(null);
@@ -155,11 +157,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     if (isSpecialRage || isCrit) {
       soundFx.playCritHit();
       screenShakeRef.current = 8;
+      setScreenShakeVal(8);
       spawnHitParticles(235, 110, '#fbbf24', 16);
       addFloatingText(isSpecialRage ? `${t('superCrit', state.lang)} ${finalDmg}` : `${t('crit', state.lang)} -${finalDmg}`, 235, 78, '#fbbf24', 'crit');
     } else {
       soundFx.playPunch();
       screenShakeRef.current = 3;
+      setScreenShakeVal(3);
       spawnHitParticles(235, 110, '#ef4444', 8);
       addFloatingText(`-${finalDmg}`, 235, 82, '#ffffff', 'damage');
     }
@@ -207,11 +211,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     if (isCrit) {
       soundFx.playCritHit();
       screenShakeRef.current = 6;
+      setScreenShakeVal(6);
       spawnHitParticles(85, 110, '#f97316', 10);
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 85, 78, '#ef4444', 'crit');
     } else {
       soundFx.playPunch();
       screenShakeRef.current = 2;
+      setScreenShakeVal(2);
       spawnHitParticles(85, 110, '#fca5a5', 6);
       addFloatingText(`-${finalDmg}`, 85, 82, '#f87171', 'damage');
     }
@@ -335,6 +341,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
       if (screenShakeRef.current > 0) {
         screenShakeRef.current = Math.max(0, screenShakeRef.current - dt * 0.03);
+        setScreenShakeVal(screenShakeRef.current);
       }
 
       drawScene(ctx, currentTime);
@@ -351,9 +358,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
   const drawScene = (ctx: CanvasRenderingContext2D, time: number) => {
     const width = 360;
-    const height = 210;
+    const height = 205;
 
     ctx.save();
+    ctx.clearRect(0, 0, width, height);
 
     if (screenShakeRef.current > 0) {
       const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 2;
@@ -361,23 +369,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.translate(shakeX, shakeY);
     }
 
-    drawEnvironment(ctx, width, height, stageRef.current.environment, time);
-
-    // Floor & Reflections
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(0, 160, width, 50);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, 160);
-    ctx.lineTo(width, 160);
-    ctx.stroke();
-
-    // Shadows
+    // Shadows on 3D floor
     const pIdleBob = Math.sin(time * 0.006) * 3;
     const oppIdleBob = Math.sin((time + 500) * 0.006) * 3;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
     ctx.ellipse(85 + playerPoseRef.current.xOffset, 162, 24, 7, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -526,111 +522,6 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     ctx.restore();
   };
 
-  const drawEnvironment = (ctx: CanvasRenderingContext2D, w: number, h: number, env: ArenaEnvironment, time: number) => {
-    if (env === 'alley') {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, '#090d16');
-      grad.addColorStop(1, '#1e293b');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-      for (let y = 20; y < 150; y += 16) {
-        ctx.fillRect(0, y, w, 1);
-      }
-      const lampGlow = ctx.createRadialGradient(40, 20, 5, 40, 20, 85);
-      lampGlow.addColorStop(0, 'rgba(251, 191, 36, 0.3)');
-      lampGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
-      ctx.fillStyle = lampGlow;
-      ctx.fillRect(0, 0, 125, 125);
-
-    } else if (env === 'cage') {
-      ctx.fillStyle = '#060608';
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.strokeStyle = 'rgba(161, 161, 170, 0.14)';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 12) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x + 40, 160);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x - 40, 160);
-        ctx.stroke();
-      }
-      const redLight = ctx.createRadialGradient(w / 2, 20, 5, w / 2, 20, 120);
-      redLight.addColorStop(0, 'rgba(239, 68, 68, 0.25)');
-      redLight.addColorStop(1, 'rgba(239, 68, 68, 0)');
-      ctx.fillStyle = redLight;
-      ctx.fillRect(0, 0, w, 160);
-
-    } else if (env === 'neon_club') {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, '#13112c');
-      grad.addColorStop(1, '#2e1065');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-      ctx.fillRect(30, 40, 60, 120);
-      ctx.fillRect(110, 20, 80, 140);
-      ctx.fillRect(210, 50, 70, 110);
-      ctx.fillRect(300, 30, 50, 130);
-
-      const pulse = Math.sin(time * 0.004);
-      ctx.strokeStyle = pulse > 0 ? '#d946ef' : '#06b6d4';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 155);
-      ctx.lineTo(w, 155);
-      ctx.stroke();
-
-    } else if (env === 'pro_ring') {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, '#101014');
-      grad.addColorStop(1, '#27272a');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      ['#ef4444', '#ffffff', '#3b82f6'].forEach((col, idx) => {
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.moveTo(0, 90 + idx * 22);
-        ctx.lineTo(w, 90 + idx * 22);
-        ctx.stroke();
-      });
-
-      if (Math.random() < 0.05) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-        ctx.fillRect(0, 0, w, h);
-      }
-
-    } else {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, '#022119');
-      grad.addColorStop(1, '#064e3b');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      [60, 180, 300].forEach((lx) => {
-        const spot = ctx.createRadialGradient(lx, 10, 2, lx, 10, 130);
-        spot.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
-        spot.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = spot;
-        ctx.fillRect(lx - 70, 0, 140, 160);
-      });
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(w / 2, 180, 50, Math.PI, 0);
-      ctx.stroke();
-    }
-  };
-
   const drawFighter = (
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -667,7 +558,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.fillRect(1, 0, 8, 4);
     }
 
-    // 2. Torso with Athletic Bevel
+    // 2. Torso
     ctx.fillStyle = avatar.bodyColor;
     ctx.beginPath();
     ctx.roundRect(-10, -32, 20, 22, 4);
@@ -715,7 +606,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(3, -43, 3, 3);
 
-    // 4. Arms & Gloves with Metallic Edge
+    // 4. Arms & Gloves
     ctx.fillStyle = avatar.skinTone;
     if (isStriking && (attackType === 'punch' || attackType === 'special')) {
       ctx.fillRect(2, -28, 18, 5.5);
@@ -747,8 +638,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
   return (
     <div className="relative w-full bg-neutral-950 flex flex-col border-b border-zinc-800/80 select-none">
-      {/* Top Combat HUD (AAA Segmented Bars) */}
-      <div className="px-3 pt-2.5 pb-2 bg-gradient-to-b from-neutral-900 to-neutral-950 backdrop-blur border-b border-white/5 flex items-center justify-between text-xs">
+      {/* Top Combat HUD */}
+      <div className="px-3 pt-2.5 pb-2 bg-gradient-to-b from-neutral-900 to-neutral-950 backdrop-blur border-b border-white/5 flex items-center justify-between text-xs z-20">
         {/* Player Header Info */}
         <div className="flex-1 pr-2">
           <div className="flex items-center justify-between font-bold text-zinc-100 truncate">
@@ -807,18 +698,22 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         </div>
       </div>
 
-      {/* 2D Canvas Viewport */}
-      <div className="relative w-full flex justify-center bg-black">
+      {/* 2.5D Hybrid WebGL Viewport */}
+      <div className="relative w-full flex justify-center bg-black overflow-hidden h-[205px]">
+        {/* 1. 3D WebGL Arena Backdrop */}
+        <BattleScene3D environment={currentStageData.environment} screenShake={screenShakeVal} />
+
+        {/* 2. 2D Animated Combat Sprite Layer */}
         <canvas
           ref={canvasRef}
           width={360}
           height={205}
-          className="w-full max-w-[420px] h-[205px] block object-contain"
+          className="w-full max-w-[420px] h-[205px] block object-contain z-10"
         />
 
         {/* Combo Streak Multiplier Badge */}
         {comboStreak > 1 && (
-          <div className="absolute top-2 left-3 px-2 py-0.5 rounded-lg bg-black/60 border border-amber-500/40 text-[10px] font-black font-mono text-amber-400 animate-bounce shadow-md flex items-center gap-1">
+          <div className="absolute top-2 left-3 px-2 py-0.5 rounded-lg bg-black/60 border border-amber-500/40 text-[10px] font-black font-mono text-amber-400 animate-bounce shadow-md flex items-center gap-1 z-20">
             <Zap className="w-3 h-3 text-amber-400" />
             <span>x{comboStreak} COMBO!</span>
           </div>
@@ -828,7 +723,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         {playerRageDisplay >= 100 && (
           <button
             onClick={handleManualRage}
-            className="absolute bottom-3 left-3 px-3.5 py-1.5 game-btn-gold text-black font-black text-xs rounded-full shadow-xl animate-bounce active:scale-95 transition-transform flex items-center gap-1.5 shine-effect"
+            className="absolute bottom-3 left-3 px-3.5 py-1.5 game-btn-gold text-black font-black text-xs rounded-full shadow-xl animate-bounce active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-20"
           >
             {t('superMove', state.lang)}
           </button>
@@ -847,7 +742,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
         {/* Match Result Overlay */}
         {matchStatus !== 'fighting' && !showReviveAd && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none z-20">
             <span className={`text-2xl font-black italic tracking-wider drop-shadow-2xl ${
               matchStatus === 'victory' ? 'text-amber-400' : 'text-rose-500'
             }`}>

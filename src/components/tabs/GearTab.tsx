@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { EquipmentItem, EquipmentSlot } from '../../types/game';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { RARITY_CONFIG, SLOT_INFO } from '../../core/lootGenerator';
+import { ThreeItemViewer } from '../ThreeItemViewer';
 import { t } from '../../i18n/translations';
 import { 
   Crown, 
@@ -180,12 +181,12 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
         )}
       </div>
 
-      {/* 3. Selected Item Details Modal */}
+      {/* 3. Selected Item Details Modal with 3D WebGL Turntable */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none animate-fadeIn">
-          <div className="w-full max-w-sm game-card border-2 border-zinc-600 rounded-3xl p-5 shadow-2xl flex flex-col text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-fadeIn">
+          <div className="w-full max-w-sm game-card border-2 border-zinc-600 rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center text-white">
             
-            <div className="flex justify-between items-start mb-2">
+            <div className="w-full flex justify-between items-start mb-1 text-left">
               <div>
                 <h3 className="text-base font-black text-white">{selectedItem.name}</h3>
                 <div className={`text-xs font-bold uppercase ${RARITY_CONFIG[selectedItem.rarity].color}`}>
@@ -200,12 +201,17 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
               </button>
             </div>
 
-            <div className="bg-black/50 px-3 py-2 rounded-xl border border-white/10 mb-3 flex items-center justify-between">
+            {/* 3D WebGL Interactive Viewer */}
+            <div className="my-1">
+              <ThreeItemViewer slot={selectedItem.slot} rarity={selectedItem.rarity} size={120} />
+            </div>
+
+            <div className="w-full bg-black/50 px-3 py-1.5 rounded-xl border border-white/10 mb-3 flex items-center justify-between">
               <span className="text-xs text-zinc-400 font-semibold">{t('powerScoreLabel', state.lang)}</span>
               <span className="text-sm font-black font-mono text-amber-400">⚡ {selectedItem.powerScore}</span>
             </div>
 
-            <div className="bg-black/40 rounded-2xl p-3 border border-white/5 text-xs space-y-1.5 mb-4">
+            <div className="w-full bg-black/40 rounded-2xl p-3 border border-white/5 text-xs space-y-1 mb-4 text-left">
               {selectedItem.stats.hp > 0 && (
                 <div className="flex justify-between text-zinc-300">
                   <span>Health:</span>
@@ -256,7 +262,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="w-full grid grid-cols-2 gap-2.5">
               <button
                 onClick={() => {
                   gameManager.sellItem(selectedItem);

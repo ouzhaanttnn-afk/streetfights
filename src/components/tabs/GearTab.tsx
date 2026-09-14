@@ -17,7 +17,8 @@ import {
   Coins, 
   Trash2, 
   Sparkles, 
-  Check 
+  Check,
+  Hammer 
 } from 'lucide-react';
 
 interface GearTabProps {
@@ -27,6 +28,7 @@ interface GearTabProps {
 export const GearTab: React.FC<GearTabProps> = ({ state }) => {
   const [selectedItem, setSelectedItem] = useState<EquipmentItem | null>(null);
   const [isEquippedSelected, setIsEquippedSelected] = useState<boolean>(false);
+  const [forgeSuccessMsg, setForgeSuccessMsg] = useState<string | null>(null);
 
   const slotsOrder: EquipmentSlot[] = [
     'head', 'gloves', 'mouth',
@@ -67,6 +69,36 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
         gameManager.sellItem(item);
       }
     });
+  };
+
+  const handleAutoForge = () => {
+    // Look for any 3 items with matching rarity in inventory
+    const rarityGroups: Record<string, EquipmentItem[]> = {};
+    state.inventory.forEach((item) => {
+      if (item.rarity !== 'mythic') {
+        if (!rarityGroups[item.rarity]) rarityGroups[item.rarity] = [];
+        rarityGroups[item.rarity].push(item);
+      }
+    });
+
+    for (const r in rarityGroups) {
+      if (rarityGroups[r].length >= 3) {
+        const itemIds: [string, string, string] = [
+          rarityGroups[r][0].id,
+          rarityGroups[r][1].id,
+          rarityGroups[r][2].id,
+        ];
+        const success = gameManager.fuseEquipment(itemIds);
+        if (success) {
+          setForgeSuccessMsg(`✨ 3 ${r.toUpperCase()} FORGED INTO HIGHER TIER!`);
+          setTimeout(() => setForgeSuccessMsg(null), 3000);
+          return;
+        }
+      }
+    }
+
+    setForgeSuccessMsg(`⚠️ Need 3 items of the same rarity to forge!`);
+    setTimeout(() => setForgeSuccessMsg(null), 3000);
   };
 
   return (
@@ -140,15 +172,31 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
           </div>
 
           {state.inventory.length > 0 && (
-            <button
-              onClick={handleSellAllCommon}
-              className="text-[10px] font-black text-amber-300 bg-amber-950/80 hover:bg-amber-900 px-3 py-1 rounded-xl border border-amber-600/40 flex items-center gap-1 active:scale-95 shadow-md"
-            >
-              <Trash2 className="w-3 h-3 text-amber-400" />
-              <span>{t('sellLowTier', state.lang)}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleAutoForge}
+                className="text-[10px] font-black text-cyan-300 bg-cyan-950/80 hover:bg-cyan-900 px-2.5 py-1 rounded-xl border border-cyan-500/40 flex items-center gap-1 active:scale-95 shadow-md"
+              >
+                <Hammer className="w-3 h-3 text-cyan-400" />
+                <span>FORGE (3:1)</span>
+              </button>
+
+              <button
+                onClick={handleSellAllCommon}
+                className="text-[10px] font-black text-amber-300 bg-amber-950/80 hover:bg-amber-900 px-2.5 py-1 rounded-xl border border-amber-600/40 flex items-center gap-1 active:scale-95 shadow-md"
+              >
+                <Trash2 className="w-3 h-3 text-amber-400" />
+                <span>{t('sellLowTier', state.lang)}</span>
+              </button>
+            </div>
           )}
         </div>
+
+        {forgeSuccessMsg && (
+          <div className="mb-3 py-1.5 px-3 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-[10px] font-black text-cyan-300 text-center animate-bounce">
+            {forgeSuccessMsg}
+          </div>
+        )}
 
         {state.inventory.length === 0 ? (
           <div className="py-8 text-center text-xs text-zinc-500 italic bg-black/30 rounded-2xl border border-white/5 p-4">

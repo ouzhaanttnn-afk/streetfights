@@ -32,6 +32,7 @@ export interface GameStateData {
   maxInventorySlots: number;
   pendingLootDrop: EquipmentItem | null;
   pendingSkillOffer: Skill | null;
+  pendingSkillReplacement: Skill | null;
   activeTab: TabType;
   autoBattle: boolean;
   battleSpeed: 1 | 2 | 4;
@@ -40,6 +41,21 @@ export interface GameStateData {
   totalFightsWon: number;
   totalDamageDealt: number;
   bossDefeatedCount: number;
+
+  // Daily Login & Retention
+  dailyLoginStreak: number;
+  lastDailyLoginDate: string;
+  claimedDailyDays: number[];
+  isDailyLoginOpen: boolean;
+
+  // Lucky Wheel
+  isLuckyWheelOpen: boolean;
+
+  // AFK Offline Gold
+  lastOfflineTimestamp: number;
+  isOfflineRewardOpen: boolean;
+  offlineGoldAccumulated: number;
+  offlineMinutesAccumulated: number;
 
   // Cosmetics
   unlockedCosmetics: string[];
@@ -188,6 +204,28 @@ class GameManager {
     this.state = this.loadState();
     this.applyCosmeticsToPlayer();
     this.recalculatePlayerStats();
+    this.checkOfflineEarnings();
+  }
+
+  private checkOfflineEarnings() {
+    const now = Date.now();
+    const lastTime = this.state.lastOfflineTimestamp || now;
+    this.state.lastOfflineTimestamp = now;
+
+    const elapsedMs = now - lastTime;
+    const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+
+    // If away for more than 5 minutes
+    if (elapsedMinutes >= 5) {
+      const cappedMins = Math.min(480, elapsedMinutes); // 8 hours max
+      const gymLevelSum = this.state.gymTrainings.reduce((sum, g) => sum + g.level, 0);
+      const coinsPerMin = Math.max(2, Math.round(5 + gymLevelSum * 0.5 + this.state.currentWorld * 3));
+      const totalOfflineCoins = cappedMins * coinsPerMin;
+
+      this.state.offlineGoldAccumulated = totalOfflineCoins;
+      this.state.offlineMinutesAccumulated = cappedMins;
+      this.state.isOfflineRewardOpen = true;
+    }
   }
 
   private loadState(): GameStateData {
@@ -208,7 +246,17 @@ class GameManager {
           activeAdModal: null,
           pendingLootDrop: parsed.pendingLootDrop || null,
           pendingSkillOffer: parsed.pendingSkillOffer || null,
+          pendingSkillReplacement: null,
           activeTab: parsed.activeTab || 'gear',
+          dailyLoginStreak: parsed.dailyLoginStreak || 1,
+          lastDailyLoginDate: parsed.lastDailyLoginDate || '',
+          claimedDailyDays: parsed.claimedDailyDays || [],
+          isDailyLoginOpen: false,
+          isLuckyWheelOpen: false,
+          lastOfflineTimestamp: parsed.lastOfflineTimestamp || Date.now(),
+          isOfflineRewardOpen: false,
+          offlineGoldAccumulated: 0,
+          offlineMinutesAccumulated: 0,
         };
       }
     } catch {
@@ -233,6 +281,7 @@ class GameManager {
       maxInventorySlots: 20,
       pendingLootDrop: null,
       pendingSkillOffer: null,
+      pendingSkillReplacement: null,
       activeTab: 'gear',
       autoBattle: true,
       battleSpeed: 1,
@@ -241,6 +290,15 @@ class GameManager {
       totalFightsWon: 0,
       totalDamageDealt: 0,
       bossDefeatedCount: 0,
+      dailyLoginStreak: 1,
+      lastDailyLoginDate: '',
+      claimedDailyDays: [],
+      isDailyLoginOpen: false,
+      isLuckyWheelOpen: false,
+      lastOfflineTimestamp: Date.now(),
+      isOfflineRewardOpen: false,
+      offlineGoldAccumulated: 0,
+      offlineMinutesAccumulated: 0,
       unlockedCosmetics: ['outfit_street', 'hair_spiky_yellow', 'aura_none', 'ball_street'],
       equippedOutfit: 'outfit_street',
       equippedHair: 'hair_spiky_yellow',
@@ -586,18 +644,39 @@ class GameManager {
         if (existing.statBonus.dodgeRate) existing.statBonus.dodgeRate = Math.min(existing.statBonus.dodgeRate + 3, 40);
         if (existing.statBonus.lifesteal) existing.statBonus.lifesteal = Math.min(existing.statBonus.lifesteal + 2.5, 30);
       }
+      this.state.pendingSkillOffer = null;
     } else {
       if (this.state.playerFighter.equippedSkills.length < 6) {
         this.state.playerFighter.equippedSkills.push({ ...skill });
+        this.state.pendingSkillOffer = null;
       } else {
-        this.state.playerFighter.equippedSkills.shift();
-        this.state.playerFighter.equippedSkills.push({ ...skill });
+        // Deck full! Open safe replacement modal instead of silent purge
+        this.state.pendingSkillReplacement = skill;
+        this.state.pendingSkillOffer = null;
       }
     }
 
+    soundFx.playEquip();
+    this.recalculatePlayerStats();
+    this.saveState();
+    this.notify();
+  }
+
+  public replaceSkillInDeck(oldSkillId: string, newSkill: Skill) {
+    const idx = this.state.playerFighter.equippedSkills.findIndex((s) => s.id === oldSkillId);
+    if (idx >= 0) {
+      this.state.playerFighter.equippedSkills[idx] = { ...newSkill };
+    }
+    this.state.pendingSkillReplacement = null;
     this.state.pendingSkillOffer = null;
     soundFx.playEquip();
     this.recalculatePlayerStats();
+    this.saveState();
+    this.notify();
+  }
+
+  public dismissSkillReplacement() {
+    this.state.pendingSkillReplacement = null;
     this.notify();
   }
 
@@ -617,7 +696,121 @@ class GameManager {
     this.notify();
   }
 
-  // GYM WORKOUT UPGRADES
+  // EQUIPMENT FUSION / FORGE (3-in-1 MERGE)
+  public fuseEquipment(itemIds: [string, string, string]): boolean {
+    if (itemIds.length !== 3) return false;
+    const items = itemIds
+      .map((id) => this.state.inventory.find((i) => i.id === id))
+      .filter(Boolean) as EquipmentItem[];
+    if (items.length !== 3) return false;
+
+    const rarity = items[0].rarity;
+    const allSameRarity = items.every((i) => i.rarity === rarity);
+    if (!allSameRarity) return false;
+
+    const nextRarityMap: Record<Rarity, Rarity | null> = {
+      common: 'uncommon',
+      uncommon: 'rare',
+      rare: 'epic',
+      epic: 'legendary',
+      legendary: 'mythic',
+      mythic: null,
+    };
+
+    const nextRarity = nextRarityMap[rarity];
+    if (!nextRarity) return false;
+
+    // Remove consumed items
+    this.state.inventory = this.state.inventory.filter((i) => !itemIds.includes(i.id));
+
+    // Generate forged item
+    const avgLevel = Math.max(1, Math.round((items[0].level + items[1].level + items[2].level) / 3));
+    const forgedItem = generateEquipment(items[0].slot, nextRarity, avgLevel);
+    this.state.inventory.push(forgedItem);
+
+    soundFx.playLootDrop();
+    this.saveState();
+    this.notify();
+    return true;
+  }
+
+  // RETENTION: 7-DAY LOGIN REWARDS
+  public openDailyLogin() {
+    this.state.isDailyLoginOpen = true;
+    this.notify();
+  }
+
+  public closeDailyLogin() {
+    this.state.isDailyLoginOpen = false;
+    this.notify();
+  }
+
+  public claimDailyLoginReward(day: number) {
+    if (this.state.claimedDailyDays.includes(day)) return;
+    this.state.claimedDailyDays.push(day);
+
+    if (day === 1) this.state.coins += 500;
+    else if (day === 2) this.state.gems += 50;
+    else if (day === 3) this.state.doubleDamageUntil = Date.now() + 10 * 60 * 1000;
+    else if (day === 4) this.state.coins += 1500;
+    else if (day === 5) this.state.gems += 100;
+    else if (day === 6) {
+      const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
+      this.state.pendingLootDrop = generateEquipment(undefined, 'legendary', stageLvl);
+    } else if (day === 7) {
+      this.state.gems += 250;
+      const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
+      this.state.pendingLootDrop = generateEquipment('head', 'mythic', stageLvl);
+    }
+
+    this.saveState();
+    this.notify();
+  }
+
+  // RETENTION: LUCKY FORTUNE WHEEL
+  public openLuckyWheel() {
+    this.state.isLuckyWheelOpen = true;
+    this.notify();
+  }
+
+  public closeLuckyWheel() {
+    this.state.isLuckyWheelOpen = false;
+    this.notify();
+  }
+
+  public claimLuckyWheelPrize(type: string, amount: number) {
+    if (type === 'coins') this.state.coins += amount;
+    else if (type === 'gems') this.state.gems += amount;
+    else if (type === 'buff') this.state.doubleDamageUntil = Date.now() + 10 * 60 * 1000;
+    else if (type === 'gear') {
+      const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
+      this.state.pendingLootDrop = generateEquipment(undefined, 'legendary', stageLvl);
+    }
+
+    this.saveState();
+    this.notify();
+  }
+
+  // RETENTION: AFK OFFLINE EARNINGS
+  public openOfflineReward() {
+    this.state.isOfflineRewardOpen = true;
+    this.notify();
+  }
+
+  public closeOfflineReward() {
+    this.state.isOfflineRewardOpen = false;
+    this.notify();
+  }
+
+  public claimOfflineGold(amount: number) {
+    this.state.coins += amount;
+    this.state.offlineGoldAccumulated = 0;
+    this.state.isOfflineRewardOpen = false;
+    this.saveState();
+    this.notify();
+  }
+
+  // GYM WORKOUT UPGRADES (Tiered Scaling)
   public trainGym(trainingId: string): boolean {
     const training = this.state.gymTrainings.find((t) => t.id === trainingId);
     if (!training) return false;
@@ -627,8 +820,14 @@ class GameManager {
     training.level += 1;
     training.cost = Math.round(training.cost * 1.35);
 
+    // Tiered Gym scaling: bonus stats increase every 5 levels
+    if (training.level % 5 === 0) {
+      training.statGain = Math.round(training.statGain * 1.4 * 10) / 10;
+    }
+
     soundFx.playGymTap();
     this.recalculatePlayerStats();
+    this.saveState();
     this.notify();
     return true;
   }
@@ -665,6 +864,28 @@ class GameManager {
 
   public setAutoSellRarity(rarity: Rarity | 'none') {
     this.state.autoSellRarity = rarity;
+    this.notify();
+  }
+
+  public updateFighterName(newName: string) {
+    const trimmed = newName.trim();
+    if (trimmed.length > 0 && trimmed.length <= 24) {
+      this.state.playerFighter.name = trimmed;
+      this.saveState();
+      this.notify();
+    }
+  }
+
+  public setFighterAvatar(avatarId: string) {
+    this.state.playerFighter.avatarId = avatarId;
+    this.saveState();
+    this.notify();
+  }
+
+  public setFighterTitle(titleId: string, titleName: string) {
+    this.state.playerFighter.titleId = titleId;
+    this.state.playerFighter.title = titleName;
+    this.saveState();
     this.notify();
   }
 
@@ -710,6 +931,7 @@ class GameManager {
       maxInventorySlots: 20,
       pendingLootDrop: null,
       pendingSkillOffer: null,
+      pendingSkillReplacement: null,
       activeTab: 'gear',
       autoBattle: true,
       battleSpeed: 1,
@@ -718,6 +940,15 @@ class GameManager {
       totalFightsWon: 0,
       totalDamageDealt: 0,
       bossDefeatedCount: 0,
+      dailyLoginStreak: 1,
+      lastDailyLoginDate: '',
+      claimedDailyDays: [],
+      isDailyLoginOpen: false,
+      isLuckyWheelOpen: false,
+      lastOfflineTimestamp: Date.now(),
+      isOfflineRewardOpen: false,
+      offlineGoldAccumulated: 0,
+      offlineMinutesAccumulated: 0,
       unlockedCosmetics: ['outfit_street', 'hair_spiky_yellow', 'aura_none', 'ball_street'],
       equippedOutfit: 'outfit_street',
       equippedHair: 'hair_spiky_yellow',

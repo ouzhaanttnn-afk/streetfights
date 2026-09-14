@@ -75,6 +75,8 @@ export interface Fighter {
   id: string;
   name: string;
   title: string;
+  avatarId?: string;
+  titleId?: string;
   level: number;
   xp: number;
   maxXp: number;
@@ -151,4 +153,5 @@ export interface BattleAction {
   timestamp: number;
 }
 
-export type TabType = 'gear' | 'skills' | 'gym' | 'shop' | 'arena' | 'cheats';
+export type TabType = 'gear' | 'skills' | 'gym' | 'shop' | 'arena' | 'profile';
+

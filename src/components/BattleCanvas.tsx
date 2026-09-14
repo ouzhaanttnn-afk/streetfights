@@ -113,6 +113,19 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     }
   };
 
+  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'super') => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        if (type === 'light') navigator.vibrate(15);
+        else if (type === 'medium') navigator.vibrate(40);
+        else if (type === 'heavy') navigator.vibrate([40, 30, 40]);
+        else if (type === 'super') navigator.vibrate([60, 30, 80]);
+      } catch {
+        // Haptics not allowed or unsupported
+      }
+    }
+  };
+
   const performPlayerAttack = (isSpecialRage: boolean = false) => {
     if (isMatchOverRef.current) return;
     const pStats = state.playerFighter.stats;
@@ -135,8 +148,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
     const isCrit = Math.random() * 100 < pStats.critRate;
     let baseDmg = pStats.atk * (0.85 + Math.random() * 0.3);
-    const defReduction = Math.max(1, oppStats.def * 0.4);
-    let finalDmg = Math.max(1, Math.round(baseDmg - defReduction));
+    
+    // Asymptotic Defense Formula (eliminates 1 DMG wall)
+    const defMultiplier = 100 / (100 + oppStats.def * 0.45);
+    let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
 
     if (isCrit) {
       finalDmg = Math.round(finalDmg * (pStats.critDmg || 1.5));
@@ -173,6 +188,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
     if (isSpecialRage) {
       soundFx.playCritHit();
+      triggerHaptic('super');
       screenShakeRef.current = 12;
       setScreenShakeVal(12);
       hitStopTimerRef.current = 70; // 70ms AAA Hit-Stop Freeze
@@ -181,6 +197,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       addFloatingText(`${t('superCrit', state.lang)} ${finalDmg}`, 235, 78, '#fbbf24', 'crit');
     } else if (isCrit) {
       soundFx.playCritHit();
+      triggerHaptic('medium');
       screenShakeRef.current = 8;
       setScreenShakeVal(8);
       hitStopTimerRef.current = 45; // 45ms Hit-Stop Freeze
@@ -190,6 +207,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 235, 78, '#fbbf24', 'crit');
     } else {
       soundFx.playPunch();
+      triggerHaptic('light');
       screenShakeRef.current = 3;
       setScreenShakeVal(3);
       spawnHitParticles(235, 110, '#ef4444', 8);
@@ -220,14 +238,19 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     const dodgeRoll = Math.random() * 100;
     if (dodgeRoll < pStats.dodgeRate) {
       soundFx.playDodge();
+      // Clutch evasion generates +15 rage
+      playerRageRef.current = Math.min(100, playerRageRef.current + 15);
+      setPlayerRageDisplay(playerRageRef.current);
       addFloatingText(t('dodge', state.lang), 85, 95, '#38bdf8', 'dodge');
       return;
     }
 
     const isCrit = Math.random() * 100 < oppStats.critRate;
     let baseDmg = oppStats.atk * (0.85 + Math.random() * 0.3);
-    const defReduction = Math.max(1, pStats.def * 0.4);
-    let finalDmg = Math.max(1, Math.round(baseDmg - defReduction));
+    
+    // Asymptotic Defense Formula for Player
+    const defMultiplier = 100 / (100 + pStats.def * 0.45);
+    let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
 
     if (isCrit) {
       finalDmg = Math.round(finalDmg * (oppStats.critDmg || 1.5));
@@ -236,8 +259,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     playerHpRef.current = Math.max(0, playerHpRef.current - finalDmg);
     setPlayerHpDisplay(playerHpRef.current);
 
+    // Taking damage builds +8 rage (comeback mechanics)
+    playerRageRef.current = Math.min(100, playerRageRef.current + 8);
+    setPlayerRageDisplay(playerRageRef.current);
+
     if (isCrit) {
       soundFx.playCritHit();
+      triggerHaptic('medium');
       screenShakeRef.current = 7;
       setScreenShakeVal(7);
       hitStopTimerRef.current = 40;
@@ -246,6 +274,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 85, 78, '#ef4444', 'crit');
     } else {
       soundFx.playPunch();
+      triggerHaptic('light');
       screenShakeRef.current = 2;
       setScreenShakeVal(2);
       spawnHitParticles(85, 110, '#fca5a5', 6);
@@ -667,7 +696,33 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.restore();
     }
 
-    // 1. Legs
+    // 0.5 Companion Drone Mascot (if equipped partner)
+    if (equipped?.partner) {
+      const droneBob = Math.sin(time * 0.005) * 4;
+      const droneX = -24;
+      const droneY = -55 + droneBob;
+
+      ctx.save();
+      // Mini drone body
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(droneX, droneY, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eye lens
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(droneX + 2, droneY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Drone wings
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(droneX - 9, droneY - 2, 4, 3);
+      ctx.fillRect(droneX + 5, droneY - 2, 4, 3);
+      ctx.restore();
+    }
+
+    // 1. Legs & Shorts
     ctx.fillStyle = avatar.bodyColor;
     ctx.fillRect(-8, -12, 6, 14);
     if (isStriking && attackType === 'kick') {
@@ -676,6 +731,12 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.rotate(0.9);
       ctx.fillRect(0, 0, 6, 16);
       
+      // Shorts athletic gold trim
+      if (equipped?.shorts) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(0, 0, 6, 3);
+      }
+
       // Cleat sparks on kick
       if (equipped?.boots) {
         ctx.fillStyle = '#fbbf24';
@@ -684,6 +745,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       ctx.restore();
     } else {
       ctx.fillRect(2, -12, 6, 14);
+
+      // Shorts athletic gold trim
+      if (equipped?.shorts) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(-8, -12, 6, 3);
+        ctx.fillRect(2, -12, 6, 3);
+      }
     }
 
     // Shoes / Golden Striker Cleats

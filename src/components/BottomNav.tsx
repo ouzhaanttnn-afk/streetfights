@@ -9,7 +9,7 @@ import {
   Dumbbell, 
   ShoppingBag, 
   Swords, 
-  Terminal 
+  User 
 } from 'lucide-react';
 
 interface BottomNavProps {
@@ -24,7 +24,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, lang }) => {
     { id: 'gym', labelKey: 'tab_gym', icon: Dumbbell },
     { id: 'shop', labelKey: 'tab_shop', icon: ShoppingBag },
     { id: 'arena', labelKey: 'tab_arena', icon: Swords },
-    { id: 'cheats', labelKey: 'tab_cheats', icon: Terminal },
+    { id: 'profile', labelKey: 'tab_profile', icon: User },
   ];
 
   return (

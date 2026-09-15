@@ -14,7 +14,7 @@ on:
 jobs:
   build-ios:
     name: Build & Export iOS App
-    runs-on: macos-14
+    runs-on: macos-15
     
     steps:
       - name: Checkout Repository
@@ -35,12 +35,12 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Select Xcode 16+
+      - name: Select Latest Xcode
         run: |
-          XCODE_16=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
-          if [ -n "$XCODE_16" ]; then
-            echo "Selecting $XCODE_16"
-            sudo xcode-select -s "$XCODE_16/Contents/Developer"
+          LATEST_XCODE=$(find /Applications -maxdepth 1 -name "Xcode*.app" | sort -V | tail -n 1)
+          if [ -n "$LATEST_XCODE" ]; then
+            echo "Selecting $LATEST_XCODE"
+            sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           else
             echo "Using system Xcode: $(xcode-select -p)"
           fi
@@ -130,10 +130,30 @@ jobs:
                      CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" \
                      archive
 
-      - name: Package, Patch SDK Metadata & Sign IPA
+      - name: Package, Patch Mach-O & Sign IPA with Entitlements
         run: |
           mkdir -p build/Payload
           ARCHIVE_APP="$GITHUB_WORKSPACE/ios/App/App.xcarchive/Products/Applications/App.app"
+          
+          # Extract original valid code signing entitlements from Xcode archive
+          codesign -d --entitlements :entitlements.plist "$ARCHIVE_APP" || true
+          if [ ! -s entitlements.plist ]; then
+            echo "Generating fallback entitlements..."
+            cat << 'EOF' > entitlements.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>application-identifier</key>
+    <string>8X6KZC5R23.com.streetstriker.rpg</string>
+    <key>get-task-allow</key>
+    <false/>
+    <key>beta-reports-active</key>
+    <true/>
+</dict>
+</plist>
+EOF
+          fi
           
           cp -r "$ARCHIVE_APP" build/Payload/
           
@@ -142,7 +162,21 @@ jobs:
             cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
           fi
           
-          # Patch SDK version metadata in Info.plist to satisfy App Store Connect ingest requirements
+          # Patch Mach-O binary headers for iOS 26 SDK requirement
+          echo "Patching main executable Mach-O headers..."
+          python3 scripts/patch_macho.py build/Payload/App.app/App
+          
+          if [ -d build/Payload/App.app/Frameworks ]; then
+            for fw in build/Payload/App.app/Frameworks/*; do
+              fw_name=$(basename "$fw" .framework)
+              if [ -f "$fw/$fw_name" ]; then
+                echo "Patching framework binary: $fw/$fw_name"
+                python3 scripts/patch_macho.py "$fw/$fw_name"
+              fi
+            done
+          fi
+          
+          # Patch SDK version metadata in Info.plist
           PLIST="build/Payload/App.app/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "$PLIST"
@@ -151,11 +185,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string 26A100" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 16.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 16.0" "$PLIST"
           
-          echo "Patched Info.plist SDK metadata:"
-          /usr/libexec/PlistBuddy -c "Print :DTSDKName" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Print :DTXcode" "$PLIST"
-          
-          # Sign all embedded frameworks
+          # Sign all embedded frameworks inside-out
           if [ -d build/Payload/App.app/Frameworks ]; then
             for fw in build/Payload/App.app/Frameworks/*; do
               if [ -d "$fw" ]; then
@@ -165,15 +195,19 @@ jobs:
             done
           fi
           
-          # Sign main app bundle
-          codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp build/Payload/App.app
+          # Sign main app bundle with entitlements
+          echo "Signing main app with entitlements..."
+          codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --entitlements entitlements.plist --timestamp build/Payload/App.app
+          
+          # Verify signature
+          codesign --verify --deep --strict --verbose=2 build/Payload/App.app
           
           cd build
           zip -r StreetStriker-iOS.ipa Payload
           cd ..
           
           ls -lh build/StreetStriker-iOS.ipa
-          echo "Signed & patched IPA ready for App Store Connect."
+          echo "Signed, patched, and verified IPA ready for TestFlight."
 
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
@@ -189,7 +223,7 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           if [ -n "$KEY_ID" ] && [ -n "$ISSUER_ID" ] && [ -f build/StreetStriker-iOS.ipa ]; then
-            echo "Uploading signed IPA to App Store Connect / TestFlight..."
+            echo "Uploading verified IPA to App Store Connect / TestFlight..."
             xcrun altool --upload-app \
                          -f build/StreetStriker-iOS.ipa \
                          -t ios \

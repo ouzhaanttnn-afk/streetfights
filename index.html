@@ -34,6 +34,14 @@
         document.addEventListener('gesturestart', function(e) {
           e.preventDefault();
         });
+
+        // Prevent whole-screen rubber-band drag on non-scrollable areas
+        document.addEventListener('touchmove', function(e) {
+          var scrollable = e.target.closest('.overflow-y-auto, .overflow-x-auto, textarea, input');
+          if (!scrollable) {
+            e.preventDefault();
+          }
+        }, { passive: false });
       })();
     </script>
   </head>

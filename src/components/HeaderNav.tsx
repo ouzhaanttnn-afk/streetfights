@@ -23,10 +23,10 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 }) => {
   const xpPct = Math.min(100, Math.round((state.playerXp / state.playerMaxXp) * 100));
 
-  // Compact top padding: env(safe-area-inset-top) handles the exact iOS status bar / 
-  // Dynamic Island hardware zone, then we add only 6px breathing room below it.
-  // On devices without a notch/island, safe-area-inset-top is 0 so we get just 6px.
-  const topPadding = 'calc(env(safe-area-inset-top, 0px) + 6px)';
+  // Compact top padding: env(safe-area-inset-top) handles the exact iOS status bar / Dynamic Island zone.
+  // With contentInset: "never", the webview starts at Y=0 behind the status bar.
+  // We add 2px breathing room so HUD icons sit snug right below the status bar/island.
+  const topPadding = 'calc(max(env(safe-area-inset-top, 0px), 8px) + 2px)';
 
   return (
     <header

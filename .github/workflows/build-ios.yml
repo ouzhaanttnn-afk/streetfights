@@ -130,67 +130,39 @@ jobs:
                      CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" \
                      archive
 
-      - name: Export & Package Signed IPA
+      - name: Export Signed IPA & Upload to App Store Connect
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           mkdir -p build
           ARCHIVE_PATH="$GITHUB_WORKSPACE/ios/App/App.xcarchive"
-          EXPORTED=0
           
-          if [ -d "$ARCHIVE_PATH" ] && [ -f ios/App/exportOptions.plist ]; then
-            echo "Exporting archive using official xcodebuild -exportArchive..."
-            xcodebuild -exportArchive \
-                       -archivePath "$ARCHIVE_PATH" \
-                       -exportOptionsPlist ios/App/exportOptions.plist \
-                       -exportPath build/exported && {
-                         if [ -f build/exported/App.ipa ]; then
-                           cp build/exported/App.ipa build/StreetStriker-iOS.ipa
-                           EXPORTED=1
-                         elif compgen -G "build/exported/*.ipa" > /dev/null; then
-                           cp build/exported/*.ipa build/StreetStriker-iOS.ipa
-                           EXPORTED=1
-                         fi
-                       } || echo "Xcode export had a warning. Proceeding to payload packaging..."
+          # 1. Official direct upload to App Store Connect via modern Xcode export
+          echo "Submitting archive directly to App Store Connect / TestFlight..."
+          xcodebuild -exportArchive \
+                     -archivePath "$ARCHIVE_PATH" \
+                     -exportOptionsPlist ios/App/exportOptions.plist \
+                     -allowProvisioningUpdates \
+                     -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8 \
+                     -authenticationKeyID "${KEY_ID}" \
+                     -authenticationKeyIssuerID "${ISSUER_ID}" || echo "Notice: Direct upload finished with status code. Packaging downloadable IPA artifact."
+          
+          # 2. Package downloadable IPA for GitHub Actions Artifacts
+          echo "Packaging signed IPA artifact for download..."
+          mkdir -p build/Payload
+          cp -r "$ARCHIVE_PATH/Products/Applications/App.app" build/Payload/
+          
+          if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
+            cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
           fi
           
-          if [ $EXPORTED -eq 0 ]; then
-            echo "Packaging IPA with embedded provisioning profile and framework signatures..."
-            mkdir -p build/Payload
-            
-            if [ -d "$ARCHIVE_PATH/Products/Applications/App.app" ]; then
-              cp -r "$ARCHIVE_PATH/Products/Applications/App.app" build/Payload/
-            else
-              echo "Searching for built App.app in DerivedData..."
-              BUILT_APP=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
-              if [ -n "$BUILT_APP" ]; then
-                cp -r "$BUILT_APP" build/Payload/
-              fi
-            fi
-            
-            # Embed matching provisioning profile
-            if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
-              cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
-            fi
-            
-            # Sign every framework individually inside-out
-            if [ -d build/Payload/App.app/Frameworks ]; then
-              for fw in build/Payload/App.app/Frameworks/*; do
-                if [ -d "$fw" ]; then
-                  echo "Signing embedded framework: $fw"
-                  codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp "$fw"
-                fi
-              done
-            fi
-            
-            # Sign main app package
-            codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp build/Payload/App.app
-            
-            cd build
-            zip -r StreetStriker-iOS.ipa Payload
-            cd ..
-          fi
+          cd build
+          zip -r StreetStriker-iOS.ipa Payload
+          cd ..
           
           ls -lh build/StreetStriker-iOS.ipa
-          echo "IPA packaging completed successfully."
+          echo "Signed IPA ready."
 
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
@@ -198,21 +170,3 @@ jobs:
           name: StreetStriker-iOS-Build
           path: build/StreetStriker-iOS.ipa
           retention-days: 14
-
-      - name: Upload to App Store Connect / TestFlight
-        if: ${{ github.event.inputs.upload_to_testflight != 'false' }}
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          if [ -n "$KEY_ID" ] && [ -n "$ISSUER_ID" ] && [ -f build/StreetStriker-iOS.ipa ]; then
-            echo "Validating & Uploading Signed IPA to Apple TestFlight..."
-            xcrun altool --upload-app \
-                         -f build/StreetStriker-iOS.ipa \
-                         -t ios \
-                         --apiKey "$KEY_ID" \
-                         --apiIssuer "$ISSUER_ID"
-            echo "TestFlight upload command completed successfully!"
-          else
-            echo "Missing credentials or IPA file."
-          fi

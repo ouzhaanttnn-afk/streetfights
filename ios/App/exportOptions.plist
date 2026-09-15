@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>method</key>
-    <string>app-store</string>
+    <string>app-store-connect</string>
+    <key>destination</key>
+    <string>upload</string>
     <key>teamID</key>
     <string>8X6KZC5R23</string>
     <key>signingStyle</key>
@@ -15,7 +17,9 @@
     </dict>
     <key>signingCertificate</key>
     <string>Apple Distribution</string>
-    <key>destination</key>
-    <string>export</string>
+    <key>manageAppVersionAndBuildNumber</key>
+    <true/>
+    <key>uploadSymbols</key>
+    <true/>
 </dict>
 </plist>

@@ -7,11 +7,5 @@
     "contentInset": "automatic",
     "allowsLinkPreview": false,
     "handleApplicationURL": false
-  },
-  "plugins": {
-    "StatusBar": {
-      "style": "DARK",
-      "backgroundColor": "#06070a"
-    }
   }
 }

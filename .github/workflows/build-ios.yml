@@ -155,28 +155,12 @@ jobs:
             cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
           fi
           
-          # Patch Mach-O binary headers for iOS 26 SDK requirement
-          echo "Patching main executable Mach-O headers..."
-          python3 scripts/patch_macho.py build/Payload/App.app/App
-          
-          if [ -d build/Payload/App.app/Frameworks ]; then
-            for fw in build/Payload/App.app/Frameworks/*; do
-              fw_name=$(basename "$fw" .framework)
-              if [ -f "$fw/$fw_name" ]; then
-                echo "Patching framework binary: $fw/$fw_name"
-                python3 scripts/patch_macho.py "$fw/$fw_name"
-              fi
-            done
-          fi
-          
-          # Patch SDK version metadata in Info.plist
+          # Verify Info.plist metadata from Xcode
           PLIST="build/Payload/App.app/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A100" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A100" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string 26A100" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 16.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 16.0" "$PLIST"
+          echo "Xcode Build Version Info:"
+          /usr/libexec/PlistBuddy -c "Print :DTXcode" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Print :DTSDKName" "$PLIST" || true
+          /usr/libexec/PlistBuddy -c "Print :DTXcodeBuild" "$PLIST" || true
           
           # Sign all embedded frameworks inside-out
           if [ -d build/Payload/App.app/Frameworks ]; then

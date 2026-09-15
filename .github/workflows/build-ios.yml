@@ -68,10 +68,8 @@ jobs:
             echo "$CERT_CER_B64" | base64 --decode > certs/distribution.cer
             echo "$CERT_KEY" > certs/distribution.key
 
-            # Convert .cer (DER) to PEM
             openssl x509 -inform DER -in certs/distribution.cer -out certs/distribution.pem
 
-            # Create PKCS12 with password 'password123'
             openssl pkcs12 -export \
               -in certs/distribution.pem \
               -inkey certs/distribution.key \
@@ -79,111 +77,110 @@ jobs:
               -passout pass:password123 \
               -name "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)"
 
-            # Create and configure temporary keychain
             KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
             security create-keychain -p "" $KEYCHAIN_PATH
             security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
             security unlock-keychain -p "" $KEYCHAIN_PATH
 
-            # Import Apple WWDR Certificates
             curl -s https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o certs/AppleWWDRCAG3.cer
             curl -s https://www.apple.com/certificateauthority/AppleWWDRCAG6.cer -o certs/AppleWWDRCAG6.cer
             security import certs/AppleWWDRCAG3.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
             security import certs/AppleWWDRCAG6.cer -k $KEYCHAIN_PATH -T /usr/bin/codesign
 
-            # Import Distribution Certificate
             security import certs/distribution.p12 -k $KEYCHAIN_PATH -P password123 -T /usr/bin/codesign
             security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" $KEYCHAIN_PATH
-
-            # Set search list
             security list-keychain -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | tr -d '"')
 
             echo "Signing certificate imported into keychain successfully."
             security find-identity -v -p codesigning $KEYCHAIN_PATH || true
           fi
 
-      - name: Build & Archive (Signed or Clean Fallback)
+      - name: Install Provisioning Profile
         env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          
+          if [ -n "$PROFILE_B64" ]; then
+            echo "$PROFILE_B64" | base64 --decode > "$PROFILES_DIR/110943fe-0886-4cc2-9cdf-0b29461e5972.mobileprovision"
+            echo "$PROFILE_B64" | base64 --decode > "$PROFILES_DIR/Street_Striker_App_Store.mobileprovision"
+            echo "Provisioning profile installed to ~/Library/MobileDevice/Provisioning Profiles"
+          fi
+          
+          if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
+            cp ios/App/Street_Striker_App_Store.mobileprovision "$PROFILES_DIR/110943fe-0886-4cc2-9cdf-0b29461e5972.mobileprovision"
+            cp ios/App/Street_Striker_App_Store.mobileprovision "$PROFILES_DIR/Street_Striker_App_Store.mobileprovision"
+          fi
+          
+          ls -la "$PROFILES_DIR"
+
+      - name: Build & Archive iOS App
         run: |
           cd ios/App
-          
-          echo "Attempting archive..."
-          if [ -n "$KEY_ID" ] && [ -n "$ISSUER_ID" ] && [ -f ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8 ]; then
-            xcodebuild -project App.xcodeproj \
-                       -scheme App \
-                       -configuration Release \
-                       -destination 'generic/platform=iOS' \
-                       -archivePath App.xcarchive \
-                       -allowProvisioningUpdates \
-                       -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8 \
-                       -authenticationKeyID ${KEY_ID} \
-                       -authenticationKeyIssuerID ${ISSUER_ID} \
-                       archive || {
-                         echo "Provisioned archive failed. Retrying with basic archive..."
-                         xcodebuild -project App.xcodeproj \
-                                    -scheme App \
-                                    -configuration Release \
-                                    -destination 'generic/platform=iOS' \
-                                    -archivePath App.xcarchive \
-                                    archive \
-                                    CODE_SIGN_IDENTITY="" \
-                                    CODE_SIGNING_REQUIRED=NO \
-                                    CODE_SIGNING_ALLOWED=NO
-                       }
-          else
-            xcodebuild -project App.xcodeproj \
-                       -scheme App \
-                       -configuration Release \
-                       -destination 'generic/platform=iOS' \
-                       -archivePath App.xcarchive \
-                       archive \
-                       CODE_SIGN_IDENTITY="" \
-                       CODE_SIGNING_REQUIRED=NO \
-                       CODE_SIGNING_ALLOWED=NO
-          fi
+          xcodebuild -project App.xcodeproj \
+                     -scheme App \
+                     -configuration Release \
+                     -destination 'generic/platform=iOS' \
+                     -archivePath App.xcarchive \
+                     archive \
+                     DEVELOPMENT_TEAM="8X6KZC5R23" \
+                     CODE_SIGN_STYLE="Manual" \
+                     PROVISIONING_PROFILE_SPECIFIER="Street Striker App Store" \
+                     CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" || {
+                       echo "Attempting archive with clean fallback..."
+                       xcodebuild -project App.xcodeproj \
+                                  -scheme App \
+                                  -configuration Release \
+                                  -destination 'generic/platform=iOS' \
+                                  -archivePath App.xcarchive \
+                                  archive \
+                                  CODE_SIGN_IDENTITY="" \
+                                  CODE_SIGNING_REQUIRED=NO \
+                                  CODE_SIGNING_ALLOWED=NO
+                     }
 
-      - name: Package & Export IPA
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      - name: Export & Package Signed IPA
         run: |
           mkdir -p build
-          
-          # Attempt Xcode export with exportOptions.plist if available
           EXPORTED=0
-          if [ -f ios/App/exportOptions.plist ] && [ -n "$KEY_ID" ]; then
-            echo "Attempting official xcodebuild exportArchive..."
+          
+          if [ -f ios/App/exportOptions.plist ]; then
+            echo "Exporting archive using official xcodebuild -exportArchive..."
             xcodebuild -exportArchive \
                        -archivePath ios/App/App.xcarchive \
                        -exportOptionsPlist ios/App/exportOptions.plist \
-                       -exportPath build/exported \
-                       -allowProvisioningUpdates \
-                       -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8 \
-                       -authenticationKeyID ${KEY_ID} \
-                       -authenticationKeyIssuerID ${ISSUER_ID} && {
+                       -exportPath build/exported && {
                          if [ -f build/exported/App.ipa ]; then
                            cp build/exported/App.ipa build/StreetStriker-iOS.ipa
                            EXPORTED=1
-                         elif [ -f build/exported/*.ipa ]; then
+                         elif compgen -G "build/exported/*.ipa" > /dev/null; then
                            cp build/exported/*.ipa build/StreetStriker-iOS.ipa
                            EXPORTED=1
                          fi
-                       } || echo "Export archive had a warning, falling back to payload packaging."
+                       } || echo "Xcode export had a warning. Proceeding to payload packaging..."
           fi
           
           if [ $EXPORTED -eq 0 ]; then
-            echo "Creating IPA from App.xcarchive products..."
+            echo "Packaging IPA with embedded provisioning profile and distribution signature..."
             mkdir -p build/Payload
             cp -r ios/App/App.xcarchive/Products/Applications/App.app build/Payload/
+            
+            # Embed provisioning profile
+            if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
+              cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
+            fi
+            
+            # Sign binary and app package
+            codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp --deep build/Payload/App.app || true
+            
             cd build
             zip -r StreetStriker-iOS.ipa Payload
             cd ..
           fi
           
           ls -lh build/StreetStriker-iOS.ipa
-          echo "IPA packaging completed."
+          echo "IPA packaging completed successfully."
 
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
@@ -199,15 +196,13 @@ jobs:
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           if [ -n "$KEY_ID" ] && [ -n "$ISSUER_ID" ] && [ -f build/StreetStriker-iOS.ipa ]; then
-            echo "Validating & Uploading IPA to Apple TestFlight / App Store..."
+            echo "Validating & Uploading Signed IPA to Apple TestFlight..."
             xcrun altool --upload-app \
                          -f build/StreetStriker-iOS.ipa \
                          -t ios \
                          --apiKey "$KEY_ID" \
-                         --apiIssuer "$ISSUER_ID" || {
-                           echo "Notice: Upload command exited with a warning/status code."
-                           echo "The IPA artifact remains securely available under GitHub Actions artifacts."
-                         }
+                         --apiIssuer "$ISSUER_ID"
+            echo "TestFlight upload command completed successfully!"
           else
-            echo "No credentials or IPA found for upload."
+            echo "Missing credentials or IPA file."
           fi

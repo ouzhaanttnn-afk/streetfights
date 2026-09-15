@@ -43,7 +43,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
   const dmgMinutesLeft = Math.ceil((state.doubleDamageUntil - Date.now()) / 60000);
 
   return (
-    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-28">
+    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-16">
       
       {/* 1. Rewarded Video Ads Center Banner */}
       <div className="game-card rounded-3xl p-4 shadow-2xl border border-amber-500/30 space-y-3">

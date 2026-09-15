@@ -180,7 +180,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
               placeholder="Paste JSON save here to import..."
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
-              className="w-full bg-black/70 border border-zinc-800 rounded-xl px-3 py-2 text-[10px] font-mono text-zinc-300 focus:outline-none focus:border-amber-500"
+              className="w-full bg-black/70 border border-zinc-800 rounded-xl px-3 py-2 text-base font-mono text-zinc-300 focus:outline-none focus:border-amber-500"
             />
           </div>
 

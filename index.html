@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover" />
     <meta name="theme-color" content="#06070a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -15,9 +15,30 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+      // Disable double-tap to zoom on iOS Safari / WKWebView
+      (function() {
+        var lastTouchEnd = 0;
+        document.addEventListener('touchend', function(event) {
+          var now = Date.now();
+          if (now - lastTouchEnd <= 300) {
+            // Only prevent if not an input element
+            if (!['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+              event.preventDefault();
+            }
+          }
+          lastTouchEnd = now;
+        }, { passive: false });
+
+        // Disable pinch to zoom
+        document.addEventListener('gesturestart', function(e) {
+          e.preventDefault();
+        });
+      })();
+    </script>
   </head>
-  <body class="bg-[#050508] text-neutral-100 min-h-screen min-h-[100dvh] font-sans antialiased touch-manipulation select-none overflow-x-hidden">
-    <div id="root" class="min-h-screen min-h-[100dvh] w-full flex flex-col justify-between"></div>
+  <body class="bg-[#050508] text-neutral-100 h-full h-[100dvh] w-full font-sans antialiased touch-manipulation select-none overflow-hidden fixed inset-0">
+    <div id="root" class="h-full h-[100dvh] w-full flex flex-col overflow-hidden relative"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

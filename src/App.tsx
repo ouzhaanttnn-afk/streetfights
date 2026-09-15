@@ -69,8 +69,8 @@ export function App() {
       {/* Mobile-Friendly Portrait Phone Container with AAA Glow Frame */}
       <div className="relative w-full max-w-[430px] h-full h-[100dvh] max-h-[100dvh] bg-neutral-950 flex flex-col shadow-2xl border-x border-zinc-800/80 overflow-hidden">
         
-        {/* Pinned Top Combat Deck (Header HUD + Battle Canvas + Stats) */}
-        <div className="shrink-0 z-20 flex flex-col bg-neutral-950">
+        {/* Pinned Top Combat Deck (Header HUD + Battle Canvas + Stats) - Strictly non-scrollable */}
+        <div className="shrink-0 z-20 flex flex-col bg-neutral-950 touch-none select-none overscroll-none">
           {/* 1. Top Header HUD (Currencies, XP, Leaderboard, Settings) */}
           <HeaderNav 
             state={state} 
@@ -86,7 +86,7 @@ export function App() {
         </div>
 
         {/* Scrollable Center: Only Interactive Tab Views Scroll */}
-        <main className="flex-1 overflow-y-auto overscroll-contain pb-24 scroll-smooth">
+        <main className="flex-1 overflow-y-auto overscroll-y-contain overscroll-x-none scroll-smooth min-h-0">
           {renderActiveTab()}
         </main>
 

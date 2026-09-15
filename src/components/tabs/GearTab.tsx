@@ -102,7 +102,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
   };
 
   return (
-    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-28">
+    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-16">
       
       {/* 1. Character Equipment Slots (3x3 Grid) */}
       <div className="game-card rounded-3xl p-4 shadow-2xl border border-white/10">

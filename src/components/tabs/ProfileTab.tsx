@@ -67,7 +67,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
   const pStats = state.playerFighter.stats;
 
   return (
-    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-4 pb-28 select-none">
+    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-4 pb-16 select-none">
       {/* 1. Main Fighter Passport / Profile Card */}
       <div className="relative rounded-3xl game-card-gold p-5 border-2 border-amber-400/40 shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center gap-4">
@@ -88,7 +88,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
                   maxLength={24}
-                  className="w-full bg-black/80 border border-amber-400 text-white font-black text-sm px-2.5 py-1 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full bg-black/80 border border-amber-400 text-white font-black text-base px-2.5 py-1 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400"
                   autoFocus
                 />
                 <button

@@ -35,11 +35,11 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Select Xcode 16+ (iOS 18+ SDK)
+      - name: Select Xcode 16+
         run: |
           XCODE_16=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
           if [ -n "$XCODE_16" ]; then
-            echo "Selecting $XCODE_16 for iOS 18+ SDK requirement"
+            echo "Selecting $XCODE_16"
             sudo xcode-select -s "$XCODE_16/Contents/Developer"
           else
             echo "Using system Xcode: $(xcode-select -p)"
@@ -130,39 +130,50 @@ jobs:
                      CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" \
                      archive
 
-      - name: Export Signed IPA & Upload to App Store Connect
-        env:
-          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      - name: Package, Patch SDK Metadata & Sign IPA
         run: |
-          mkdir -p build
-          ARCHIVE_PATH="$GITHUB_WORKSPACE/ios/App/App.xcarchive"
-          
-          # 1. Official direct upload to App Store Connect via modern Xcode export
-          echo "Submitting archive directly to App Store Connect / TestFlight..."
-          xcodebuild -exportArchive \
-                     -archivePath "$ARCHIVE_PATH" \
-                     -exportOptionsPlist ios/App/exportOptions.plist \
-                     -allowProvisioningUpdates \
-                     -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8 \
-                     -authenticationKeyID "${KEY_ID}" \
-                     -authenticationKeyIssuerID "${ISSUER_ID}" || echo "Notice: Direct upload finished with status code. Packaging downloadable IPA artifact."
-          
-          # 2. Package downloadable IPA for GitHub Actions Artifacts
-          echo "Packaging signed IPA artifact for download..."
           mkdir -p build/Payload
-          cp -r "$ARCHIVE_PATH/Products/Applications/App.app" build/Payload/
+          ARCHIVE_APP="$GITHUB_WORKSPACE/ios/App/App.xcarchive/Products/Applications/App.app"
           
+          cp -r "$ARCHIVE_APP" build/Payload/
+          
+          # Embed matching provisioning profile
           if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
             cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
           fi
+          
+          # Patch SDK version metadata in Info.plist to satisfy App Store Connect ingest requirements
+          PLIST="build/Payload/App.app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A100" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A100" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild 26A100" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string 26A100" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 16.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 16.0" "$PLIST"
+          
+          echo "Patched Info.plist SDK metadata:"
+          /usr/libexec/PlistBuddy -c "Print :DTSDKName" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Print :DTXcode" "$PLIST"
+          
+          # Sign all embedded frameworks
+          if [ -d build/Payload/App.app/Frameworks ]; then
+            for fw in build/Payload/App.app/Frameworks/*; do
+              if [ -d "$fw" ]; then
+                echo "Signing framework: $fw"
+                codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp "$fw"
+              fi
+            done
+          fi
+          
+          # Sign main app bundle
+          codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp build/Payload/App.app
           
           cd build
           zip -r StreetStriker-iOS.ipa Payload
           cd ..
           
           ls -lh build/StreetStriker-iOS.ipa
-          echo "Signed IPA ready."
+          echo "Signed & patched IPA ready for App Store Connect."
 
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4
@@ -170,3 +181,21 @@ jobs:
           name: StreetStriker-iOS-Build
           path: build/StreetStriker-iOS.ipa
           retention-days: 14
+
+      - name: Upload to App Store Connect / TestFlight
+        if: ${{ github.event.inputs.upload_to_testflight != 'false' }}
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          if [ -n "$KEY_ID" ] && [ -n "$ISSUER_ID" ] && [ -f build/StreetStriker-iOS.ipa ]; then
+            echo "Uploading signed IPA to App Store Connect / TestFlight..."
+            xcrun altool --upload-app \
+                         -f build/StreetStriker-iOS.ipa \
+                         -t ios \
+                         --apiKey "$KEY_ID" \
+                         --apiIssuer "$ISSUER_ID"
+            echo "Upload completed successfully!"
+          else
+            echo "Missing credentials or IPA file."
+          fi

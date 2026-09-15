@@ -44,10 +44,10 @@ def patch_slice(data, base_offset, slice_size):
         if cmd == LC_BUILD_VERSION:
             platform, minos, sdk, ntools = struct.unpack_from('<IIII', data, offset + 8)
             print(f"Found LC_BUILD_VERSION: platform={platform}, minos={hex(minos)}, sdk={hex(sdk)}, ntools={ntools}")
-            # Target iOS 26.0 (0x001a0000)
-            new_sdk = (26 << 16) | (0 << 8) | 0
+            # Target iOS 26.5 (0x001a0500)
+            new_sdk = (26 << 16) | (5 << 8) | 0
             struct.pack_into('<I', data, offset + 16, new_sdk)
-            print(f"Patched SDK version to: {hex(new_sdk)} (iOS 26.0)")
+            print(f"Patched SDK version to: {hex(new_sdk)} (iOS 26.5)")
             return
         offset += cmdsize
 

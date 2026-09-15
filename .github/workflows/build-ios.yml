@@ -169,13 +169,13 @@ jobs:
             done
           fi
           
-          # Patch SDK version metadata in Info.plist with official GM release build
+          # Patch SDK version metadata in Info.plist with official Xcode 26.6 stable release build (17F113)
           PLIST="build/Payload/App.app/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.0" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTXcode 2600" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2600" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 26A366" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 26A366" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 26A366" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 26A366" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild 26A366" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string 26A366" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.5" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.5" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTXcode 2660" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2660" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 17F113" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 17F113" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 23F79" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 23F79" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild 23F79" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string 23F79" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 16.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 16.0" "$PLIST"
           
           # Sign all embedded frameworks inside-out

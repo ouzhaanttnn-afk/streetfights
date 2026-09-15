@@ -105,7 +105,7 @@ jobs:
           if [ -n "$PROFILE_B64" ]; then
             echo "$PROFILE_B64" | base64 --decode > "$PROFILES_DIR/110943fe-0886-4cc2-9cdf-0b29461e5972.mobileprovision"
             echo "$PROFILE_B64" | base64 --decode > "$PROFILES_DIR/Street_Striker_App_Store.mobileprovision"
-            echo "Provisioning profile installed to ~/Library/MobileDevice/Provisioning Profiles"
+            echo "Provisioning profile installed from secret"
           fi
           
           if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
@@ -123,7 +123,6 @@ jobs:
                      -configuration Release \
                      -destination 'generic/platform=iOS' \
                      -archivePath App.xcarchive \
-                     archive \
                      DEVELOPMENT_TEAM="8X6KZC5R23" \
                      CODE_SIGN_STYLE="Manual" \
                      PROVISIONING_PROFILE_SPECIFIER="Street Striker App Store" \
@@ -134,7 +133,6 @@ jobs:
                                   -configuration Release \
                                   -destination 'generic/platform=iOS' \
                                   -archivePath App.xcarchive \
-                                  archive \
                                   CODE_SIGN_IDENTITY="" \
                                   CODE_SIGNING_REQUIRED=NO \
                                   CODE_SIGNING_ALLOWED=NO
@@ -162,7 +160,7 @@ jobs:
           fi
           
           if [ $EXPORTED -eq 0 ]; then
-            echo "Packaging IPA with embedded provisioning profile and distribution signature..."
+            echo "Packaging IPA with embedded provisioning profile and full framework distribution signatures..."
             mkdir -p build/Payload
             cp -r ios/App/App.xcarchive/Products/Applications/App.app build/Payload/
             
@@ -171,8 +169,18 @@ jobs:
               cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
             fi
             
-            # Sign binary and app package
-            codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp --deep build/Payload/App.app || true
+            # Sign every framework individually inside-out
+            if [ -d build/Payload/App.app/Frameworks ]; then
+              for fw in build/Payload/App.app/Frameworks/*; do
+                if [ -d "$fw" ]; then
+                  echo "Signing embedded framework: $fw"
+                  codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp "$fw"
+                fi
+              done
+            fi
+            
+            # Sign main app package
+            codesign --force --sign "Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" --timestamp build/Payload/App.app
             
             cd build
             zip -r StreetStriker-iOS.ipa Payload

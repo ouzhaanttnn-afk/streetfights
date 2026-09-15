@@ -14,7 +14,7 @@ on:
 jobs:
   build-ios:
     name: Build & Export iOS App
-    runs-on: macos-15
+    runs-on: macos-14
     
     steps:
       - name: Checkout Repository
@@ -35,12 +35,12 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Select Latest Xcode
+      - name: Select Xcode 16+
         run: |
-          LATEST_XCODE=$(find /Applications -maxdepth 1 -name "Xcode*.app" | sort -V | tail -n 1)
-          if [ -n "$LATEST_XCODE" ]; then
-            echo "Selecting $LATEST_XCODE"
-            sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+          XCODE_16=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
+          if [ -n "$XCODE_16" ]; then
+            echo "Selecting $XCODE_16"
+            sudo xcode-select -s "$XCODE_16/Contents/Developer"
           else
             echo "Using system Xcode: $(xcode-select -p)"
           fi
@@ -139,20 +139,13 @@ jobs:
           codesign -d --entitlements :entitlements.plist "$ARCHIVE_APP" || true
           if [ ! -s entitlements.plist ]; then
             echo "Generating fallback entitlements..."
-            cat << 'EOF' > entitlements.plist
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>application-identifier</key>
-    <string>8X6KZC5R23.com.streetstriker.rpg</string>
-    <key>get-task-allow</key>
-    <false/>
-    <key>beta-reports-active</key>
-    <true/>
-</dict>
-</plist>
-EOF
+            echo '<?xml version="1.0" encoding="UTF-8"?>' > entitlements.plist
+            echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> entitlements.plist
+            echo '<plist version="1.0"><dict>' >> entitlements.plist
+            echo '<key>application-identifier</key><string>8X6KZC5R23.com.streetstriker.rpg</string>' >> entitlements.plist
+            echo '<key>get-task-allow</key><false/>' >> entitlements.plist
+            echo '<key>beta-reports-active</key><true/>' >> entitlements.plist
+            echo '</dict></plist>' >> entitlements.plist
           fi
           
           cp -r "$ARCHIVE_APP" build/Payload/

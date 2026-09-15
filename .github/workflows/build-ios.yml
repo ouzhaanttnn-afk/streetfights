@@ -122,31 +122,23 @@ jobs:
                      -scheme App \
                      -configuration Release \
                      -destination 'generic/platform=iOS' \
-                     -archivePath App.xcarchive \
+                     -archivePath "$PWD/App.xcarchive" \
                      DEVELOPMENT_TEAM="8X6KZC5R23" \
                      CODE_SIGN_STYLE="Manual" \
                      PROVISIONING_PROFILE_SPECIFIER="Street Striker App Store" \
-                     CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" || {
-                       echo "Attempting archive with clean fallback..."
-                       xcodebuild -project App.xcodeproj \
-                                  -scheme App \
-                                  -configuration Release \
-                                  -destination 'generic/platform=iOS' \
-                                  -archivePath App.xcarchive \
-                                  CODE_SIGN_IDENTITY="" \
-                                  CODE_SIGNING_REQUIRED=NO \
-                                  CODE_SIGNING_ALLOWED=NO
-                     }
+                     CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" \
+                     archive
 
       - name: Export & Package Signed IPA
         run: |
           mkdir -p build
+          ARCHIVE_PATH="$GITHUB_WORKSPACE/ios/App/App.xcarchive"
           EXPORTED=0
           
-          if [ -f ios/App/exportOptions.plist ]; then
+          if [ -d "$ARCHIVE_PATH" ] && [ -f ios/App/exportOptions.plist ]; then
             echo "Exporting archive using official xcodebuild -exportArchive..."
             xcodebuild -exportArchive \
-                       -archivePath ios/App/App.xcarchive \
+                       -archivePath "$ARCHIVE_PATH" \
                        -exportOptionsPlist ios/App/exportOptions.plist \
                        -exportPath build/exported && {
                          if [ -f build/exported/App.ipa ]; then
@@ -160,11 +152,20 @@ jobs:
           fi
           
           if [ $EXPORTED -eq 0 ]; then
-            echo "Packaging IPA with embedded provisioning profile and full framework distribution signatures..."
+            echo "Packaging IPA with embedded provisioning profile and framework signatures..."
             mkdir -p build/Payload
-            cp -r ios/App/App.xcarchive/Products/Applications/App.app build/Payload/
             
-            # Embed provisioning profile
+            if [ -d "$ARCHIVE_PATH/Products/Applications/App.app" ]; then
+              cp -r "$ARCHIVE_PATH/Products/Applications/App.app" build/Payload/
+            else
+              echo "Searching for built App.app in DerivedData..."
+              BUILT_APP=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -type d | head -n 1)
+              if [ -n "$BUILT_APP" ]; then
+                cp -r "$BUILT_APP" build/Payload/
+              fi
+            fi
+            
+            # Embed matching provisioning profile
             if [ -f ios/App/Street_Striker_App_Store.mobileprovision ]; then
               cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
             fi

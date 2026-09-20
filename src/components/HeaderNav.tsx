@@ -30,11 +30,11 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
 
   return (
     <header
-      className="glass-panel border-b border-white/10 px-2.5 pb-1.5 flex items-center justify-between select-none z-30 shadow-xl sticky top-0 backdrop-blur-2xl shrink-0"
+      className="top-nav glass-panel border-b border-white/10 px-2.5 pb-1.5 flex items-center justify-between select-none z-30 shadow-xl sticky top-0 backdrop-blur-2xl shrink-0"
       style={{ paddingTop: topPadding }}
     >
       {/* LEFT: Level badge + XP */}
-      <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+      <div className="top-nav-left flex items-center gap-1.5 min-w-0 shrink-0">
         <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 text-black font-black text-[11px] shadow-sm shadow-amber-500/30 border border-amber-300/60 shrink-0">
           <span>{state.playerLevel}</span>
         </div>
@@ -57,7 +57,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
       </div>
 
       {/* RIGHT: Currencies + Quick Actions */}
-      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap-reverse justify-end">
+      <div className="top-nav-actions flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap-reverse justify-end">
         {/* Coins */}
         <div className="flex items-center gap-0.5 bg-black/60 border border-amber-500/30 px-1.5 py-0.5 rounded-lg shadow-inner">
           <Coins className="w-2.5 h-2.5 text-amber-400 shrink-0" />

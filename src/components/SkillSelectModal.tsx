@@ -38,7 +38,7 @@ export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
       <div className={`relative w-full max-w-sm rounded-3xl border-2 ${rarity.borderColor} ${rarity.bgColor} p-6 shadow-2xl flex flex-col items-center text-center text-white game-card overflow-hidden`}>
         
         {/* Header Tag */}

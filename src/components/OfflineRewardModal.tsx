@@ -39,7 +39,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
   const timeString = hours > 0 ? `${hours}h ${remainingMins}m` : `${remainingMins}m`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
       <div className="relative w-full max-w-sm game-card border-2 border-amber-400/50 rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center text-white overflow-hidden">
         
         {/* Top Header Badge */}

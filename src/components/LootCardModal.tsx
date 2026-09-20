@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { EquipmentItem } from '../types/game';
 import { RARITY_CONFIG, SLOT_INFO } from '../core/lootGenerator';
 import { GameStateData, gameManager } from '../core/gameState';
-import { ThreeItemViewer } from './ThreeItemViewer';
 import { t } from '../i18n/translations';
 import { 
   Coins, 
@@ -11,6 +10,8 @@ import {
   Check, 
   Sparkles 
 } from 'lucide-react';
+
+const ThreeItemViewer = lazy(() => import('./ThreeItemViewer').then((module) => ({ default: module.ThreeItemViewer })));
 
 interface LootCardModalProps {
   item: EquipmentItem;
@@ -26,7 +27,7 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
   const powerDiff = item.powerScore - currentPower;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
       {/* 3D Enhanced Loot Card Box */}
       <div className={`relative w-full max-w-sm rounded-3xl border-2 ${rarity.borderColor} ${rarity.bgColor} p-5 shadow-2xl flex flex-col items-center text-center text-white overflow-hidden game-card ${
         ['epic', 'legendary', 'mythic'].includes(item.rarity) ? 'holographic-card ring-2 ring-amber-400/40 shadow-amber-500/20' : ''
@@ -64,7 +65,9 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
 
         {/* 3D WebGL Turntable Interactive Item Model */}
         <div className="relative z-10 my-1 flex items-center justify-center">
-          <ThreeItemViewer slot={item.slot} rarity={item.rarity} size={140} />
+          <Suspense fallback={<div className="w-[140px] h-[140px]" />}>
+            <ThreeItemViewer slot={item.slot} rarity={item.rarity} size={140} />
+          </Suspense>
           <span className="absolute bottom-0 text-[8px] text-zinc-400 font-mono tracking-wider opacity-70 bg-black/50 px-2 py-0.5 rounded-full border border-white/5">
             DRAG TO ROTATE 3D
           </span>

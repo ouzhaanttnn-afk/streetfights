@@ -4,10 +4,10 @@ import { ArenaEnvironment } from '../types/game';
 
 interface BattleScene3DProps {
   environment: ArenaEnvironment;
-  screenShake: number;
+  screenShakeRef: React.RefObject<number>;
 }
 
-export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShake }) => {
+export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
     // 2. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     mount.appendChild(renderer.domElement);
 
     // 3. Lighting
@@ -116,9 +116,10 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
     }
 
     // 5. Animation Loop
-    let animId: number;
+    let animId: number | null = null;
     const animate = (time: number) => {
       animId = requestAnimationFrame(animate);
+      const screenShake = screenShakeRef.current;
 
       // Subtle breathing float on 3D camera
       camera.position.x = Math.sin(time * 0.001) * 0.15;
@@ -136,16 +137,49 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
       renderer.render(scene, camera);
     };
 
-    animId = requestAnimationFrame(animate);
+    let isInView = true;
+    const onVisibilityChange = () => {
+      if (document.hidden || !isInView) {
+        if (animId !== null) cancelAnimationFrame(animId);
+        animId = null;
+      } else if (animId === null) {
+        animId = requestAnimationFrame(animate);
+      }
+    };
+    const resizeObserver = new ResizeObserver(() => {
+      const nextWidth = mount.clientWidth || 360;
+      const nextHeight = mount.clientHeight || 205;
+      camera.aspect = nextWidth / nextHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nextWidth, nextHeight);
+    });
+    resizeObserver.observe(mount);
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      isInView = entry.isIntersecting;
+      onVisibilityChange();
+    });
+    intersectionObserver.observe(mount);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onVisibilityChange();
 
     return () => {
-      cancelAnimationFrame(animId);
+      if (animId !== null) cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
       renderer.dispose();
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [environment, screenShake]);
+  }, [environment, screenShakeRef]);
 
   return (
     <div

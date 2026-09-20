@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { EquipmentItem, EquipmentSlot } from '../../types/game';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { RARITY_CONFIG, SLOT_INFO } from '../../core/lootGenerator';
-import { ThreeItemViewer } from '../ThreeItemViewer';
 import { t } from '../../i18n/translations';
 import { 
   Crown, 
@@ -20,6 +19,8 @@ import {
   Check,
   Hammer 
 } from 'lucide-react';
+
+const ThreeItemViewer = lazy(() => import('../ThreeItemViewer').then((module) => ({ default: module.ThreeItemViewer })));
 
 interface GearTabProps {
   state: GameStateData;
@@ -253,7 +254,9 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
 
             {/* 3D WebGL Interactive Viewer */}
             <div className="my-1">
-              <ThreeItemViewer slot={selectedItem.slot} rarity={selectedItem.rarity} size={130} />
+              <Suspense fallback={<div className="w-[130px] h-[130px]" />}>
+                <ThreeItemViewer slot={selectedItem.slot} rarity={selectedItem.rarity} size={130} />
+              </Suspense>
             </div>
 
             <div className="w-full bg-black/60 px-3 py-2 rounded-2xl border border-white/10 mb-3 flex items-center justify-between shadow-inner">

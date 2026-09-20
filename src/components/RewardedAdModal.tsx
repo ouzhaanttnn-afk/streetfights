@@ -17,9 +17,10 @@ import {
 
 interface RewardedAdModalProps {
   state: GameStateData;
+  onReviveClaimed?: () => void;
 }
 
-export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state }) => {
+export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviveClaimed }) => {
   const [secondsLeft, setSecondsLeft] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const offer = state.activeAdModal;
@@ -43,7 +44,10 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state }) => {
   if (!offer) return null;
 
   const handleClaim = () => {
+    if (!isCompleted) return;
+    const isRevive = offer.type === 'revive';
     gameManager.claimRewardedAdReward();
+    if (isRevive) onReviveClaimed?.();
   };
 
   const handleClose = () => {
@@ -51,7 +55,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md select-none animate-fadeIn">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md select-none animate-fadeIn">
       <div className="relative w-full max-w-sm game-card border-2 border-amber-500/60 rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center text-white overflow-hidden">
         
         {/* Top Header Bar */}

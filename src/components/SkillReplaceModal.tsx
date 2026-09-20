@@ -28,7 +28,7 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
       <div className="relative w-full max-w-sm game-card border-2 border-amber-400/60 rounded-3xl p-5 shadow-2xl flex flex-col text-white overflow-hidden">
         
         {/* Header */}

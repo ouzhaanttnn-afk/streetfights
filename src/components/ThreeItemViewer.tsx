@@ -29,7 +29,7 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
     // 2. WebGL Renderer
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(size, size);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
     mount.appendChild(renderer.domElement);
@@ -290,7 +290,7 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
     window.addEventListener('touchend', onPointerUp);
 
     // Animation Loop
-    let animId: number;
+    let animId: number | null = null;
     const animate = (time: number) => {
       animId = requestAnimationFrame(animate);
 
@@ -304,16 +304,42 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
       renderer.render(scene, camera);
     };
 
-    animId = requestAnimationFrame(animate);
+    let isInView = true;
+    const onVisibilityChange = () => {
+      if (document.hidden || !isInView) {
+        if (animId !== null) cancelAnimationFrame(animId);
+        animId = null;
+      } else if (animId === null) {
+        animId = requestAnimationFrame(animate);
+      }
+    };
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      isInView = entry.isIntersecting;
+      onVisibilityChange();
+    });
+    intersectionObserver.observe(mount);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onVisibilityChange();
 
     return () => {
-      cancelAnimationFrame(animId);
+      if (animId !== null) cancelAnimationFrame(animId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      intersectionObserver.disconnect();
       dom.removeEventListener('mousedown', onPointerDown);
       window.removeEventListener('mousemove', onPointerMove);
       window.removeEventListener('mouseup', onPointerUp);
       dom.removeEventListener('touchstart', onPointerDown);
       window.removeEventListener('touchmove', onPointerMove);
       window.removeEventListener('touchend', onPointerUp);
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+          object.geometry.dispose();
+        }
+      });
+      matRarity.dispose();
+      matGold.dispose();
+      matDark.dispose();
+      particleMat.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement);

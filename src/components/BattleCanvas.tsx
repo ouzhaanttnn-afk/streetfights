@@ -1,18 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { ArenaEnvironment, FloatingText, Stage } from '../types/game';
 import { GameStateData, gameManager } from '../core/gameState';
 import { soundFx } from '../core/audio';
 import { t } from '../i18n/translations';
-import { BattleScene3D } from './BattleScene3D';
 import confetti from 'canvas-confetti';
-import { Tv, Zap } from 'lucide-react';
+import { Hand, Shield, Tv, Zap } from 'lucide-react';
+
+const BattleScene3D = lazy(() => import('./BattleScene3D').then((module) => ({ default: module.BattleScene3D })));
 
 interface BattleCanvasProps {
   state: GameStateData;
   onVictory: (stage: Stage) => void;
+  reviveToken: number;
+  paused: boolean;
 }
 
-export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) => {
+export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, reviveToken, paused }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Current battle state
@@ -28,7 +31,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
   const [matchStatus, setMatchStatus] = useState<'fighting' | 'victory' | 'defeat'>('fighting');
   const [showReviveAd, setShowReviveAd] = useState<boolean>(false);
   const [comboStreak, setComboStreak] = useState<number>(0);
-  const [screenShakeVal, setScreenShakeVal] = useState<number>(0);
+  const [manualAttackReady, setManualAttackReady] = useState(false);
+  const [guardReady, setGuardReady] = useState(true);
+  const [isGuarding, setIsGuarding] = useState(false);
+  const manualAttackReadyRef = useRef(false);
+  const guardReadyRef = useRef(true);
+  const isGuardingRef = useRef(false);
+  const comboStreakRef = useRef(0);
 
   // Animation state
   const animFrameRef = useRef<number | null>(null);
@@ -45,7 +54,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
   // Combat cooldown timers
   const playerCooldownRef = useRef<number>(0);
   const opponentCooldownRef = useRef<number>(0);
+  const guardTimerRef = useRef(0);
+  const guardCooldownRef = useRef(0);
   const isMatchOverRef = useRef<boolean>(false);
+  const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const current = gameManager.getCurrentStage();
@@ -54,7 +66,26 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     resetBattle(current);
   }, [state.currentWorld, state.currentSubStage, state.playerFighter.stats.maxHp]);
 
+  useEffect(() => {
+    if (reviveToken === 0 || !isMatchOverRef.current || !stageRef.current.isBoss) return;
+    playerHpRef.current = state.playerFighter.stats.maxHp;
+    playerRageRef.current = 100;
+    setPlayerHpDisplay(playerHpRef.current);
+    setPlayerRageDisplay(100);
+    isMatchOverRef.current = false;
+    setMatchStatus('fighting');
+    setShowReviveAd(false);
+    playerCooldownRef.current = 300;
+    opponentCooldownRef.current = 400;
+    manualAttackReadyRef.current = false;
+    setManualAttackReady(false);
+  }, [reviveToken]);
+
   const resetBattle = (stage: Stage) => {
+    if (resultTimerRef.current !== null) {
+      clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
     playerHpRef.current = state.playerFighter.stats.maxHp;
     opponentHpRef.current = stage.opponent.stats.maxHp;
     playerRageRef.current = 0;
@@ -63,12 +94,25 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     setMatchStatus('fighting');
     setShowReviveAd(false);
     setComboStreak(0);
+    comboStreakRef.current = 0;
+    guardTimerRef.current = 0;
+    guardCooldownRef.current = 0;
+    setIsGuarding(false);
+    setGuardReady(true);
+    setManualAttackReady(false);
+    isGuardingRef.current = false;
+    guardReadyRef.current = true;
+    manualAttackReadyRef.current = false;
     setPlayerHpDisplay(playerHpRef.current);
     setOpponentHpDisplay(opponentHpRef.current);
     setPlayerRageDisplay(0);
     playerCooldownRef.current = 300;
     opponentCooldownRef.current = 400;
   };
+
+  useEffect(() => () => {
+    if (resultTimerRef.current !== null) clearTimeout(resultTimerRef.current);
+  }, []);
 
   const addFloatingText = (text: string, x: number, y: number, color: string, type: FloatingText['type'] = 'damage') => {
     floatingTextsRef.current.push({
@@ -141,6 +185,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     const dodgeRoll = Math.random() * 100;
     if (!isSpecialRage && dodgeRoll < oppStats.dodgeRate) {
       soundFx.playDodge();
+      comboStreakRef.current = 0;
       setComboStreak(0);
       addFloatingText(t('missDodge', state.lang), 240, 95, '#38bdf8', 'dodge');
       return;
@@ -160,7 +205,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       finalDmg = Math.round(finalDmg * 2.2);
     }
 
-    setComboStreak((prev) => prev + 1);
+    comboStreakRef.current += 1;
+    setComboStreak(comboStreakRef.current);
 
     // Skill procs
     let skillProcText = '';
@@ -172,6 +218,15 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         }
       }
     });
+
+    // Combo Rate now grants a real follow-up strike, with a small streak bonus.
+    const comboChance = Math.min(75, pStats.comboRate + Math.min(15, comboStreakRef.current * 2));
+    if (!isSpecialRage && Math.random() * 100 < comboChance) {
+      const extraDamage = Math.max(1, Math.round(finalDmg * 0.35));
+      finalDmg += extraDamage;
+      addFloatingText(`KOMBO +${extraDamage}`, 225, 55, '#fde047', 'skill');
+      spawnHitParticles(235, 110, '#fde047', 6);
+    }
 
     opponentHpRef.current = Math.max(0, opponentHpRef.current - finalDmg);
     setOpponentHpDisplay(opponentHpRef.current);
@@ -190,7 +245,6 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       soundFx.playCritHit();
       triggerHaptic('super');
       screenShakeRef.current = 12;
-      setScreenShakeVal(12);
       hitStopTimerRef.current = 70; // 70ms AAA Hit-Stop Freeze
       spawnHitParticles(235, 110, '#fbbf24', 24);
       addCallout('SUPER VOLE!', 210, 60, '#fde047');
@@ -199,7 +253,6 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       soundFx.playCritHit();
       triggerHaptic('medium');
       screenShakeRef.current = 8;
-      setScreenShakeVal(8);
       hitStopTimerRef.current = 45; // 45ms Hit-Stop Freeze
       spawnHitParticles(235, 110, '#fbbf24', 16);
       const critCallouts = ['CRUNCH!', 'POW!', 'SMASH!', 'BOOM!'];
@@ -209,7 +262,6 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       soundFx.playPunch();
       triggerHaptic('light');
       screenShakeRef.current = 3;
-      setScreenShakeVal(3);
       spawnHitParticles(235, 110, '#ef4444', 8);
       addFloatingText(`-${finalDmg}`, 235, 82, '#ffffff', 'damage');
     }
@@ -256,6 +308,21 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       finalDmg = Math.round(finalDmg * (oppStats.critDmg || 1.5));
     }
 
+    const guarded = guardTimerRef.current > 0;
+    if (guarded) {
+      finalDmg = Math.max(1, Math.round(finalDmg * 0.25));
+      guardTimerRef.current = 0;
+      isGuardingRef.current = false;
+      setIsGuarding(false);
+      playerRageRef.current = Math.min(100, playerRageRef.current + 20);
+      setPlayerRageDisplay(playerRageRef.current);
+      addCallout('BLOK!', 95, 65, '#67e8f9');
+      spawnHitParticles(85, 110, '#67e8f9', 8);
+    } else {
+      comboStreakRef.current = 0;
+      setComboStreak(0);
+    }
+
     playerHpRef.current = Math.max(0, playerHpRef.current - finalDmg);
     setPlayerHpDisplay(playerHpRef.current);
 
@@ -263,11 +330,15 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     playerRageRef.current = Math.min(100, playerRageRef.current + 8);
     setPlayerRageDisplay(playerRageRef.current);
 
-    if (isCrit) {
+    if (guarded) {
+      soundFx.playDodge();
+      triggerHaptic('medium');
+      screenShakeRef.current = 2;
+      addFloatingText(`-${finalDmg}`, 85, 82, '#67e8f9', 'damage');
+    } else if (isCrit) {
       soundFx.playCritHit();
       triggerHaptic('medium');
       screenShakeRef.current = 7;
-      setScreenShakeVal(7);
       hitStopTimerRef.current = 40;
       spawnHitParticles(85, 110, '#f97316', 12);
       addCallout('OUCH!', 95, 65, '#ef4444');
@@ -276,7 +347,6 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       soundFx.playPunch();
       triggerHaptic('light');
       screenShakeRef.current = 2;
-      setScreenShakeVal(2);
       spawnHitParticles(85, 110, '#fca5a5', 6);
       addFloatingText(`-${finalDmg}`, 85, 82, '#f87171', 'damage');
     }
@@ -288,6 +358,9 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
   const handleVictory = () => {
     isMatchOverRef.current = true;
+    guardTimerRef.current = 0;
+    isGuardingRef.current = false;
+    setIsGuarding(false);
     setMatchStatus('victory');
     soundFx.playVictoryFanfare();
     addCallout('PERFECT KO!', 160, 75, '#fbbf24');
@@ -300,20 +373,26 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       });
     }
 
-    setTimeout(() => {
-      onVictory(stageRef.current);
+    const completedStage = stageRef.current;
+    resultTimerRef.current = setTimeout(() => {
+      resultTimerRef.current = null;
+      onVictory(completedStage);
     }, 700 / state.battleSpeed);
   };
 
   const handleDefeat = () => {
     isMatchOverRef.current = true;
+    guardTimerRef.current = 0;
+    isGuardingRef.current = false;
+    setIsGuarding(false);
     setMatchStatus('defeat');
     addFloatingText(t('knockout', state.lang), 160, 90, '#ef4444', 'crit');
 
     if (stageRef.current.isBoss) {
       setShowReviveAd(true);
     } else {
-      setTimeout(() => {
+      resultTimerRef.current = setTimeout(() => {
+        resultTimerRef.current = null;
         resetBattle(stageRef.current);
       }, 1500 / state.battleSpeed);
     }
@@ -321,25 +400,38 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
   const handleReviveWithAd = () => {
     gameManager.openRewardedAd({
-      type: 'free_gems',
+      type: 'revive',
       title: t('adRevive', state.lang),
       rewardDesc: 'Full HP Revive + Super Rage Surge!',
     });
-    playerHpRef.current = state.playerFighter.stats.maxHp;
-    playerRageRef.current = 100;
-    setPlayerHpDisplay(playerHpRef.current);
-    setPlayerRageDisplay(100);
-    isMatchOverRef.current = false;
-    setMatchStatus('fighting');
-    setShowReviveAd(false);
   };
 
   const handleManualRage = () => {
-    if (playerRageRef.current >= 100 && !isMatchOverRef.current) {
+    if (playerRageRef.current >= 100 && !isMatchOverRef.current && !paused) {
       playerRageRef.current = 0;
       setPlayerRageDisplay(0);
       performPlayerAttack(true);
     }
+  };
+
+  const handleManualAttack = () => {
+    if (state.autoBattle || paused || isMatchOverRef.current || playerCooldownRef.current > 0) return;
+    const speed = Math.max(10, state.playerFighter.stats.spd);
+    playerCooldownRef.current = Math.max(450, 1500 - speed * 18);
+    manualAttackReadyRef.current = false;
+    setManualAttackReady(false);
+    performPlayerAttack(false);
+  };
+
+  const handleGuard = () => {
+    if (state.autoBattle || paused || isMatchOverRef.current || guardCooldownRef.current > 0) return;
+    guardTimerRef.current = 800;
+    guardCooldownRef.current = 2600;
+    guardReadyRef.current = false;
+    isGuardingRef.current = true;
+    setGuardReady(false);
+    setIsGuarding(true);
+    addFloatingText('SAVUNMA', 85, 80, '#67e8f9', 'skill');
   };
 
   // Main Canvas Render Loop
@@ -350,6 +442,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
     if (!ctx) return;
 
     let lastTime = performance.now();
+    let canvasInView = true;
+    const intersectionObserver = new IntersectionObserver(([entry]) => {
+      canvasInView = entry.isIntersecting;
+    });
+    intersectionObserver.observe(canvas);
 
     const loop = (currentTime: number) => {
       const dt = Math.min(50, currentTime - lastTime);
@@ -362,11 +459,25 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         isHitStopActive = true;
       }
 
-      const simDt = isHitStopActive ? 0 : dt * state.battleSpeed;
+      const simDt = isHitStopActive || paused ? 0 : dt * state.battleSpeed;
 
-      if (!isMatchOverRef.current && state.autoBattle && !isHitStopActive) {
+      if (!isMatchOverRef.current && !paused && !isHitStopActive) {
         playerCooldownRef.current -= simDt;
         opponentCooldownRef.current -= simDt;
+        guardTimerRef.current = Math.max(0, guardTimerRef.current - simDt);
+        guardCooldownRef.current = Math.max(0, guardCooldownRef.current - simDt);
+        if (guardTimerRef.current === 0 && isGuardingRef.current) {
+          isGuardingRef.current = false;
+          setIsGuarding(false);
+        }
+        if (guardCooldownRef.current === 0 && !guardReadyRef.current) {
+          guardReadyRef.current = true;
+          setGuardReady(true);
+        }
+        if (playerCooldownRef.current <= 0 && !manualAttackReadyRef.current) {
+          manualAttackReadyRef.current = true;
+          setManualAttackReady(true);
+        }
 
         const pSpd = Math.max(10, state.playerFighter.stats.spd);
         const oppSpd = Math.max(10, stageRef.current.opponent.stats.spd);
@@ -374,8 +485,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         const pInterval = Math.max(450, 1500 - pSpd * 18);
         const oppInterval = Math.max(500, 1600 - oppSpd * 16);
 
-        if (playerCooldownRef.current <= 0) {
+        if (state.autoBattle && playerCooldownRef.current <= 0) {
           playerCooldownRef.current = pInterval;
+          manualAttackReadyRef.current = false;
+          setManualAttackReady(false);
           if (playerRageRef.current >= 100) {
             playerRageRef.current = 0;
             setPlayerRageDisplay(0);
@@ -408,20 +521,33 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
 
       if (screenShakeRef.current > 0) {
         screenShakeRef.current = Math.max(0, screenShakeRef.current - dt * 0.03);
-        setScreenShakeVal(screenShakeRef.current);
       }
 
-      drawScene(ctx, currentTime, isHitStopActive);
+      if (canvasInView) drawScene(ctx, currentTime, isHitStopActive);
 
       animFrameRef.current = requestAnimationFrame(loop);
     };
 
-    animFrameRef.current = requestAnimationFrame(loop);
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      } else if (animFrameRef.current === null) {
+        lastTime = performance.now();
+        animFrameRef.current = requestAnimationFrame(loop);
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onVisibilityChange();
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      intersectionObserver.disconnect();
+      if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
     };
-  }, [state.battleSpeed, state.autoBattle, state.playerFighter.stats]);
+  }, [state.battleSpeed, state.autoBattle, state.playerFighter.stats, paused]);
 
   const drawScene = (ctx: CanvasRenderingContext2D, time: number, isHitStop: boolean) => {
     const width = 360;
@@ -931,7 +1057,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       {/* Top Combat HUD with Frosted Titanium Panel */}
       <div className="px-3 pt-3 pb-2.5 bg-gradient-to-b from-[#10121a]/95 to-[#08090e]/95 backdrop-blur-md border-b border-white/10 flex items-center justify-between text-xs z-20 shadow-lg">
         {/* Player Header Info */}
-        <div className="flex-1 pr-2.5">
+        <div className="flex-1 min-w-0 pr-1.5">
           <div className="flex items-center justify-between font-black text-zinc-100 truncate">
             <span className="truncate tracking-wide text-xs">{state.playerFighter.name}</span>
             <span className="text-[10px] text-amber-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-amber-500/30">★ Lv.{state.playerLevel}</span>
@@ -962,7 +1088,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         </div>
 
         {/* Center Stage VS Badge */}
-        <div className="flex flex-col items-center px-2">
+        <div className="flex shrink-0 flex-col items-center px-1">
           <span className="font-black text-[12px] bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent drop-shadow font-mono tracking-tight">
             {currentStageData.displayStage}
           </span>
@@ -976,7 +1102,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         </div>
 
         {/* Opponent Header Info */}
-        <div className="flex-1 pl-2.5 text-right">
+        <div className="flex-1 min-w-0 pl-1.5 text-right">
           <div className="flex items-center justify-between font-black text-zinc-100 truncate flex-row-reverse">
             <span className="truncate tracking-wide text-xs">{currentStageData.opponent.name}</span>
             <span className="text-[10px] text-rose-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-rose-500/30 mr-1">★ Lv.{currentStageData.opponent.level}</span>
@@ -1000,17 +1126,54 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
       </div>
 
       {/* 2.5D Hybrid WebGL Viewport */}
-      <div className="relative w-full flex justify-center bg-black overflow-hidden h-[215px]">
+      <div className="battle-viewport arena-backdrop relative w-full flex justify-center overflow-hidden h-[clamp(148px,28dvh,215px)]" data-environment={currentStageData.environment}>
+        <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/45 via-transparent to-sky-950/20" />
         {/* 1. 3D WebGL Arena Backdrop */}
-        <BattleScene3D environment={currentStageData.environment} screenShake={screenShakeVal} />
+        <Suspense fallback={null}>
+          <BattleScene3D environment={currentStageData.environment} screenShakeRef={screenShakeRef} />
+        </Suspense>
 
         {/* 2. 2D Animated Combat Sprite Layer */}
         <canvas
           ref={canvasRef}
           width={360}
           height={215}
-          className="w-full max-w-[420px] h-[215px] block object-contain z-10"
+          className="w-full h-full block object-contain z-10"
         />
+
+        <button
+          type="button"
+          onClick={() => gameManager.toggleAutoBattle()}
+          className="absolute top-2 right-2 z-30 min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
+          aria-label={state.autoBattle ? 'Manuel dövüşe geç' : 'Otomatik dövüşe geç'}
+        >
+          {state.autoBattle ? '● AUTO' : '◎ MANUEL'}
+        </button>
+
+        {isGuarding && !state.autoBattle && (
+          <div className="pointer-events-none absolute inset-0 z-20 border-2 border-cyan-300/70 bg-cyan-300/5 shadow-[inset_0_0_35px_rgba(34,211,238,0.22)]" />
+        )}
+
+        {!state.autoBattle && matchStatus === 'fighting' && (
+          <div className="absolute bottom-2 right-2 z-30 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGuard}
+              disabled={!guardReady || paused}
+              className="min-h-11 px-3 rounded-xl border border-cyan-300/60 bg-cyan-950/90 text-cyan-100 shadow-lg flex items-center gap-1.5 text-xs font-black disabled:opacity-45 active:scale-95"
+            >
+              <Shield className="w-4 h-4" /> {state.lang === 'tr' ? 'KORUN' : 'GUARD'}
+            </button>
+            <button
+              type="button"
+              onClick={handleManualAttack}
+              disabled={!manualAttackReady || paused}
+              className="min-h-11 px-4 rounded-xl game-btn-crimson border border-rose-300/70 text-white shadow-lg flex items-center gap-1.5 text-xs font-black disabled:opacity-45 active:scale-95"
+            >
+              <Hand className="w-4 h-4" /> {state.lang === 'tr' ? 'VUR' : 'HIT'}
+            </button>
+          </div>
+        )}
 
         {/* Combo Streak Multiplier Badge */}
         {comboStreak > 1 && (
@@ -1024,7 +1187,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory }) 
         {playerRageDisplay >= 100 && (
           <button
             onClick={handleManualRage}
-            className="absolute bottom-3 left-3 px-4 py-2 game-btn-gold text-black font-black text-xs rounded-2xl shadow-2xl animate-bounce active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-20 border border-amber-300/80"
+            className={`absolute left-2 ${state.autoBattle ? 'bottom-3' : 'top-2'} px-3 min-h-9 game-btn-gold text-black font-black text-xs rounded-xl shadow-2xl active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-30 border border-amber-300/80`}
           >
             <Zap className="w-4 h-4 text-black" />
             <span>{t('superMove', state.lang)}</span>

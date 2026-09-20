@@ -66,7 +66,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-fadeIn">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-fadeIn">
       <div className="relative w-full max-w-sm game-card rounded-3xl p-5 shadow-2xl flex flex-col text-white max-h-[90vh] overflow-y-auto border border-white/15">
         
         {/* Header */}

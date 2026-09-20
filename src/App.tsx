@@ -15,7 +15,6 @@ import { SkillSelectModal } from './components/SkillSelectModal';
 import { RewardedAdModal } from './components/RewardedAdModal';
 import { SettingsModal } from './components/SettingsModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
-import { LoadingScreen } from './components/LoadingScreen';
 import { DailyLoginModal } from './components/DailyLoginModal';
 import { LuckyWheelModal } from './components/LuckyWheelModal';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
@@ -24,9 +23,9 @@ import { Stage } from './types/game';
 
 export function App() {
   const [state, setState] = useState<GameStateData>(gameManager.getState());
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
+  const [reviveToken, setReviveToken] = useState(0);
 
   useEffect(() => {
     const unsubscribe = gameManager.subscribe((newState) => {
@@ -38,6 +37,12 @@ export function App() {
   const handleStageVictory = (stage: Stage) => {
     gameManager.onStageVictory(stage);
   };
+
+  const isBattlePaused = Boolean(
+    state.pendingLootDrop || state.pendingSkillOffer || state.pendingSkillReplacement ||
+    state.isDailyLoginOpen || state.isLuckyWheelOpen || state.isOfflineRewardOpen ||
+    state.activeAdModal || isSettingsOpen || isLeaderboardOpen
+  );
 
   const renderActiveTab = () => {
     switch (state.activeTab) {
@@ -61,16 +66,11 @@ export function App() {
   return (
     <div className="w-full h-screen h-[100dvh] max-h-[100dvh] bg-[#050508] flex justify-center text-white font-sans selection:bg-amber-500 selection:text-black overflow-hidden select-none">
       
-      {/* 0. Initial AAA Loading Splash Screen */}
-      {isLoading && (
-        <LoadingScreen onComplete={() => setIsLoading(false)} />
-      )}
-
       {/* Mobile-Friendly Portrait Phone Container with AAA Glow Frame */}
-      <div className="relative w-full max-w-[430px] h-full h-[100dvh] max-h-[100dvh] bg-neutral-950 flex flex-col shadow-2xl border-x border-zinc-800/80 overflow-hidden">
+      <div className="app-shell relative w-full max-w-[430px] h-full h-[100dvh] max-h-[100dvh] bg-neutral-950 flex flex-col shadow-2xl border-x border-zinc-800/80 overflow-hidden">
         
         {/* Pinned Top Combat Deck (Header HUD + Battle Canvas + Stats) - Strictly non-scrollable */}
-        <div className="shrink-0 z-20 flex flex-col bg-neutral-950 touch-none select-none overscroll-none">
+        <div className="combat-deck shrink-0 z-20 flex flex-col bg-neutral-950 select-none overscroll-none">
           {/* 1. Top Header HUD (Currencies, XP, Leaderboard, Settings) */}
           <HeaderNav 
             state={state} 
@@ -79,14 +79,14 @@ export function App() {
           />
 
           {/* 2. Top Half: 2.5D Combat Canvas Viewport */}
-          <BattleCanvas state={state} onVictory={handleStageVictory} />
+          <BattleCanvas state={state} onVictory={handleStageVictory} reviveToken={reviveToken} paused={isBattlePaused} />
 
           {/* 3. Mid Section: Real-time Stats Strip */}
           <StatBar stats={state.playerFighter.stats} lang={state.lang} />
         </div>
 
         {/* Scrollable Center: Only Interactive Tab Views Scroll */}
-        <main className="flex-1 overflow-y-auto overscroll-y-contain overscroll-x-none scroll-smooth min-h-0">
+        <main className="tab-content flex-1 overflow-y-auto overscroll-y-contain overscroll-x-none scroll-smooth min-h-0">
           {renderActiveTab()}
         </main>
 
@@ -134,7 +134,7 @@ export function App() {
 
         {/* 12. Rewarded Video Ad Modal */}
         {state.activeAdModal && (
-          <RewardedAdModal state={state} />
+          <RewardedAdModal state={state} onReviveClaimed={() => setReviveToken((token) => token + 1)} />
         )}
 
         {/* 13. Professional Game Settings Modal */}

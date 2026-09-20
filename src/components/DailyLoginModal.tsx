@@ -43,7 +43,7 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
+    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
       <div className="relative w-full max-w-md game-card border-2 border-amber-400/50 rounded-3xl p-5 shadow-2xl flex flex-col text-white overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">

@@ -55,13 +55,13 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
           return (
             <div
               key={item.label}
-              className={`flex items-center justify-between px-2 py-1.5 rounded-xl bg-black/40 border border-white/5 shadow-sm ${item.glow} transition-all hover:border-white/15`}
+              className={`min-w-0 flex items-center justify-between gap-1 px-2 py-1.5 rounded-xl bg-black/40 border border-white/5 shadow-sm ${item.glow} transition-all hover:border-white/15`}
             >
-              <div className="flex items-center gap-1 text-[9px] font-bold text-zinc-400">
-                <Icon className={`w-3 h-3 ${item.color}`} />
-                <span className="tracking-tight">{item.label}</span>
+              <div className="min-w-0 flex items-center gap-1 text-[9px] font-bold text-zinc-400">
+                <Icon className={`w-3 h-3 shrink-0 ${item.color}`} />
+                <span className="tracking-tight truncate">{item.label}</span>
               </div>
-              <span className={`text-[10px] font-black font-mono ${item.color}`}>
+              <span className={`shrink-0 text-[10px] font-black font-mono ${item.color}`}>
                 {item.value}
               </span>
             </div>

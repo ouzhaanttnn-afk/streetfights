@@ -95,3 +95,24 @@ screenshots or a trailer; capture them from a real device build.
 - [ ] Upgrade run from build 6: progress preserved.
 - [ ] Screenshots: iPhone 6.9" and iPad 13" if iPad is a supported device family.
 - [ ] Privacy policy + support URLs load; privacy labels match section 3.
+
+
+## 8. Submission status (2026-10-30) and the one step left for you
+Done through the App Store Connect API (app 6812213326, version 1.0, build 8): build attached, en-US + tr metadata, subtitle,
+support/marketing/privacy URLs (Vercel pages), 6 screenshots per language (6.5"), review notes, content rights
+("no third-party content"), age rating 12+ (prize wheel counted as simulated gambling), release type MANUAL.
+
+**Blocking item (cannot be done through the public API):** App Store Connect rejects adding the version to review with
+`BINARY_INDICATES_APP_TRACKS_USERS`. The binary's privacy manifest says the app tracks users (AdMob), so the *App Privacy*
+answers must say so too. In App Store Connect: **App > App Privacy > Get Started / Edit**
+1. "Do you or your third-party partners collect data from this app?" -> **Yes**.
+2. Select and fill (each: *Not linked to the user's identity*, **Used for tracking: Yes**, purpose **Third-Party Advertising**):
+   - Identifiers -> **Device ID**
+   - Usage Data -> **Advertising Data**
+   - Usage Data -> **Product Interaction**
+3. Also declare what the Google Mobile Ads SDK collects per Google's own "Apple app privacy details" page for AdMob
+   (typically Coarse Location, and Diagnostics: Crash Data / Performance Data / Other Diagnostic Data; not used for tracking).
+   Check that page: I could not reach it from my environment, so treat this list as a starting point, not as verified.
+4. Tracking domains are already in `PrivacyInfo.xcprivacy`. **Publish** the answers.
+5. Then open version 1.0 and press **Add for Review / Submit for Review** (an empty draft submission already exists
+   and will be reused).

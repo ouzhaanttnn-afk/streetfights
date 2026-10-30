@@ -28,6 +28,11 @@ export function App() {
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [reviveToken, setReviveToken] = useState(0);
 
+  // CSS uppercase follows the document language (Turkish dotted/dotless I), so keep it in sync with the game language
+  useEffect(() => {
+    document.documentElement.lang = state.lang;
+  }, [state.lang]);
+
   useEffect(() => {
     const unsubscribe = gameManager.subscribe((newState) => {
       setState({ ...newState });

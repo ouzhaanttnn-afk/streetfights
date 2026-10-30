@@ -73,7 +73,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     await p.addInitScript(([base,d]) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:true, currentWorld:3,currentSubStage:2,highestWorld:3,highestSubStage:2, playerFighter:{baseStats:base} })); }, [base, today()]);
     await p.goto(URL); await p.waitForTimeout(4000);
     let used = 0;
-    for (let i = 0; i < 40 && !used; i++) { await p.waitForTimeout(500); used = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).dailyQuests.find(q => q.id==='use_super').progress); }
+    for (let i = 0; i < 40 && !used; i++) { await p.waitForTimeout(500); used = await p.evaluate(() => { const x = JSON.parse(localStorage.getItem('street_striker_rpg_save_v2') || '{}'); return ((x.dailyQuests || []).find(q => q.id === 'use_super') || {}).progress || 0; }); }
     ok('rage attack fires and is counted', used >= 1, `use_super=${used}`);
     ok('no page errors during rage', errs.length === 0, errs.join('|'));
     await b.close();

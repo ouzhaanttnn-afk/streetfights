@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { ArenaEnvironment, FloatingText, Stage } from '../types/game';
 import { GameStateData, gameManager } from '../core/gameState';
 import { soundFx } from '../core/audio';
+import { haptics } from '../core/haptics';
 import { t } from '../i18n/translations';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
@@ -64,7 +65,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     stageRef.current = current;
     setCurrentStageData(current);
     resetBattle(current);
-  }, [state.currentWorld, state.currentSubStage, state.playerFighter.stats.maxHp]);
+  }, [state.currentWorld, state.currentSubStage, state.battleNonce, state.playerFighter.stats.maxHp]);
 
   useEffect(() => {
     if (reviveToken === 0 || !isMatchOverRef.current || !stageRef.current.isBoss) return;
@@ -158,16 +159,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   };
 
   const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'super') => {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        if (type === 'light') navigator.vibrate(15);
-        else if (type === 'medium') navigator.vibrate(40);
-        else if (type === 'heavy') navigator.vibrate([40, 30, 40]);
-        else if (type === 'super') navigator.vibrate([60, 30, 80]);
-      } catch {
-        // Haptics not allowed or unsupported
-      }
-    }
+    haptics.trigger(type);
   };
 
   const performPlayerAttack = (isSpecialRage: boolean = false) => {
@@ -388,7 +380,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     setMatchStatus('defeat');
     addFloatingText(t('knockout', state.lang), 160, 90, '#ef4444', 'crit');
 
-    if (stageRef.current.isBoss) {
+    const retreated = gameManager.onStageDefeat(stageRef.current);
+    if (retreated) {
+      // The stage change triggers a fresh battle on the previous stage
+      addFloatingText(state.lang === 'tr' ? 'Geri çekildin: biraz güçlen!' : 'Falling back: power up!', 160, 120, '#fbbf24', 'skill');
+    } else if (stageRef.current.isBoss) {
       setShowReviveAd(true);
     } else {
       resultTimerRef.current = setTimeout(() => {
@@ -408,6 +404,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
   const handleManualRage = () => {
     if (playerRageRef.current >= 100 && !isMatchOverRef.current && !paused) {
+      gameManager.recordQuest('use_super');
       playerRageRef.current = 0;
       setPlayerRageDisplay(0);
       performPlayerAttack(true);
@@ -490,6 +487,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           manualAttackReadyRef.current = false;
           setManualAttackReady(false);
           if (playerRageRef.current >= 100) {
+            gameManager.recordQuest('use_super');
             playerRageRef.current = 0;
             setPlayerRageDisplay(0);
             performPlayerAttack(true);
@@ -1196,13 +1194,21 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
         {/* Revive with Ad in Boss Fights */}
         {showReviveAd && (
-          <button
-            onClick={handleReviveWithAd}
-            className="absolute bottom-3 right-3 px-4 py-2.5 game-btn-crimson text-white font-black text-xs rounded-2xl shadow-2xl border border-rose-300 flex items-center gap-1.5 animate-pulse active:scale-95 transition-transform z-30"
-          >
-            <Tv className="w-4 h-4" />
-            <span>{t('adRevive', state.lang)}</span>
-          </button>
+          <div className="absolute bottom-3 right-3 z-30 flex flex-col items-end gap-2">
+            <button
+              onClick={handleReviveWithAd}
+              className="px-4 py-2.5 game-btn-crimson text-white font-black text-xs rounded-2xl shadow-2xl border border-rose-300 flex items-center gap-1.5 animate-pulse active:scale-95 transition-transform"
+            >
+              <Tv className="w-4 h-4" />
+              <span>{t('adRevive', state.lang)}</span>
+            </button>
+            <button
+              onClick={() => resetBattle(stageRef.current)}
+              className="min-h-10 px-4 rounded-2xl bg-black/80 text-zinc-100 font-black text-xs border border-white/25 active:scale-95"
+            >
+              {state.lang === 'tr' ? '↻ Tekrar dene' : '↻ Retry'}
+            </button>
+          </div>
         )}
 
         {/* Match Result Overlay */}

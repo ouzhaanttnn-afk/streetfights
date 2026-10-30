@@ -70,9 +70,20 @@ const WORLDS: WorldConfig[] = [
   },
 ];
 
+export const WORLD_COUNT = WORLDS.length;
+
+export function getWorldName(worldNum: number): string {
+  const idx = (Math.max(worldNum, 1) - 1) % WORLDS.length;
+  const loop = Math.floor((Math.max(worldNum, 1) - 1) / WORLDS.length);
+  return loop > 0 ? `${WORLDS[idx].worldName} ∞${loop}` : WORLDS[idx].worldName;
+}
+
 export function getStageData(worldNum: number, subNum: number): Stage {
-  const worldIdx = Math.min(Math.max(worldNum - 1, 0), WORLDS.length - 1);
+  // Worlds loop after the last arena, with stats continuing to scale (endless mode)
+  const worldIdx = (Math.max(worldNum, 1) - 1) % WORLDS.length;
+  const loop = Math.floor((Math.max(worldNum, 1) - 1) / WORLDS.length);
   const w = WORLDS[worldIdx];
+  const worldName = loop > 0 ? `${w.worldName} ∞${loop}` : w.worldName;
   const isBoss = subNum === 10 || subNum === 5;
   const isFinalBoss = subNum === 10;
 
@@ -107,7 +118,7 @@ export function getStageData(worldNum: number, subNum: number): Stage {
     world: worldNum,
     subStage: subNum,
     displayStage: `Stage ${worldNum}-${subNum}`,
-    name: isBoss ? `BOSS: ${w.worldName}` : `${w.worldName}`,
+    name: isBoss ? `BOSS: ${worldName}` : worldName,
     environment: w.environment,
     isBoss,
     opponent: {

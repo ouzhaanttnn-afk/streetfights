@@ -144,6 +144,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
+                <Zap className="w-4 h-4 text-cyan-400" />
+                <span>{state.lang === 'tr' ? 'Titreşim (Haptic)' : 'Haptics'}</span>
+              </div>
+              <button
+                onClick={() => gameManager.toggleHaptics()}
+                aria-label="Haptics"
+                className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
+                  state.hapticsEnabled ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
+                }`}
+              >
+                <div className="w-5 h-5 rounded-full bg-white shadow-md" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
                 <Zap className="w-4 h-4 text-amber-400" />
                 <span>{t('highPerformance', state.lang)}</span>
               </div>

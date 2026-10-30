@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
-import { getStageData } from '../../core/stageDatabase';
+import { getStageData, getWorldName, WORLD_COUNT } from '../../core/stageDatabase';
+import { DailyQuestsCard } from '../DailyQuestsCard';
 import { t } from '../../i18n/translations';
 import { 
   Trophy, 
@@ -18,19 +19,43 @@ interface ArenaTabProps {
 export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
   const [selectedWorld, setSelectedWorld] = useState<number>(state.currentWorld);
 
-  const worlds = [
-    { num: 1, name: 'The Back Alley', desc: 'Street fighters & reckless brawlers' },
-    { num: 2, name: 'The Concrete Cage', desc: 'Underground cage duels & subway bandits' },
-    { num: 3, name: 'Neon Rooftop Club', desc: 'Cyberpunk fighters & acrobatic strikers' },
-    { num: 4, name: 'Pro Boxing & Striker Ring', desc: 'National champions & heavyweight sluggers' },
-    { num: 5, name: 'Grand World Mega Stadium', desc: 'Apex legends & world gods' },
+  const worldDescs = [
+    'Street fighters & reckless brawlers',
+    'Underground cage duels & subway bandits',
+    'Cyberpunk fighters & acrobatic strikers',
+    'National champions & heavyweight sluggers',
+    'Apex legends & world gods',
   ];
+  // Worlds beyond the fifth loop endlessly with tougher opponents
+  const worldCount = Math.max(WORLD_COUNT, state.highestWorld, state.currentWorld);
+  const worlds = Array.from({ length: worldCount }, (_, i) => ({
+    num: i + 1,
+    name: getWorldName(i + 1).replace(/\s*\(.*\)/, ''),
+    desc: worldDescs[i % WORLD_COUNT],
+  }));
 
   const highestTotal = (state.highestWorld - 1) * 10 + state.highestSubStage;
 
   return (
     <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-16">
       
+      <DailyQuestsCard state={state} />
+
+      {/* Stage Progression Mode */}
+      <button
+        onClick={() => gameManager.toggleAutoAdvance()}
+        className="w-full min-h-11 rounded-2xl game-card border border-white/10 px-4 flex items-center justify-between text-xs font-black active:scale-[0.98]"
+      >
+        <span className="text-zinc-200">
+          {state.lang === 'tr' ? 'Zafer sonrası' : 'After victory'}
+        </span>
+        <span className={state.autoAdvance ? 'text-emerald-300' : 'text-amber-300'}>
+          {state.autoAdvance
+            ? (state.lang === 'tr' ? '➜ Sonraki bölüm' : '➜ Next stage')
+            : (state.lang === 'tr' ? '⟳ Aynı bölümü tekrarla (farm)' : '⟳ Repeat stage (farm)')}
+        </span>
+      </button>
+
       {/* World Selector Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
         {worlds.map((w) => {

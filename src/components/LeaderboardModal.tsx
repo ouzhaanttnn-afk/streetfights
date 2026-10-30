@@ -104,7 +104,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ state, onClo
         {/* Top Tier Leaderboard Roster */}
         <div className="space-y-2.5">
           <span className="text-[11px] font-black text-zinc-400 uppercase tracking-wider block px-1">
-            Top Global Champions
+            Street Legends
           </span>
 
           {TOP_TIER_PLAYERS.map((entry) => {

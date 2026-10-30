@@ -5,11 +5,53 @@ import { getRandomSkill, SKILL_DATABASE } from './skillDatabase';
 import { COSMETICS_LIST, CosmeticItem } from './cosmeticsData';
 import { Language } from '../i18n/translations';
 import { soundFx } from './audio';
+import { haptics } from './haptics';
 
 const STORAGE_KEY = 'street_striker_rpg_save_v2';
+const SAVE_VERSION = 3;
+const BUFF_DURATION_MS = 10 * 60 * 1000;
+const LOSSES_BEFORE_RETREAT = 3;
+
+export type QuestId = 'win_fights' | 'beat_boss' | 'train_gym' | 'use_super';
+
+export interface DailyQuest {
+  id: QuestId;
+  target: number;
+  progress: number;
+  claimed: boolean;
+  gems: number;
+  coins: number;
+}
+
+const QUEST_TEMPLATES: Omit<DailyQuest, 'progress' | 'claimed'>[] = [
+  { id: 'win_fights', target: 8, gems: 10, coins: 400 },
+  { id: 'beat_boss', target: 1, gems: 20, coins: 600 },
+  { id: 'train_gym', target: 3, gems: 8, coins: 300 },
+  { id: 'use_super', target: 5, gems: 12, coins: 500 },
+];
+
+function createDailyQuests(): DailyQuest[] {
+  return QUEST_TEMPLATES.map((q) => ({ ...q, progress: 0, claimed: false }));
+}
+
+function dateKey(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function cloneSkill(skill: Skill): Skill {
+  return {
+    ...skill,
+    statBonus: { ...skill.statBonus },
+    specialProc: skill.specialProc ? { ...skill.specialProc } : undefined,
+  };
+}
 
 export interface AdOffer {
-  type: 'free_gems' | 'double_damage' | 'mystery_chest' | 'revive';
+  type: 'free_gems' | 'double_damage' | 'double_coins' | 'mystery_chest' | 'revive' | 'offline_double';
   title: string;
   rewardDesc: string;
 }
@@ -68,9 +110,18 @@ export interface GameStateData {
   doubleDamageUntil: number;
   doubleCoinsUntil: number;
   activeAdModal: AdOffer | null;
+
+  // Mobile QoL & Progression
+  saveVersion: number;
+  hapticsEnabled: boolean;
+  autoAdvance: boolean;
+  lossStreak: number;
+  battleNonce: number;
+  dailyQuests: DailyQuest[];
+  questDate: string;
 }
 
-const INITIAL_GYM: GymTraining[] = [
+const GYM_TEMPLATES: GymTraining[] = [
   {
     id: 'gym_punching_bag',
     name: 'Heavy Boxing Bag',
@@ -151,7 +202,7 @@ function createInitialPlayer(): Fighter {
     partner: null,
   };
 
-  const starterSkill = { ...SKILL_DATABASE[0] }; // Flurry Master
+  const starterSkill = cloneSkill(SKILL_DATABASE[0]); // Flurry Master
 
   const stats = calculateTotalStats(
     INITIAL_BASE_STATS,
@@ -196,18 +247,140 @@ function createInitialPlayer(): Fighter {
   };
 }
 
+function createDefaultState(): GameStateData {
+  return {
+    lang: 'tr',
+    coins: 200,
+    gems: 30,
+    trophies: 0,
+    playerLevel: 1,
+    playerXp: 0,
+    playerMaxXp: 100,
+    currentWorld: 1,
+    currentSubStage: 1,
+    highestWorld: 1,
+    highestSubStage: 1,
+    playerFighter: createInitialPlayer(),
+    gymTrainings: GYM_TEMPLATES.map((g) => ({ ...g })),
+    inventory: [],
+    maxInventorySlots: 20,
+    pendingLootDrop: null,
+    pendingSkillOffer: null,
+    pendingSkillReplacement: null,
+    activeTab: 'gear',
+    autoBattle: true,
+    battleSpeed: 1,
+    soundEnabled: true,
+    autoSellRarity: 'none',
+    totalFightsWon: 0,
+    totalDamageDealt: 0,
+    bossDefeatedCount: 0,
+    dailyLoginStreak: 0,
+    lastDailyLoginDate: '',
+    claimedDailyDays: [],
+    isDailyLoginOpen: false,
+    isLuckyWheelOpen: false,
+    lastOfflineTimestamp: Date.now(),
+    isOfflineRewardOpen: false,
+    offlineGoldAccumulated: 0,
+    offlineMinutesAccumulated: 0,
+    unlockedCosmetics: ['outfit_street', 'hair_spiky_yellow', 'aura_none', 'ball_street'],
+    equippedOutfit: 'outfit_street',
+    equippedHair: 'hair_spiky_yellow',
+    equippedAura: 'aura_none',
+    equippedBall: 'ball_street',
+    doubleDamageUntil: 0,
+    doubleCoinsUntil: 0,
+    activeAdModal: null,
+    saveVersion: SAVE_VERSION,
+    hapticsEnabled: true,
+    autoAdvance: true,
+    lossStreak: 0,
+    battleNonce: 0,
+    dailyQuests: createDailyQuests(),
+    questDate: dateKey(),
+  };
+}
+
 class GameManager {
   private state: GameStateData;
   private listeners: Set<(state: GameStateData) => void> = new Set();
 
   constructor() {
     this.state = this.loadState();
+    soundFx.soundEnabled = this.state.soundEnabled;
+    haptics.enabled = this.state.hapticsEnabled;
     this.applyCosmeticsToPlayer();
     this.recalculatePlayerStats();
+    this.refreshSession();
+  }
+
+  private lastBuffActive = false;
+
+  // Runs on launch and every time the app returns from the background
+  public refreshSession() {
     this.checkOfflineEarnings();
+    this.checkDailyLogin();
+    this.ensureDailyQuests();
+    this.notify();
+  }
+
+  public onAppHidden() {
+    this.saveState();
+  }
+
+  // Called periodically: expires timed buffs without waiting for the next fight
+  public refreshBuffs() {
+    const active = Date.now() < this.state.doubleDamageUntil;
+    if (active !== this.lastBuffActive) {
+      this.recalculatePlayerStats();
+      this.notify();
+    }
+  }
+
+  private checkDailyLogin() {
+    const today = dateKey();
+    if (this.state.lastDailyLoginDate === today) return;
+
+    const consecutive = this.state.lastDailyLoginDate === dateKey(-1);
+    let streak = consecutive ? this.state.dailyLoginStreak + 1 : 1;
+    if (!consecutive || streak > 7) {
+      this.state.claimedDailyDays = [];
+      if (streak > 7) streak = 1;
+    }
+    this.state.dailyLoginStreak = streak;
+    this.state.lastDailyLoginDate = today;
+    this.state.isDailyLoginOpen = true;
+  }
+
+  private ensureDailyQuests() {
+    const today = dateKey();
+    if (this.state.questDate !== today || !this.state.dailyQuests?.length) {
+      this.state.dailyQuests = createDailyQuests();
+      this.state.questDate = today;
+    }
+  }
+
+  public recordQuest(id: QuestId, amount = 1) {
+    this.ensureDailyQuests();
+    const quest = this.state.dailyQuests.find((q) => q.id === id);
+    if (!quest || quest.claimed || quest.progress >= quest.target) return;
+    quest.progress = Math.min(quest.target, quest.progress + amount);
+  }
+
+  public claimQuest(id: QuestId) {
+    const quest = this.state.dailyQuests.find((q) => q.id === id);
+    if (!quest || quest.claimed || quest.progress < quest.target) return;
+    quest.claimed = true;
+    this.state.gems += quest.gems;
+    this.state.coins += quest.coins;
+    soundFx.playCoin();
+    haptics.trigger('success');
+    this.notify();
   }
 
   private checkOfflineEarnings() {
+    if (this.state.isOfflineRewardOpen) return;
     const now = Date.now();
     const lastTime = this.state.lastOfflineTimestamp || now;
     this.state.lastOfflineTimestamp = now;
@@ -219,7 +392,8 @@ class GameManager {
     if (elapsedMinutes >= 5) {
       const cappedMins = Math.min(480, elapsedMinutes); // 8 hours max
       const gymLevelSum = this.state.gymTrainings.reduce((sum, g) => sum + g.level, 0);
-      const coinsPerMin = Math.max(2, Math.round(5 + gymLevelSum * 0.5 + this.state.currentWorld * 3));
+      const bestStage = (this.state.highestWorld - 1) * 10 + this.state.highestSubStage;
+      const coinsPerMin = Math.max(2, Math.round(5 + gymLevelSum * 0.5 + bestStage * 1.5));
       const totalOfflineCoins = cappedMins * coinsPerMin;
 
       this.state.offlineGoldAccumulated = totalOfflineCoins;
@@ -229,88 +403,43 @@ class GameManager {
   }
 
   private loadState(): GameStateData {
+    const defaults = createDefaultState();
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const fighter = parsed.playerFighter || defaults.playerFighter;
         return {
+          ...defaults,
           ...parsed,
-          lang: parsed.lang || 'tr',
-          unlockedCosmetics: parsed.unlockedCosmetics || ['outfit_street', 'hair_spiky_yellow', 'aura_none', 'ball_street'],
-          equippedOutfit: parsed.equippedOutfit || 'outfit_street',
-          equippedHair: parsed.equippedHair || 'hair_spiky_yellow',
-          equippedAura: parsed.equippedAura || 'aura_none',
-          equippedBall: parsed.equippedBall || 'ball_street',
-          doubleDamageUntil: parsed.doubleDamageUntil || 0,
-          doubleCoinsUntil: parsed.doubleCoinsUntil || 0,
+          playerFighter: {
+            ...defaults.playerFighter,
+            ...fighter,
+            equippedSkills: (fighter.equippedSkills || defaults.playerFighter.equippedSkills).map(cloneSkill),
+          },
+          gymTrainings: parsed.gymTrainings?.length ? parsed.gymTrainings : defaults.gymTrainings,
+          // Transient UI state is never restored
           activeAdModal: null,
-          pendingLootDrop: parsed.pendingLootDrop || null,
-          pendingSkillOffer: parsed.pendingSkillOffer || null,
           pendingSkillReplacement: null,
-          activeTab: parsed.activeTab || 'gear',
-          dailyLoginStreak: parsed.dailyLoginStreak || 1,
-          lastDailyLoginDate: parsed.lastDailyLoginDate || '',
-          claimedDailyDays: parsed.claimedDailyDays || [],
           isDailyLoginOpen: false,
           isLuckyWheelOpen: false,
-          lastOfflineTimestamp: parsed.lastOfflineTimestamp || Date.now(),
           isOfflineRewardOpen: false,
           offlineGoldAccumulated: 0,
           offlineMinutesAccumulated: 0,
+          lastOfflineTimestamp: parsed.lastOfflineTimestamp || Date.now(),
+          // Legacy saves started the streak at 1 without a login date
+          dailyLoginStreak: parsed.lastDailyLoginDate ? parsed.dailyLoginStreak || 0 : 0,
+          saveVersion: SAVE_VERSION,
         };
       }
     } catch {
-      // Fallback
+      // Corrupt save falls back to defaults
     }
-
-    return {
-      lang: 'tr',
-      coins: 200,
-      gems: 30,
-      trophies: 0,
-      playerLevel: 1,
-      playerXp: 0,
-      playerMaxXp: 100,
-      currentWorld: 1,
-      currentSubStage: 1,
-      highestWorld: 1,
-      highestSubStage: 1,
-      playerFighter: createInitialPlayer(),
-      gymTrainings: INITIAL_GYM,
-      inventory: [],
-      maxInventorySlots: 20,
-      pendingLootDrop: null,
-      pendingSkillOffer: null,
-      pendingSkillReplacement: null,
-      activeTab: 'gear',
-      autoBattle: true,
-      battleSpeed: 1,
-      soundEnabled: true,
-      autoSellRarity: 'none',
-      totalFightsWon: 0,
-      totalDamageDealt: 0,
-      bossDefeatedCount: 0,
-      dailyLoginStreak: 1,
-      lastDailyLoginDate: '',
-      claimedDailyDays: [],
-      isDailyLoginOpen: false,
-      isLuckyWheelOpen: false,
-      lastOfflineTimestamp: Date.now(),
-      isOfflineRewardOpen: false,
-      offlineGoldAccumulated: 0,
-      offlineMinutesAccumulated: 0,
-      unlockedCosmetics: ['outfit_street', 'hair_spiky_yellow', 'aura_none', 'ball_street'],
-      equippedOutfit: 'outfit_street',
-      equippedHair: 'hair_spiky_yellow',
-      equippedAura: 'aura_none',
-      equippedBall: 'ball_street',
-      doubleDamageUntil: 0,
-      doubleCoinsUntil: 0,
-      activeAdModal: null,
-    };
+    return defaults;
   }
 
   public saveState() {
+    this.state.lastOfflineTimestamp = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
     } catch {
@@ -410,7 +539,15 @@ class GameManager {
       this.state.coins += 1000;
       soundFx.playVictoryFanfare();
     } else if (type === 'double_damage') {
-      this.state.doubleDamageUntil = Date.now() + 10 * 60 * 1000; // 10 minutes
+      this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS;
+      soundFx.playVictoryFanfare();
+    } else if (type === 'double_coins') {
+      this.state.doubleCoinsUntil = Date.now() + BUFF_DURATION_MS;
+      soundFx.playVictoryFanfare();
+    } else if (type === 'offline_double') {
+      this.state.coins += this.state.offlineGoldAccumulated * 2;
+      this.state.offlineGoldAccumulated = 0;
+      this.state.isOfflineRewardOpen = false;
       soundFx.playVictoryFanfare();
     } else if (type === 'mystery_chest') {
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
@@ -460,6 +597,7 @@ class GameManager {
 
     // Apply timed active 2x damage buff from rewarded video
     const isDoubleDamageActive = Date.now() < this.state.doubleDamageUntil;
+    this.lastBuffActive = isDoubleDamageActive;
     if (isDoubleDamageActive) {
       calculated.atk = Math.round(calculated.atk * 2.0);
     }
@@ -494,6 +632,10 @@ class GameManager {
     this.state.trophies += stage.isBoss ? 25 : 5;
     this.state.totalFightsWon += 1;
     if (stage.isBoss) this.state.bossDefeatedCount += 1;
+    this.state.lossStreak = 0;
+    this.state.battleNonce += 1;
+    this.recordQuest('win_fights');
+    if (stage.isBoss) this.recordQuest('beat_boss');
 
     // Add XP
     this.addPlayerXp(stage.xpReward);
@@ -507,8 +649,11 @@ class GameManager {
       nextWorld += 1;
     }
 
-    this.state.currentWorld = nextWorld;
-    this.state.currentSubStage = nextSub;
+    // In farm mode the fighter keeps replaying the same stage
+    if (this.state.autoAdvance) {
+      this.state.currentWorld = nextWorld;
+      this.state.currentSubStage = nextSub;
+    }
 
     // Track highest unlocked
     const currentTotal = (nextWorld - 1) * 10 + nextSub;
@@ -542,6 +687,36 @@ class GameManager {
     }
 
     this.recalculatePlayerStats();
+    this.notify();
+  }
+
+  // Returns true when the fighter was moved back a stage to farm up
+  public onStageDefeat(stage: Stage): boolean {
+    this.state.lossStreak += 1;
+    let retreated = false;
+    if (!stage.isBoss && this.state.lossStreak >= LOSSES_BEFORE_RETREAT) {
+      const total = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
+      if (total > 1) {
+        const prev = total - 1;
+        this.state.currentWorld = Math.floor((prev - 1) / 10) + 1;
+        this.state.currentSubStage = ((prev - 1) % 10) + 1;
+        retreated = true;
+      }
+      this.state.lossStreak = 0;
+    }
+    this.notify();
+    return retreated;
+  }
+
+  public toggleAutoAdvance() {
+    this.state.autoAdvance = !this.state.autoAdvance;
+    this.notify();
+  }
+
+  public toggleHaptics() {
+    this.state.hapticsEnabled = !this.state.hapticsEnabled;
+    haptics.enabled = this.state.hapticsEnabled;
+    haptics.trigger('medium');
     this.notify();
   }
 
@@ -647,7 +822,7 @@ class GameManager {
       this.state.pendingSkillOffer = null;
     } else {
       if (this.state.playerFighter.equippedSkills.length < 6) {
-        this.state.playerFighter.equippedSkills.push({ ...skill });
+        this.state.playerFighter.equippedSkills.push(cloneSkill(skill));
         this.state.pendingSkillOffer = null;
       } else {
         // Deck full! Open safe replacement modal instead of silent purge
@@ -665,7 +840,7 @@ class GameManager {
   public replaceSkillInDeck(oldSkillId: string, newSkill: Skill) {
     const idx = this.state.playerFighter.equippedSkills.findIndex((s) => s.id === oldSkillId);
     if (idx >= 0) {
-      this.state.playerFighter.equippedSkills[idx] = { ...newSkill };
+      this.state.playerFighter.equippedSkills[idx] = cloneSkill(newSkill);
     }
     this.state.pendingSkillReplacement = null;
     this.state.pendingSkillOffer = null;
@@ -746,12 +921,12 @@ class GameManager {
   }
 
   public claimDailyLoginReward(day: number) {
-    if (this.state.claimedDailyDays.includes(day)) return;
+    if (this.state.claimedDailyDays.includes(day) || day !== this.state.dailyLoginStreak) return;
     this.state.claimedDailyDays.push(day);
 
     if (day === 1) this.state.coins += 500;
     else if (day === 2) this.state.gems += 50;
-    else if (day === 3) this.state.doubleDamageUntil = Date.now() + 10 * 60 * 1000;
+    else if (day === 3) this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS;
     else if (day === 4) this.state.coins += 1500;
     else if (day === 5) this.state.gems += 100;
     else if (day === 6) {
@@ -763,6 +938,7 @@ class GameManager {
       this.state.pendingLootDrop = generateEquipment('head', 'mythic', stageLvl);
     }
 
+    this.recalculatePlayerStats();
     this.saveState();
     this.notify();
   }
@@ -781,12 +957,13 @@ class GameManager {
   public claimLuckyWheelPrize(type: string, amount: number) {
     if (type === 'coins') this.state.coins += amount;
     else if (type === 'gems') this.state.gems += amount;
-    else if (type === 'buff') this.state.doubleDamageUntil = Date.now() + 10 * 60 * 1000;
+    else if (type === 'buff') this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS;
     else if (type === 'gear') {
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
       this.state.pendingLootDrop = generateEquipment(undefined, 'legendary', stageLvl);
     }
 
+    this.recalculatePlayerStats();
     this.saveState();
     this.notify();
   }
@@ -826,6 +1003,7 @@ class GameManager {
     }
 
     soundFx.playGymTap();
+    this.recordQuest('train_gym');
     this.recalculatePlayerStats();
     this.saveState();
     this.notify();
@@ -836,6 +1014,8 @@ class GameManager {
   public selectStage(world: number, subStage: number) {
     this.state.currentWorld = world;
     this.state.currentSubStage = subStage;
+    this.state.lossStreak = 0;
+    this.state.battleNonce += 1;
     this.notify();
   }
 
@@ -913,54 +1093,11 @@ class GameManager {
 
   public resetGame() {
     localStorage.removeItem(STORAGE_KEY);
-    this.state = {
-      lang: 'tr',
-      coins: 200,
-      gems: 30,
-      trophies: 0,
-      playerLevel: 1,
-      playerXp: 0,
-      playerMaxXp: 100,
-      currentWorld: 1,
-      currentSubStage: 1,
-      highestWorld: 1,
-      highestSubStage: 1,
-      playerFighter: createInitialPlayer(),
-      gymTrainings: INITIAL_GYM,
-      inventory: [],
-      maxInventorySlots: 20,
-      pendingLootDrop: null,
-      pendingSkillOffer: null,
-      pendingSkillReplacement: null,
-      activeTab: 'gear',
-      autoBattle: true,
-      battleSpeed: 1,
-      soundEnabled: true,
-      autoSellRarity: 'none',
-      totalFightsWon: 0,
-      totalDamageDealt: 0,
-      bossDefeatedCount: 0,
-      dailyLoginStreak: 1,
-      lastDailyLoginDate: '',
-      claimedDailyDays: [],
-      isDailyLoginOpen: false,
-      isLuckyWheelOpen: false,
-      lastOfflineTimestamp: Date.now(),
-      isOfflineRewardOpen: false,
-      offlineGoldAccumulated: 0,
-      offlineMinutesAccumulated: 0,
-      unlockedCosmetics: ['outfit_street', 'hair_spiky_yellow', 'aura_none', 'ball_street'],
-      equippedOutfit: 'outfit_street',
-      equippedHair: 'hair_spiky_yellow',
-      equippedAura: 'aura_none',
-      equippedBall: 'ball_street',
-      doubleDamageUntil: 0,
-      doubleCoinsUntil: 0,
-      activeAdModal: null,
-    };
+    this.state = createDefaultState();
+    this.lastBuffActive = false;
     this.applyCosmeticsToPlayer();
     this.recalculatePlayerStats();
-    this.notify();
+    this.refreshSession();
   }
 
   public getCurrentStage(): Stage {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
 import { soundFx } from '../core/audio';
+import { adMobManager } from '../core/admob';
 import confetti from 'canvas-confetti';
 import { 
   Tv, 
@@ -23,9 +24,34 @@ interface RewardedAdModalProps {
 export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviveClaimed }) => {
   const [secondsLeft, setSecondsLeft] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [useSimulation, setUseSimulation] = useState<boolean>(!adMobManager.isNative);
   const offer = state.activeAdModal;
+  const offerType = offer?.type;
+
+  // Native platforms show a real rewarded ad; the in-app simulation is only a web/dev fallback
+  useEffect(() => {
+    if (!adMobManager.isNative || !offerType) return;
+    let cancelled = false;
+    adMobManager.showRewarded().then((result) => {
+      if (cancelled) return;
+      if (result === true) {
+        const isRevive = offerType === 'revive';
+        gameManager.claimRewardedAdReward();
+        if (isRevive) onReviveClaimed?.();
+      } else if (result === false) {
+        gameManager.closeRewardedAd();
+      } else {
+        // No ad inventory right now: tell the player instead of granting a free reward
+        gameManager.closeRewardedAd();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [offerType]);
 
   useEffect(() => {
+    if (!useSimulation) return;
     if (secondsLeft > 0) {
       const timer = setTimeout(() => {
         setSecondsLeft((s) => s - 1);
@@ -39,9 +65,9 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
         origin: { y: 0.5 },
       });
     }
-  }, [secondsLeft]);
+  }, [secondsLeft, useSimulation]);
 
-  if (!offer) return null;
+  if (!offer || !useSimulation) return null;
 
   const handleClaim = () => {
     if (!isCompleted) return;

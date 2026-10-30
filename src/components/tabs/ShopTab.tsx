@@ -59,7 +59,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 gap-2.5">
           {/* Ad 1: Free Gems */}
           <button
             onClick={() => gameManager.openRewardedAd({
@@ -86,6 +86,22 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
             <Zap className="w-6 h-6 text-rose-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
             <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adDoubleDmg', state.lang)}</span>
             <span className="text-[9px] font-mono font-bold text-rose-300 mt-1.5 bg-rose-950/90 px-2.5 py-0.5 rounded-lg border border-rose-500/40">⚡ 2x ATK</span>
+          </button>
+
+          {/* Ad 4: 2x Coins Buff */}
+          <button
+            onClick={() => gameManager.openRewardedAd({
+              type: 'double_coins',
+              title: state.lang === 'tr' ? '2x Altın' : '2x Coins',
+              rewardDesc: '2x Coin rewards for 10 min',
+            })}
+            className="p-3 rounded-2xl bg-gradient-to-b from-yellow-950/60 via-black to-neutral-950 border border-yellow-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-yellow-400 group"
+          >
+            <Coins className="w-6 h-6 text-yellow-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
+            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{state.lang === 'tr' ? '2x Altın' : '2x Coins'}</span>
+            <span className="text-[9px] font-mono font-bold text-yellow-300 mt-1.5 bg-yellow-950/90 px-2.5 py-0.5 rounded-lg border border-yellow-500/40">
+              {Date.now() < state.doubleCoinsUntil ? `${Math.ceil((state.doubleCoinsUntil - Date.now()) / 60000)}m` : '🪙 2x'}
+            </span>
           </button>
 
           {/* Ad 3: Mystery Chest */}

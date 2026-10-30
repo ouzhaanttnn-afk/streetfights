@@ -1,114 +1,75 @@
-// Google AdMob Integration Bridge for Web & Native Mobile (Capacitor / Cordova / React Native / TWA)
+// Google AdMob bridge: native rewarded ads on iOS/Android (Capacitor), web simulation elsewhere.
+import { Capacitor } from '@capacitor/core';
+import { AdMob } from '@capacitor-community/admob';
 
 export interface AdMobConfig {
   appId: string;
-  bannerAdUnitId?: string;
-  interstitialAdUnitId?: string;
-  rewardedAdUnitId?: string;
+  rewardedAdUnitId: string;
   isTesting: boolean;
 }
 
-// User's provided AdMob App ID
+// Google's official test rewarded unit. Set VITE_ADMOB_REWARDED_ID at build time to serve real ads.
+const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/1712485313';
+const liveRewardedId = import.meta.env.VITE_ADMOB_REWARDED_ID as string | undefined;
+
 export const DEFAULT_ADMOB_CONFIG: AdMobConfig = {
   appId: 'ca-app-pub-4229088811556918~1842473318',
-  // Official Google AdMob Test Rewarded Ad Unit ID for Android / iOS testing:
-  rewardedAdUnitId: 'ca-app-pub-3940256099942544/5224354917',
-  interstitialAdUnitId: 'ca-app-pub-3940256099942544/1033173712',
-  bannerAdUnitId: 'ca-app-pub-3940256099942544/6300978111',
-  isTesting: true,
+  rewardedAdUnitId: liveRewardedId || TEST_REWARDED_ID,
+  isTesting: !liveRewardedId,
 };
 
 class AdMobManager {
   private config: AdMobConfig = { ...DEFAULT_ADMOB_CONFIG };
-  private isInitialized: boolean = false;
-  private isRewardedLoaded: boolean = false;
+  private initialized = false;
+  private rewardedReady = false;
+
+  public readonly isNative = Capacitor.isNativePlatform();
 
   constructor() {
-    this.init();
+    void this.init();
   }
 
-  public init(customConfig?: Partial<AdMobConfig>) {
-    if (customConfig) {
-      this.config = { ...this.config, ...customConfig };
-    }
-
-    // Check if running inside Capacitor / Cordova AdMob Native Plugin
-    const win = window as any;
-    if (win?.Capacitor?.Plugins?.AdMob) {
-      try {
-        win.Capacitor.Plugins.AdMob.initialize({
-          requestTrackingAuthorization: true,
-          testingDevices: ['EMULATOR'],
-          initializeForTesting: this.config.isTesting,
-        });
-        this.isInitialized = true;
-        console.log('[AdMob] Native SDK Initialized with App ID:', this.config.appId);
-        this.prepareRewardedNative();
-      } catch (err) {
-        console.warn('[AdMob] Native initialization failed, falling back to Web Simulation:', err);
-      }
-    } else {
-      // Running in Web / Mobile Browser
-      this.isInitialized = true;
-      this.isRewardedLoaded = true;
-      console.log('[AdMob] Web Bridge Ready with App ID:', this.config.appId);
+  private async init() {
+    if (!this.isNative) return;
+    try {
+      await AdMob.initialize({ initializeForTesting: this.config.isTesting });
+      this.initialized = true;
+      await this.prepareRewarded();
+    } catch (err) {
+      console.warn('[AdMob] init failed', err);
     }
   }
 
-  public async prepareRewardedNative() {
-    const win = window as any;
-    if (win?.Capacitor?.Plugins?.AdMob) {
-      try {
-        await win.Capacitor.Plugins.AdMob.prepareRewardVideoAd({
-          adId: this.config.rewardedAdUnitId || 'ca-app-pub-3940256099942544/5224354917',
-          isTesting: this.config.isTesting,
-        });
-        this.isRewardedLoaded = true;
-      } catch (e) {
-        console.warn('[AdMob] Prepare Rewarded error:', e);
-      }
+  private async prepareRewarded() {
+    if (!this.isNative || !this.initialized) return;
+    try {
+      await AdMob.prepareRewardVideoAd({
+        adId: this.config.rewardedAdUnitId,
+        isTesting: this.config.isTesting,
+      });
+      this.rewardedReady = true;
+    } catch (err) {
+      this.rewardedReady = false;
+      console.warn('[AdMob] prepare rewarded failed', err);
     }
   }
 
-  public async showRewardedAd(
-    onRewardEarned: (rewardAmount?: number) => void,
-    onAdDismissed?: () => void,
-    onFallbackRequired?: () => void
-  ) {
-    const win = window as any;
-    
-    // If native Capacitor AdMob plugin is available
-    if (win?.Capacitor?.Plugins?.AdMob && this.isRewardedLoaded) {
-      try {
-        const rewardItem = await win.Capacitor.Plugins.AdMob.showRewardVideoAd();
-        if (rewardItem) {
-          onRewardEarned(rewardItem.amount || 1);
-        }
-        this.prepareRewardedNative();
-        return;
-      } catch (err) {
-        console.warn('[AdMob] Show native rewarded error, triggering simulation:', err);
-      }
+  // Resolves true only when the player actually earned the reward.
+  // Resolves 'unavailable' when no native ad could be shown (caller may fall back).
+  public async showRewarded(): Promise<boolean | 'unavailable'> {
+    if (!this.isNative) return 'unavailable';
+    if (!this.rewardedReady) await this.prepareRewarded();
+    if (!this.rewardedReady) return 'unavailable';
+    try {
+      this.rewardedReady = false;
+      const item = await AdMob.showRewardVideoAd();
+      void this.prepareRewarded();
+      return Boolean(item);
+    } catch (err) {
+      console.warn('[AdMob] show rewarded failed', err);
+      void this.prepareRewarded();
+      return 'unavailable';
     }
-
-    // Web / Simulator Fallback
-    if (onFallbackRequired) {
-      onFallbackRequired();
-    } else {
-      // Direct reward grant if no modal passed
-      onRewardEarned(1);
-    }
-  }
-
-  public getConfig(): AdMobConfig {
-    return this.config;
-  }
-
-  public updateAdUnitIds(rewardedId?: string, bannerId?: string, interstitialId?: string) {
-    if (rewardedId) this.config.rewardedAdUnitId = rewardedId;
-    if (bannerId) this.config.bannerAdUnitId = bannerId;
-    if (interstitialId) this.config.interstitialAdUnitId = interstitialId;
-    console.log('[AdMob] Updated Ad Units:', this.config);
   }
 }
 

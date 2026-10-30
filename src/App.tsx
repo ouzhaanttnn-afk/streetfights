@@ -31,7 +31,24 @@ export function App() {
     const unsubscribe = gameManager.subscribe((newState) => {
       setState({ ...newState });
     });
-    return () => unsubscribe();
+
+    // Mobile lifecycle: save on background, grant AFK/daily rewards on return
+    const onVisibility = () => {
+      if (document.hidden) gameManager.onAppHidden();
+      else gameManager.refreshSession();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onVisibility);
+
+    // Expire timed buffs without waiting for the next fight
+    const buffTimer = setInterval(() => gameManager.refreshBuffs(), 5000);
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onVisibility);
+      clearInterval(buffTimer);
+    };
   }, []);
 
   const handleStageVictory = (stage: Stage) => {

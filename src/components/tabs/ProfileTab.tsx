@@ -58,7 +58,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
   const handleVersionTap = () => {
     const newCount = devTapCount + 1;
     setDevTapCount(newCount);
-    if (newCount >= 7) {
+    if (import.meta.env.DEV && newCount >= 7) {
       setShowDevTools(!showDevTools);
       setDevTapCount(0);
     }

@@ -55,7 +55,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
         {/* Top Header Badge */}
         <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-black text-[10px] tracking-widest uppercase mb-2 border border-amber-500/40">
           <Clock className="w-3.5 h-3.5" />
-          <span>AFK GYM TRAINING COMPLETE</span>
+          <span>{ui(state.lang, 'off_badge')}</span>
         </div>
 
         {/* Mascot / Icon */}
@@ -64,17 +64,17 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
         </div>
 
         <h2 className="text-lg font-black text-white mb-1">
-          WELCOME BACK, CHAMP!
+          {ui(state.lang, 'off_title')}
         </h2>
         <p className="text-xs text-zinc-300 mb-4 px-2 font-medium">
-          While you were away for <strong className="text-amber-400">{timeString}</strong>, your fighter trained hard in the underground gym!
+          {ui(state.lang, 'off_body', { n: timeString })}
         </p>
 
         {/* Accumulated Gold Box */}
         <div className="w-full bg-black/60 rounded-2xl p-4 border border-white/10 mb-4 flex items-center justify-between shadow-inner">
-          <span className="text-xs font-bold text-zinc-400 uppercase">AFK Earnings:</span>
+          <span className="text-xs font-bold text-zinc-400 uppercase">{ui(state.lang, 'off_earn')}</span>
           <div className="flex items-center gap-1.5">
-            <Coins className="w-5 h-5 text-amber-400 animate-spin" />
+            <Coins className="w-5 h-5 text-amber-400" />
             <span className="text-xl font-black font-mono text-amber-300">
               +{amount.toLocaleString()}
             </span>
@@ -87,7 +87,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
             onClick={handleClaim}
             className="py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-zinc-300 font-black text-xs border border-zinc-700 active:scale-95 transition-all"
           >
-            CLAIM (+{amount.toLocaleString()})
+            {ui(state.lang, 'off_claim')}
           </button>
 
           <button
@@ -95,7 +95,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
             className="py-3 rounded-2xl game-btn-gold text-black font-black text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-1.5 animate-pulse"
           >
             <Tv className="w-4 h-4 text-black" />
-            <span>2X WITH AD (+{(amount * 2).toLocaleString()})</span>
+            <span>{ui(state.lang, 'off_double')} · +{(amount * 2).toLocaleString()}</span>
           </button>
         </div>
       </div>

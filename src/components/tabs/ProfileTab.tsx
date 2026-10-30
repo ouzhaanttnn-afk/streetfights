@@ -131,10 +131,10 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
             {/* Level & Power Rating */}
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-bold bg-black/60 px-2 py-0.5 rounded-lg border border-white/10 text-zinc-300">
-                ? Lv.{state.playerLevel}
+                ★ Lv.{state.playerLevel}
               </span>
               <span className="text-[11px] font-mono font-black text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
-                ? {pStats.powerScore} POW
+                ⚡ {pStats.powerScore.toLocaleString()} POW
               </span>
             </div>
           </div>

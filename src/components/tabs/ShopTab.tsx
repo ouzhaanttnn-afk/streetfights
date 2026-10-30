@@ -20,6 +20,34 @@ interface ShopTabProps {
   state: GameStateData;
 }
 
+const AURA_COLOR: Record<string, string> = { lightning: '#38bdf8', flame: '#f97316', neon: '#06b6d4', divine: '#fbbf24' };
+
+// Small visual swatch of the cosmetic: outfit colour, hair colour, aura glow or ball colour.
+const CosmeticPreview: React.FC<{ item: CosmeticItem }> = ({ item }) => {
+  const v = item.visualData;
+  if (item.category === 'ball') {
+    return (
+      <div className="w-12 h-12 shrink-0 rounded-2xl bg-neutral-900 border border-white/15 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-black/40" style={{ background: `radial-gradient(circle at 35% 30%, #ffffff 0%, ${v.ballColor || '#ffffff'} 45%, #111 100%)` }} />
+      </div>
+    );
+  }
+  if (item.category === 'aura') {
+    const c = v.auraEffect ? AURA_COLOR[v.auraEffect] : '#52525b';
+    return (
+      <div className="w-12 h-12 shrink-0 rounded-2xl bg-neutral-950 border border-white/15 flex items-center justify-center" style={{ boxShadow: v.auraEffect ? `inset 0 0 16px ${c}, 0 0 12px ${c}66` : undefined }}>
+        <Sparkles className="w-6 h-6" style={{ color: c }} />
+      </div>
+    );
+  }
+  const Icon = item.category === 'hair' ? Scissors : Shirt;
+  return (
+    <div className="w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center border border-white/20" style={{ backgroundColor: v.color || '#1e1b4b' }}>
+      <Icon className="w-6 h-6 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />
+    </div>
+  );
+};
+
 export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
   const [activeCategory, setActiveCategory] = useState<CosmeticCategory>('outfit');
 
@@ -114,7 +142,7 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
             })}
             className="p-3 rounded-2xl bg-gradient-to-b from-amber-950/60 via-black to-neutral-950 border border-amber-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-amber-400 group"
           >
-            <Sparkles className="w-6 h-6 text-amber-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform animate-spin" />
+            <Sparkles className="w-6 h-6 text-amber-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
             <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adMysteryChest', state.lang)}</span>
             <span className="text-[9px] font-mono font-bold text-amber-300 mt-1.5 bg-amber-950/90 px-2.5 py-0.5 rounded-lg border border-amber-500/40">🎁 DROP</span>
           </button>
@@ -177,37 +205,21 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
                       : 'bg-neutral-950/70 border-zinc-900'
                 }`}
               >
-                <div className="flex items-center gap-3.5">
-                  <div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xs border border-white/20 shadow-inner"
-                    style={{ backgroundColor: item.visualData.color || '#1e1b4b' }}
-                  >
-                    {item.visualData.auraEffect ? (
-                      <Sparkles className="w-6 h-6 text-amber-300 animate-spin" />
-                    ) : (
-                      <span className="text-white text-xl drop-shadow">🥊</span>
-                    )}
-                  </div>
+                <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                  <CosmeticPreview item={item} />
 
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-black text-zinc-100 tracking-tight">
-                        {item.name}
-                      </h4>
-                      {equipped && (
-                        <span className="px-2 py-0.5 bg-purple-600 text-white font-black text-[9px] rounded-md uppercase shadow-sm">
-                          {t('equippedSkin', state.lang)}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-zinc-400 mt-0.5 max-w-[185px] truncate">
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-black text-zinc-100 tracking-tight truncate">
+                      {item.name}
+                    </h4>
+                    <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
                       {item.description}
                     </p>
                   </div>
                 </div>
 
                 {equipped ? (
-                  <div className="px-3.5 py-2 rounded-2xl bg-purple-950 border border-purple-500 text-purple-300 font-black text-xs flex items-center gap-1.5 shadow-sm">
+                  <div className="shrink-0 px-3 py-2 rounded-2xl bg-purple-950 border border-purple-500 text-purple-300 font-black text-[11px] flex items-center gap-1.5 shadow-sm">
                     <Check className="w-4 h-4" />
                     <span>{t('equippedSkin', state.lang)}</span>
                   </div>

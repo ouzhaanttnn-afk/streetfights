@@ -159,7 +159,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
             <div className="text-xs font-black text-zinc-100">{offer.title}</div>
             <div className="text-[11px] text-emerald-400 font-bold font-mono mt-0.5">{offer.rewardDesc}</div>
           </div>
-          <Sparkles className="w-6 h-6 text-amber-400 shrink-0 animate-spin" />
+          <Sparkles className="w-6 h-6 text-amber-400 shrink-0" />
         </div>
 
         {/* Claim / Close Actions */}

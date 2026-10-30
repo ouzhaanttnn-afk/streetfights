@@ -80,7 +80,7 @@ export const SLOT_INFO: Record<EquipmentSlot, {
   templates: { name: string; flavor: string }[];
 }> = {
   head: {
-    label: 'Headgear',
+    label: 'Head',
     icon: 'Crown',
     primaryStat: 'def',
     secondaryStat: 'hp',
@@ -106,7 +106,7 @@ export const SLOT_INFO: Record<EquipmentSlot, {
     ],
   },
   mouth: {
-    label: 'Mouth / Mask',
+    label: 'Mouth',
     icon: 'Smile',
     primaryStat: 'stamina',
     secondaryStat: 'def',
@@ -118,7 +118,7 @@ export const SLOT_INFO: Record<EquipmentSlot, {
     ],
   },
   robe: {
-    label: 'Robe / Jersey',
+    label: 'Robe',
     icon: 'Shirt',
     primaryStat: 'hp',
     secondaryStat: 'def',
@@ -143,7 +143,7 @@ export const SLOT_INFO: Record<EquipmentSlot, {
     ],
   },
   boots: {
-    label: 'Boots / Cleats',
+    label: 'Boots',
     icon: 'Footprints',
     primaryStat: 'spd',
     secondaryStat: 'dodgeRate',
@@ -167,7 +167,7 @@ export const SLOT_INFO: Record<EquipmentSlot, {
     ],
   },
   weapon: {
-    label: 'Ball / Weapon',
+    label: 'Ball',
     icon: 'Crosshair',
     primaryStat: 'atk',
     secondaryStat: 'comboRate',
@@ -180,7 +180,7 @@ export const SLOT_INFO: Record<EquipmentSlot, {
     ],
   },
   partner: {
-    label: 'Coach / Hype-Girl',
+    label: 'Coach',
     icon: 'Heart',
     primaryStat: 'lifesteal',
     secondaryStat: 'comboRate',

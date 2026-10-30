@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GameStateData, gameManager } from './core/gameState';
 import { HeaderNav } from './components/HeaderNav';
 import { BattleCanvas } from './components/BattleCanvas';
@@ -20,6 +20,7 @@ import { LuckyWheelModal } from './components/LuckyWheelModal';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { SkillReplaceModal } from './components/SkillReplaceModal';
 import { TutorialHint } from './components/TutorialHint';
+import { ui } from './i18n/ui';
 import { Stage } from './types/game';
 
 export function App() {
@@ -27,6 +28,18 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [reviveToken, setReviveToken] = useState(0);
+  // Level-up banner: progression should feel like an event, not a silent number change
+  const [levelUpTo, setLevelUpTo] = useState<number | null>(null);
+  const prevLevel = useRef(state.playerLevel);
+  useEffect(() => {
+    if (state.playerLevel > prevLevel.current) {
+      setLevelUpTo(state.playerLevel);
+      const timer = setTimeout(() => setLevelUpTo(null), 2200);
+      prevLevel.current = state.playerLevel;
+      return () => clearTimeout(timer);
+    }
+    prevLevel.current = state.playerLevel;
+  }, [state.playerLevel]);
 
   // CSS uppercase follows the document language (Turkish dotted/dotless I), so keep it in sync with the game language
   useEffect(() => {
@@ -117,6 +130,15 @@ export function App() {
         <BottomNav activeTab={state.activeTab} lang={state.lang} />
 
         <TutorialHint state={state} blocked={isBattlePaused} />
+
+        {levelUpTo !== null && (
+          <div className="pointer-events-none absolute left-1/2 top-[58px] -translate-x-1/2 z-40 animate-fadeIn">
+            <div className="px-5 py-2 rounded-2xl game-btn-gold text-black text-center shadow-2xl border border-amber-200">
+              <div className="text-[13px] font-black tracking-wider">⬆ {ui(state.lang, 'level_up')}</div>
+              <div className="text-[11px] font-black">Lv. {levelUpTo}</div>
+            </div>
+          </div>
+        )}
 
         {/* 6. Loot Drop Decision Modal (SELL vs EQUIP) */}
         {state.pendingLootDrop && (

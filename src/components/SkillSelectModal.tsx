@@ -43,7 +43,7 @@ export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state
         
         {/* Header Tag */}
         <div className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-black tracking-widest uppercase mb-3 text-amber-300 shadow-sm">
-          <Sparkles className="w-3.5 h-3.5 animate-spin" />
+          <Sparkles className="w-3.5 h-3.5" />
           <span>{t('newRogueliteSkill', state.lang)}</span>
         </div>
 
@@ -60,7 +60,7 @@ export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state
         {/* Quote */}
         {skill.quote && (
           <p className="text-xs text-zinc-400 italic mb-2 font-serif">
-            "{skill.quote}"
+            {skill.quote}
           </p>
         )}
 

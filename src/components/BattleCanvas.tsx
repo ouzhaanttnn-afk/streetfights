@@ -1309,7 +1309,17 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           </div>
 
           <div className="flex items-center justify-end gap-1.5 mt-1 min-w-0">
-            <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[8px] font-black tracking-wider text-amber-300 uppercase">
+            {(() => {
+              // How the fight should go, from the power ratio: tells the player when to upgrade first
+              const ratio = state.playerFighter.stats.powerScore / Math.max(1, currentStageData.opponent.stats.powerScore);
+              const d = ratio >= 1.4 ? ['diff_easy', 'text-emerald-300 border-emerald-500/50'] : ratio >= 0.95 ? ['diff_even', 'text-amber-300 border-amber-500/50'] : ratio >= 0.7 ? ['diff_hard', 'text-orange-300 border-orange-500/60'] : ['diff_deadly', 'text-rose-300 border-rose-500/70'];
+              return (
+                <span className={`shrink-0 px-1.5 rounded bg-black/60 border text-[8px] font-black tracking-wider ${d[1]}`}>
+                  {ui(state.lang, d[0])}
+                </span>
+              );
+            })()}
+            <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[8px] font-black tracking-wider text-zinc-300 uppercase">
               {ui(state.lang, 'p_' + currentStageData.opponent.profile)}
             </span>
             <span className="text-[9px] text-zinc-400 truncate italic font-medium">"{currentStageData.opponent.dialogue}"</span>
@@ -1345,7 +1355,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           className="absolute top-2 right-2 z-30 min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
           aria-label={state.autoBattle ? 'Manuel dövüşe geç' : 'Otomatik dövüşe geç'}
         >
-          {state.autoBattle ? '● AUTO' : '◎ MANUEL'}
+          {ui(state.lang, state.autoBattle ? 'auto_btn' : 'manual_btn')}
         </button>
 
         {isGuarding && !state.autoBattle && (
@@ -1394,7 +1404,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         {playerRageDisplay >= 100 && (
           <button
             onClick={handleManualRage}
-            className={`absolute left-2 ${state.autoBattle ? 'bottom-3' : 'top-2'} px-3 min-h-9 game-btn-gold text-black font-black text-xs rounded-xl shadow-2xl active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-30 border border-amber-300/80`}
+            className={`absolute left-2 bottom-2 px-3.5 min-h-11 game-btn-gold text-black font-black text-xs rounded-xl shadow-2xl active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-30 border border-amber-300/80`}
           >
             <Zap className="w-4 h-4 text-black" />
             <span>{t('superMove', state.lang)}</span>
@@ -1422,7 +1432,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
         {/* Match Result Overlay */}
         {matchStatus !== 'fighting' && !showReviveAd && (
-          <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center pointer-events-none z-20">
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center pointer-events-none z-20 px-6 text-center">
             <span className={`text-3xl font-black italic tracking-wider drop-shadow-2xl ${
               matchStatus === 'victory' 
                 ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent' 
@@ -1430,6 +1440,17 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             }`}>
               {matchStatus === 'victory' ? (currentStageData.isBoss ? t('bossDefeated', state.lang) : t('victory', state.lang)) : t('knockout', state.lang)}
             </span>
+            {matchStatus === 'defeat' && (
+              <>
+                <span className="mt-1.5 text-[11px] font-bold text-zinc-200">{ui(state.lang, 'defeat_hint')}</span>
+                <button
+                  onClick={() => gameManager.setActiveTab('gym')}
+                  className="pointer-events-auto mt-2 min-h-9 px-4 rounded-xl game-btn-gold text-black text-[11px] font-black active:scale-95"
+                >
+                  {ui(state.lang, 'go_gym')}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

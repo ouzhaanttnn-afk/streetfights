@@ -216,8 +216,12 @@
 }
 
 .shine-effect {
-  position: relative;
   overflow: hidden;
+}
+
+/* Only give a containing block when the element is not already positioned (keeps .absolute buttons in place) */
+.shine-effect:not(.absolute):not(.fixed) {
+  position: relative;
 }
 
 .shine-effect::after {
@@ -279,3 +283,17 @@
   animation: spinSlow 20s linear infinite;
 }
 
+
+/* "+N POWER" toast above the power score */
+@keyframes power-gain-rise {
+  0% { opacity: 0; transform: translateY(6px) scale(0.9); }
+  15% { opacity: 1; transform: translateY(0) scale(1.08); }
+  80% { opacity: 1; transform: translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateY(-12px) scale(1); }
+}
+.power-gain {
+  animation: power-gain-rise 1.8s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .power-gain { animation: none; }
+}

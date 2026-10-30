@@ -119,7 +119,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
 
                   {skill.quote && (
                     <div className="text-[10px] text-zinc-400 italic truncate font-serif mt-0.5">
-                      "{skill.quote}"
+                      {skill.quote}
                     </div>
                   )}
 

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ui } from '../i18n/ui';
 import { FighterStats } from '../types/game';
 import { Language, t } from '../i18n/translations';
 import { 
@@ -20,6 +21,19 @@ interface StatBarProps {
 }
 
 export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
+  // Show "+N POWER" whenever an upgrade (gear, gym, level, skill) raises the power score
+  const prevPower = useRef(stats.powerScore);
+  const [gain, setGain] = useState<{ value: number; key: number } | null>(null);
+  useEffect(() => {
+    const diff = stats.powerScore - prevPower.current;
+    prevPower.current = stats.powerScore;
+    if (diff > 0) {
+      setGain({ value: diff, key: Date.now() });
+      const timer = setTimeout(() => setGain(null), 1800);
+      return () => clearTimeout(timer);
+    }
+  }, [stats.powerScore]);
+
   const statItems = [
     { label: t('stat_hp', lang), value: stats.hp, icon: Heart, color: 'text-emerald-400', glow: 'shadow-emerald-500/10' },
     { label: t('stat_atk', lang), value: stats.atk, icon: Flame, color: 'text-rose-400', glow: 'shadow-rose-500/10' },
@@ -42,8 +56,13 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
           <span className="tracking-wider uppercase text-zinc-200">{t('powerScore', lang)}</span>
         </div>
         
-        <div className="flex items-center gap-1.5 text-xs font-black font-mono tracking-wider text-amber-300 bg-gradient-to-r from-amber-950/80 via-black to-amber-950/80 px-3 py-1 rounded-xl border border-amber-500/40 shadow-inner">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+        <div className="relative flex items-center gap-1.5 text-xs font-black font-mono tracking-wider text-amber-300 bg-gradient-to-r from-amber-950/80 via-black to-amber-950/80 px-3 py-1 rounded-xl border border-amber-500/40 shadow-inner">
+          {gain && (
+            <span key={gain.key} className="power-gain absolute right-0 -top-4 whitespace-nowrap text-[11px] font-black text-emerald-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              +{gain.value.toLocaleString()} {ui(lang, 'power_word')}
+            </span>
+          )}
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
           <span className="text-[13px]">{stats.powerScore.toLocaleString()}</span>
         </div>
       </div>
@@ -55,13 +74,13 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
           return (
             <div
               key={item.label}
-              className={`min-w-0 flex items-center justify-between gap-1 px-2 py-1.5 rounded-xl bg-black/40 border border-white/5 shadow-sm ${item.glow} transition-all hover:border-white/15`}
+              className={`min-w-0 flex flex-col gap-0.5 px-2 py-1 rounded-xl bg-black/40 border border-white/5 shadow-sm ${item.glow}`}
             >
-              <div className="min-w-0 flex items-center gap-1 text-[9px] font-bold text-zinc-400">
+              <div className="min-w-0 flex items-center gap-1 text-[9px] font-bold text-zinc-400 leading-none">
                 <Icon className={`w-3 h-3 shrink-0 ${item.color}`} />
                 <span className="tracking-tight truncate">{item.label}</span>
               </div>
-              <span className={`shrink-0 text-[10px] font-black font-mono ${item.color}`}>
+              <span className={`text-[11px] leading-tight font-black font-mono ${item.color}`}>
                 {item.value}
               </span>
             </div>

@@ -87,29 +87,34 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         {/* Daily */}
         <button
           onClick={() => gameManager.openDailyLogin()}
-          className="p-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-black rounded-lg border border-amber-300/60 transition-all shadow-sm flex items-center justify-center relative"
+          className="p-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-black rounded-lg border border-amber-300/60 transition-all shadow-sm flex items-center justify-center relative"
           title="Daily Login Rewards"
         >
-          <Gift className="w-3 h-3 text-black" />
-          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
+          <Gift className="w-3.5 h-3.5 text-black" />
+          {!state.claimedDailyDays.includes(state.dailyLoginStreak) && (
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-black" />
+          )}
         </button>
 
         {/* Spin */}
         <button
           onClick={() => gameManager.openLuckyWheel()}
-          className="p-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white rounded-lg border border-cyan-300/60 transition-all shadow-sm flex items-center justify-center"
-          title="Lucky Fortune Wheel"
+          className="p-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white rounded-lg border border-cyan-300/60 transition-all shadow-sm flex items-center justify-center relative"
+          title="Lucky Wheel"
         >
-          <Sparkles className="w-3 h-3 text-yellow-200" />
+          <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+          {(gameManager.hasFreeWheelSpin() || state.bonusWheelSpins > 0) && (
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-black" />
+          )}
         </button>
 
         {/* Settings */}
         <button
           onClick={onOpenSettings}
-          className="p-1 bg-neutral-900/90 hover:bg-neutral-800 active:scale-95 text-zinc-400 hover:text-white rounded-lg border border-white/10 transition-all shadow-sm flex items-center justify-center"
+          className="p-1.5 bg-neutral-900/90 hover:bg-neutral-800 active:scale-95 text-zinc-400 hover:text-white rounded-lg border border-white/10 transition-all shadow-sm flex items-center justify-center"
           title={t('settings', state.lang)}
         >
-          <Settings className="w-3 h-3" />
+          <Settings className="w-3.5 h-3.5" />
         </button>
       </div>
     </header>

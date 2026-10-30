@@ -1,6 +1,6 @@
 import React from "react";
 import { GameStateData, gameManager } from "../core/gameState";
-import { t } from "../i18n/translations";
+import { ui } from "../i18n/ui";
 import confetti from "canvas-confetti";
 import { 
   Calendar, 
@@ -21,12 +21,12 @@ interface DailyLoginModalProps {
 
 export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose }) => {
   const rewards = [
-    { day: 1, type: "coins", amount: 500, label: "500 Coins", icon: Coins, color: "text-amber-400" },
-    { day: 2, type: "gems", amount: 50, label: "50 Gems", icon: Gem, color: "text-cyan-400" },
-    { day: 3, type: "buff", amount: 1, label: "2x Damage Token", icon: Flame, color: "text-rose-400" },
-    { day: 4, type: "coins", amount: 1500, label: "1,500 Coins", icon: Coins, color: "text-amber-400" },
-    { day: 5, type: "gems", amount: 100, label: "100 Gems", icon: Gem, color: "text-cyan-400" },
-    { day: 6, type: "gear", amount: 1, label: "Legendary Drop", icon: Sparkles, color: "text-yellow-300" },
+    { day: 1, type: "coins", amount: 500, label: "500", icon: Coins, color: "text-amber-400" },
+    { day: 2, type: "gems", amount: 50, label: "50", icon: Gem, color: "text-cyan-400" },
+    { day: 3, type: "buff", amount: 1, label: "2x ⚔️", icon: Flame, color: "text-rose-400" },
+    { day: 4, type: "coins", amount: 1500, label: "1,500", icon: Coins, color: "text-amber-400" },
+    { day: 5, type: "gems", amount: 100, label: "100", icon: Gem, color: "text-cyan-400" },
+    { day: 6, type: "gear", amount: 1, label: "★ LEGEND", icon: Sparkles, color: "text-yellow-300" },
     { day: 7, type: "mythic", amount: 250, label: "Mythic Crown + 250 Gems", icon: Crown, color: "text-fuchsia-400", isJackpot: true }
   ];
 
@@ -53,16 +53,17 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
             </div>
             <div>
               <h2 className="text-base font-black tracking-wide text-white uppercase">
-                7-DAY LOGIN REWARDS
+                {ui(state.lang, "daily_title")}
               </h2>
               <p className="text-[10px] text-zinc-400 font-medium">
-                Log in daily to claim escalating gold, gems & mythic gear!
+                {ui(state.lang, "daily_sub")}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full bg-neutral-800 text-zinc-400 hover:text-white"
+            aria-label="Close"
+            className="min-w-9 min-h-9 flex items-center justify-center rounded-full bg-neutral-800 text-zinc-400 hover:text-white"
           >
             <X className="w-4 h-4" />
           </button>
@@ -87,29 +88,29 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
                 }`}
               >
                 <div className="text-[9px] font-black font-mono text-zinc-400 uppercase">
-                  Day {r.day}
+                  {ui(state.lang, "day_n", { n: r.day })}
                 </div>
                 <div className="my-1.5 p-2 rounded-xl bg-black/50 border border-white/5">
                   <Icon className={`w-5 h-5 ${r.color}`} />
                 </div>
-                <div className="text-[10px] font-black text-white font-mono truncate max-w-[80px]">
+                <div className="text-[11px] font-black text-white font-mono leading-tight">
                   {r.label}
                 </div>
 
                 {isClaimed ? (
                   <div className="mt-1 flex items-center gap-1 text-[9px] font-black text-emerald-400 font-mono">
-                    <Check className="w-3 h-3" /> CLAIMED
+                    <Check className="w-3 h-3" /> {ui(state.lang, "claimed")}
                   </div>
                 ) : isToday ? (
                   <button
                     onClick={() => handleClaim(r.day)}
                     className="mt-1 w-full py-1 rounded-lg game-btn-gold text-black font-black text-[9px] uppercase shadow-md active:scale-95 animate-pulse"
                   >
-                    CLAIM
+                    {ui(state.lang, "claim")}
                   </button>
                 ) : (
                   <div className="mt-1 text-[8px] font-mono text-zinc-500 uppercase">
-                    LOCKED
+                    {ui(state.lang, "locked")}
                   </div>
                 )}
               </div>
@@ -135,28 +136,28 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
                 </div>
                 <div>
                   <div className="text-[10px] font-black font-mono text-fuchsia-400 uppercase tracking-widest">
-                    DAY 7 GRAND REWARD
+                    {ui(state.lang, "day7_title")}
                   </div>
                   <div className="text-xs font-black text-white">
-                    Mythic Dragon Crown + 250 Gems
+                    {ui(state.lang, "day7_desc")}
                   </div>
                 </div>
               </div>
 
               {isClaimed ? (
                 <div className="flex items-center gap-1 text-xs font-black text-emerald-400 font-mono">
-                  <Check className="w-4 h-4" /> CLAIMED
+                  <Check className="w-4 h-4" /> {ui(state.lang, "claimed")}
                 </div>
               ) : isToday ? (
                 <button
                   onClick={() => handleClaim(7)}
                   className="px-4 py-2 rounded-xl game-btn-gold text-black font-black text-xs uppercase shadow-xl animate-bounce"
                 >
-                  CLAIM
+                  {ui(state.lang, "claim")}
                 </button>
               ) : (
                 <div className="text-[9px] font-mono text-zinc-500 uppercase">
-                  DAY 7
+                  {ui(state.lang, "locked")}
                 </div>
               )}
             </div>

@@ -63,7 +63,7 @@ function cloneSkill(skill: Skill): Skill {
 }
 
 export interface AdOffer {
-  type: 'free_gems' | 'double_damage' | 'double_coins' | 'mystery_chest' | 'revive' | 'offline_double';
+  type: 'free_gems' | 'double_damage' | 'double_coins' | 'mystery_chest' | 'revive' | 'offline_double' | 'wheel_spin';
   title: string;
   rewardDesc: string;
 }
@@ -129,6 +129,8 @@ export interface GameStateData {
   reducedMotion: boolean;
   tutorialStep: number;
   claimedAchievements: string[];
+  lastWheelSpinDate: string;
+  bonusWheelSpins: number;
   hapticsEnabled: boolean;
   autoAdvance: boolean;
   lossStreak: number;
@@ -311,6 +313,8 @@ function createDefaultState(): GameStateData {
     saveVersion: SAVE_VERSION,
     tutorialStep: 0,
     claimedAchievements: [],
+    lastWheelSpinDate: '',
+    bonusWheelSpins: 0,
     quality: 'medium',
     reducedMotion: typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     hapticsEnabled: true,
@@ -572,6 +576,9 @@ class GameManager {
     } else if (type === 'double_coins') {
       this.state.doubleCoinsUntil = Date.now() + BUFF_DURATION_MS;
       soundFx.playVictoryFanfare();
+    } else if (type === 'wheel_spin') {
+      this.state.bonusWheelSpins += 1;
+      soundFx.playCoin();
     } else if (type === 'offline_double') {
       this.state.coins += this.state.offlineGoldAccumulated * 2;
       this.state.offlineGoldAccumulated = 0;
@@ -1012,6 +1019,23 @@ class GameManager {
   public closeLuckyWheel() {
     this.state.isLuckyWheelOpen = false;
     this.notify();
+  }
+
+  // One free spin per calendar day; extra spins come from rewarded ads (was unlimited before).
+  public hasFreeWheelSpin(): boolean {
+    return this.state.lastWheelSpinDate !== dateKey();
+  }
+
+  public consumeWheelSpin(): boolean {
+    if (this.hasFreeWheelSpin()) {
+      this.state.lastWheelSpinDate = dateKey();
+    } else if (this.state.bonusWheelSpins > 0) {
+      this.state.bonusWheelSpins -= 1;
+    } else {
+      return false;
+    }
+    this.notify();
+    return true;
   }
 
   public claimLuckyWheelPrize(type: string, amount: number) {

@@ -194,16 +194,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
                 ))}
               </div>
             </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-white/5">
-              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
-                <Zap className="w-4 h-4 text-amber-400" />
-                <span>{t('highPerformance', state.lang)}</span>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-400 font-black bg-emerald-950/80 px-2.5 py-0.5 rounded-lg border border-emerald-600/40">
-                60 FPS
-              </span>
-            </div>
           </div>
 
           {/* 3. Cloud / Local Save Management */}

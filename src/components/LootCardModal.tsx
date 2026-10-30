@@ -59,7 +59,7 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
 
         {/* Glow Header */}
         <div className="relative z-10 flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-black tracking-widest uppercase mb-1 shadow-sm">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
           <span>{t('newDrop', state.lang)} • {item.slot.toUpperCase()}</span>
         </div>
 

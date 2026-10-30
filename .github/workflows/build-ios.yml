@@ -14,7 +14,8 @@ on:
 jobs:
   build-ios:
     name: Build & Export iOS App
-    runs-on: macos-14
+    # macOS 26 image: ships the Xcode 26 / iOS 26 SDK that App Store Connect now requires.
+    runs-on: macos-26
     
     steps:
       - name: Checkout Repository
@@ -35,16 +36,18 @@ jobs:
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      - name: Select Xcode 16+
+      - name: Select Xcode 26
         run: |
-          XCODE_16=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
-          if [ -n "$XCODE_16" ]; then
-            echo "Selecting $XCODE_16"
-            sudo xcode-select -s "$XCODE_16/Contents/Developer"
-          else
-            echo "Using system Xcode: $(xcode-select -p)"
+          # Build with the real iOS 26 SDK. Fail loudly instead of silently falling back to an older Xcode.
+          XCODE_26=$(find /Applications -maxdepth 1 -name "Xcode_26*.app" | sort -V | tail -n 1)
+          if [ -z "$XCODE_26" ]; then
+            echo "::error::No Xcode 26 found on this runner. Installed:"; ls /Applications | grep -i xcode || true
+            exit 1
           fi
+          echo "Selecting $XCODE_26"
+          sudo xcode-select -s "$XCODE_26/Contents/Developer"
           xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
 
       - name: Setup App Store Connect API Key
         env:
@@ -130,7 +133,7 @@ jobs:
                      CODE_SIGN_IDENTITY="Apple Distribution: Ouzhan Alper Tosun (8X6KZC5R23)" \
                      archive
 
-      - name: Package, Patch Mach-O & Sign IPA with Entitlements
+      - name: Package & Sign IPA with Entitlements
         run: |
           mkdir -p build/Payload
           ARCHIVE_APP="$GITHUB_WORKSPACE/ios/App/App.xcarchive/Products/Applications/App.app"
@@ -155,28 +158,8 @@ jobs:
             cp ios/App/Street_Striker_App_Store.mobileprovision build/Payload/App.app/embedded.mobileprovision
           fi
           
-          # Patch Mach-O binary headers for iOS 26 SDK requirement
-          echo "Patching main executable Mach-O headers..."
-          python3 scripts/patch_macho.py build/Payload/App.app/App
-          
-          if [ -d build/Payload/App.app/Frameworks ]; then
-            for fw in build/Payload/App.app/Frameworks/*; do
-              fw_name=$(basename "$fw" .framework)
-              if [ -f "$fw/$fw_name" ]; then
-                echo "Patching framework binary: $fw/$fw_name"
-                python3 scripts/patch_macho.py "$fw/$fw_name"
-              fi
-            done
-          fi
-          
-          # Patch SDK version metadata in Info.plist with official Xcode 26.6 stable release build (17F113)
-          PLIST="build/Payload/App.app/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos26.5" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKName string iphoneos26.5" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTXcode 2660" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcode string 2660" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild 17F113" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTXcodeBuild string 17F113" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTSDKBuild 23F79" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string 23F79" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild 23F79" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string 23F79" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 16.0" "$PLIST" || /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string 16.0" "$PLIST"
+          # The archive was produced by the real Xcode 26 toolchain: its Mach-O SDK versions and Info.plist
+          # DT* build metadata are genuine and must not be modified.
           
           # Sign all embedded frameworks inside-out
           if [ -d build/Payload/App.app/Frameworks ]; then
@@ -200,7 +183,7 @@ jobs:
           cd ..
           
           ls -lh build/StreetStriker-iOS.ipa
-          echo "Signed, patched, and verified IPA ready for TestFlight."
+          echo "Signed and verified IPA ready for TestFlight."
 
       - name: Upload iOS IPA Artifact
         uses: actions/upload-artifact@v4

@@ -158,7 +158,7 @@ export const PREMIUM_AVATARS: PremiumAvatar[] = [
 export const FIGHTER_TITLES: FighterTitle[] = [
   {
     id: "title_rookie",
-    nameTr: "Sokak Çaylaðý",
+    nameTr: "Sokak Ã‡aylaÄŸÄ±",
     nameEn: "Street Rookie",
     badge: "??",
     color: "text-zinc-400",
@@ -166,7 +166,7 @@ export const FIGHTER_TITLES: FighterTitle[] = [
   },
   {
     id: "title_undefeated",
-    nameTr: "Yenilmez Dövüþçü",
+    nameTr: "Yenilmez DÃ¶vÃ¼ÅŸÃ§Ã¼",
     nameEn: "The Undefeated",
     badge: "?",
     color: "text-cyan-400",
@@ -174,7 +174,7 @@ export const FIGHTER_TITLES: FighterTitle[] = [
   },
   {
     id: "title_volley_king",
-    nameTr: "Altýn Vole Kralý",
+    nameTr: "AltÄ±n Vole KralÄ±",
     nameEn: "Golden Volley King",
     badge: "??",
     color: "text-amber-400",
@@ -182,7 +182,7 @@ export const FIGHTER_TITLES: FighterTitle[] = [
   },
   {
     id: "title_iron_chin",
-    nameTr: "Demir Çene Þampiyonu",
+    nameTr: "Demir Ã‡ene Åžampiyonu",
     nameEn: "Iron Chin Legend",
     badge: "???",
     color: "text-emerald-400",
@@ -198,7 +198,7 @@ export const FIGHTER_TITLES: FighterTitle[] = [
   },
   {
     id: "title_god_of_war",
-    nameTr: "Dövüþ Tanrýsý",
+    nameTr: "DÃ¶vÃ¼ÅŸ TanrÄ±sÄ±",
     nameEn: "God of Martial Arts",
     badge: "?",
     color: "text-yellow-300",

@@ -1,0 +1,72 @@
+# Codemagic build for Street Striker (Capacitor iOS). Builds with the REAL Xcode on Codemagic's Mac,
+# signs with App Store Connect API credentials and sends the build to TestFlight.
+#
+# One-time setup in Codemagic:
+#  1) Teams > Integrations > App Store Connect: add your API key (Issuer ID, Key ID, .p8) and name it exactly
+#     like `integrations.app_store_connect` below.
+#  2) App settings > Environment variables (group "street_striker"):
+#       CERTIFICATE_PRIVATE_KEY  (secure)  the private key (PEM) of your Apple Distribution certificate
+#       APP_STORE_APPLE_ID                 numeric Apple ID of the app in App Store Connect (optional, enables
+#                                          automatic build-number increment)
+#  3) Start the workflow manually on the branch you want to ship.
+workflows:
+  ios-testflight:
+    name: Street Striker iOS (TestFlight)
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    integrations:
+      app_store_connect: Street Striker ASC
+    environment:
+      groups:
+        - street_striker
+      xcode: latest
+      node: 22
+      vars:
+        BUNDLE_ID: com.streetstriker.rpg
+    scripts:
+      - name: Verify the real iOS 26 SDK is installed
+        script: |
+          xcodebuild -version
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iphoneos SDK: $SDK"
+          if [ "${SDK%%.*}" -lt 26 ]; then
+            echo "iOS SDK $SDK is older than 26; App Store Connect will not accept this build." >&2
+            exit 1
+          fi
+      - name: Install dependencies and build the web app
+        script: |
+          npm ci
+          npm run build
+          npx cap sync ios
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Increment build number from TestFlight
+        script: |
+          if [ -n "$APP_STORE_APPLE_ID" ]; then
+            LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || echo 0)
+            NEXT=$((LATEST + 1))
+            echo "Build number: $NEXT"
+            sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $NEXT;/g" ios/App/App.xcodeproj/project.pbxproj
+          else
+            echo "APP_STORE_APPLE_ID not set; keeping the build number from the Xcode project."
+          fi
+      - name: Build the signed IPA
+        script: |
+          xcode-project build-ipa \
+            --project "ios/App/App.xcodeproj" \
+            --scheme "App"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false

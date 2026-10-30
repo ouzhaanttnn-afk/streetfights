@@ -72,9 +72,10 @@ jobs:
             echo "$CERT_CER_B64" | base64 --decode > certs/distribution.cer
             echo "$CERT_KEY" > certs/distribution.key
 
-            openssl x509 -inform DER -in certs/distribution.cer -out certs/distribution.pem
+            /usr/bin/openssl x509 -inform DER -in certs/distribution.cer -out certs/distribution.pem
 
-            openssl pkcs12 -export \
+            # Use the system LibreSSL: the Homebrew OpenSSL 3 that is first on PATH on macos-26 writes a .p12 Keychain rejects
+            /usr/bin/openssl pkcs12 -export \
               -in certs/distribution.pem \
               -inkey certs/distribution.key \
               -out certs/distribution.p12 \

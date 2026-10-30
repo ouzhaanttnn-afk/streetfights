@@ -8,14 +8,16 @@ export interface AdMobConfig {
   isTesting: boolean;
 }
 
-// Google's official test rewarded unit. Set VITE_ADMOB_REWARDED_ID at build time to serve real ads.
+// Google's official iOS test rewarded unit, used in dev builds so live units are never tested on.
 const TEST_REWARDED_ID = 'ca-app-pub-3940256099942544/1712485313';
-const liveRewardedId = import.meta.env.VITE_ADMOB_REWARDED_ID as string | undefined;
+// Production rewarded unit; VITE_ADMOB_REWARDED_ID overrides it at build time.
+const LIVE_REWARDED_ID = (import.meta.env.VITE_ADMOB_REWARDED_ID as string | undefined) || 'ca-app-pub-4229088811556918/6548005088';
+const useLiveAds = !import.meta.env.DEV;
 
 export const DEFAULT_ADMOB_CONFIG: AdMobConfig = {
   appId: 'ca-app-pub-4229088811556918~1842473318',
-  rewardedAdUnitId: liveRewardedId || TEST_REWARDED_ID,
-  isTesting: !liveRewardedId,
+  rewardedAdUnitId: useLiveAds ? LIVE_REWARDED_ID : TEST_REWARDED_ID,
+  isTesting: !useLiveAds,
 };
 
 class AdMobManager {

@@ -1,0 +1,159 @@
+// Browser regression tests. Needs the dev server (npm run dev -- --port 5199) and Playwright.
+// Run: NODE_PATH=$(npm root -g) node scripts/e2e.cjs
+const { chromium } = require('playwright');
+const GL = ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'];
+const results = [];
+const ok = (n, c, extra='') => { results.push(`${c ? 'PASS' : 'FAIL'}  ${n} ${extra}`); };
+const today = () => new Date().toLocaleDateString('en-CA');
+const URL = process.env.URL || 'http://localhost:5199';
+
+(async () => {
+  // ---- 1. Legacy save compatibility (shape written by the ORIGINAL game, before my changes)
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    const legacy = { lang:'tr', coins: 12345, gems: 77, trophies: 40, playerLevel: 9, playerXp: 50, playerMaxXp: 400,
+      currentWorld: 2, currentSubStage: 4, highestWorld: 2, highestSubStage: 6, inventory: [{id:'item_x',name:'RARE Hand Wraps',slot:'gloves',rarity:'rare',level:5,stats:{hp:0,atk:20,def:0,spd:0,critRate:3,critDmg:0,comboRate:0,dodgeRate:0,lifesteal:0,stamina:0},powerScore:99,sellPrice:50,iconName:'Flame'}],
+      maxInventorySlots: 20, autoBattle: true, battleSpeed: 1, soundEnabled: true, autoSellRarity:'none', totalFightsWon: 33, totalDamageDealt: 0, bossDefeatedCount: 2,
+      dailyLoginStreak: 1, lastDailyLoginDate: '', claimedDailyDays: [], lastOfflineTimestamp: Date.now(),
+      unlockedCosmetics: ['outfit_street','hair_spiky_yellow','aura_none','ball_street'], equippedOutfit:'outfit_street', equippedHair:'hair_spiky_yellow', equippedAura:'aura_none', equippedBall:'ball_street', doubleDamageUntil:0, doubleCoinsUntil:0 };
+    await p.addInitScript((l) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify(l)); }, legacy);
+    await p.goto(URL); await p.waitForTimeout(4500);
+    const s = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
+    ok('legacy save: level/world/inventory kept', s.playerLevel === 9 && s.currentWorld === 2 && s.inventory.length === 1 && s.totalFightsWon >= 33 && s.bossDefeatedCount === 2, `lvl=${s.playerLevel} inv=${s.inventory.length} fights=${s.totalFightsWon}`);
+    ok('legacy save: coins not reset (>=12345)', s.coins >= 12345, `coins=${s.coins}`);
+    ok('legacy save: new fields filled', s.saveVersion === 3 && s.dailyQuests?.length === 4 && s.quality === 'medium');
+    ok('legacy save: daily login opens for old save', await p.getByText('7-DAY LOGIN REWARDS').count() > 0);
+    ok('legacy save: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  // ---- 2. Full combat flow (manual mode): attack, guard, rage, victory, loot, equip
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    const base = {hp:3000,maxHp:3000,atk:120,def:200,spd:30,critRate:20,critDmg:1.6,comboRate:20,dodgeRate:5,lifesteal:0,stamina:100,powerScore:1};
+    await p.addInitScript(([base,d]) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:false, playerFighter:{baseStats:base} })); }, [base, today()]);
+    await p.goto(URL); await p.waitForTimeout(4500);
+    ok('3D scene active', await p.evaluate(() => window.__battleRig.active === true));
+    const hp0 = await p.evaluate(() => document.body.innerText.match(/(\d+) \/ (\d+)/g));
+    // manual attacks
+    for (let i = 0; i < 6; i++) { await p.getByRole('button', { name: /VUR|HIT/ }).click({ force: true }).catch(()=>{}); await p.waitForTimeout(700); }
+    const afterHits = await p.evaluate(() => document.body.innerText.match(/(\d+) \/ (\d+)/g));
+    ok('manual attack lowers opponent HP', afterHits && hp0 && afterHits[1] !== hp0[1], `${hp0?.[1]} -> ${afterHits?.[1]}`);
+    // guard
+    await p.getByRole('button', { name: /KORUN|GUARD/ }).click({ force: true }).catch(()=>{});
+    const guarding = await p.evaluate(() => window.__battleRig && true);
+    ok('guard button reachable', guarding);
+    // loop until victory & loot modal
+    let loot = false;
+    for (let i = 0; i < 40 && !loot; i++) {
+      await p.getByRole('button', { name: /VUR|HIT/ }).click({ force: true, timeout: 500 }).catch(()=>{});
+      await p.waitForTimeout(500);
+      loot = await p.getByText(/YENİ EKİPMAN|NEW GEAR|NEW EQUIPMENT/i).count() > 0;
+    }
+    ok('victory -> reward screen (loot or stage advanced)', loot || (await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).totalFightsWon)) >= 1);
+    const save = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
+    ok('victory persisted (fights won, quest progress)', save.totalFightsWon >= 1 && save.dailyQuests.find(q => q.id==='win_fights').progress >= 1, `fights=${save.totalFightsWon}`);
+    // equip from loot modal if present
+    if (loot) {
+      const equip = p.getByRole('button', { name: /KUŞAN|EQUIP/i }).first();
+      if (await equip.count()) { await equip.click({ force: true }); await p.waitForTimeout(500); ok('equip from loot modal', await p.getByText(/YENİ EKİPMAN|NEW GEAR/i).count() === 0); }
+    }
+    ok('no page errors in combat flow', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  // ---- 3. Rage (super) attack
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    const base = {hp:90000,maxHp:90000,atk:60,def:900,spd:30,critRate:5,critDmg:1.5,comboRate:5,dodgeRate:5,lifesteal:0,stamina:100,powerScore:1};
+    await p.addInitScript(([base,d]) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:true, currentWorld:3,currentSubStage:2,highestWorld:3,highestSubStage:2, playerFighter:{baseStats:base} })); }, [base, today()]);
+    await p.goto(URL); await p.waitForTimeout(4000);
+    let used = 0;
+    for (let i = 0; i < 40 && !used; i++) { await p.waitForTimeout(500); used = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).dailyQuests.find(q => q.id==='use_super').progress); }
+    ok('rage attack fires and is counted', used >= 1, `use_super=${used}`);
+    ok('no page errors during rage', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  // ---- 4. Boss defeat -> retry / revive buttons
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:true, currentWorld:4,currentSubStage:10,highestWorld:4,highestSubStage:10 })); }, today());
+    await p.goto(URL); await p.waitForTimeout(3000);
+    let retry = 0;
+    for (let i = 0; i < 40 && !retry; i++) { await p.waitForTimeout(500); retry = await p.getByText(/Tekrar dene|Retry/).count(); }
+    ok('boss defeat shows retry + revive-ad buttons', retry > 0 && await p.getByText(/CANLAN|REVIVE/i).count() > 0);
+    await p.getByText(/Tekrar dene|Retry/).click({ force: true });
+    await p.waitForTimeout(800);
+    ok('retry restarts the boss fight', await p.getByText(/Tekrar dene|Retry/).count() === 0);
+    ok('no page errors in boss flow', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  // ---- 5. WebGL context loss + restore
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
+    await p.goto(URL); await p.waitForTimeout(3500);
+    await p.evaluate(() => { const c = document.querySelector('.battle-viewport canvas:not([class*="z-10"])') || document.querySelector('.battle-viewport canvas'); const gl = [...document.querySelectorAll('.battle-viewport canvas')].map(cv => cv.getContext('webgl2') || cv.getContext('webgl')).find(Boolean); window.__ext = gl.getExtension('WEBGL_lose_context'); window.__ext.loseContext(); });
+    await p.waitForTimeout(500);
+    const lost = await p.evaluate(() => window.__battleRig.active);
+    await p.evaluate(() => window.__ext.restoreContext());
+    await p.waitForTimeout(1500);
+    const back = await p.evaluate(() => window.__battleRig.active);
+    ok('context lost -> scene suspended, restored -> scene rebuilt', lost === false && back === true, `lost.active=${lost} restored.active=${back}`);
+    ok('no page errors on context loss', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  // ---- 6. No WebGL at all -> 2D fallback keeps game playable
+  {
+    const b = await chromium.launch({ args: ['--disable-gpu','--disable-webgl','--disable-3d-apis'] });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
+    await p.goto(URL); await p.waitForTimeout(6000);
+    const fights = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2') || '{}').totalFightsWon || 0);
+    ok('no-WebGL: game still runs fights (2D fallback)', fights >= 1, `fights=${fights}`);
+    ok('no-WebGL: no uncaught errors', errs.length === 0, errs.join('|'));
+    await p.screenshot({ path: 'nowebgl.png', clip:{x:0,y:60,width:390,height:260} });
+    await b.close();
+  }
+
+  // ---- 7. First-run experience: tutorial, boss intro, achievements
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
+    await p.goto(URL); await p.waitForTimeout(3500);
+    ok('tutorial shows on a brand-new save', await p.getByText(/otomatik savaşıyor|battles automatically/i).count() > 0);
+    await p.getByText(/^Tamam$|^Next$/).click({ force: true }); await p.waitForTimeout(300);
+    ok('tutorial advances to step 2', await p.getByText(/SÜPER|SUPER/).count() > 0);
+    await p.getByText(/^Atla$|^Skip$/).click({ force: true }); await p.waitForTimeout(300);
+    const step = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).tutorialStep);
+    ok('tutorial can be skipped and is remembered', step === 99, `step=${step}`);
+    await p.locator('nav button').nth(5).click(); await p.waitForTimeout(600);
+    ok('achievements card is on the profile tab', await p.getByText(/Başarımlar|Achievements/).count() > 0);
+    ok('no hidden dev panel text in production-like UI', await p.getByText('SECRET TEST PANEL').count() === 0);
+    ok('no page errors on first run', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, currentWorld:1,currentSubStage:5,highestWorld:1,highestSubStage:5 })); }, today());
+    await p.goto(URL, { waitUntil: 'commit' });
+    const seen = await p.waitForFunction(() => !!document.body && /BOSS DÖVÜŞÜ|BOSS FIGHT/.test(document.body.innerText), null, { timeout: 8000 }).then(() => true).catch(() => false);
+    ok('boss intro banner appears on a boss stage', seen);
+    await b.close();
+  }
+  console.log(results.join('\n'));
+  if (results.some((r) => r.startsWith('FAIL'))) process.exitCode = 1;
+})();

@@ -46,6 +46,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const [matchStatus, setMatchStatus] = useState<'fighting' | 'victory' | 'defeat'>('fighting');
   const [showReviveAd, setShowReviveAd] = useState<boolean>(false);
   const [comboStreak, setComboStreak] = useState<number>(0);
+  const [bossIntro, setBossIntro] = useState<boolean>(false);
+  const introTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [manualAttackReady, setManualAttackReady] = useState(false);
   const [guardReady, setGuardReady] = useState(true);
   const [isGuarding, setIsGuarding] = useState(false);
@@ -134,10 +136,26 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     oppAttackCountRef.current = 0;
     battleRig.command('player', 'idle', { instant: true });
     battleRig.command('opp', 'idle', { instant: true });
+
+    // Boss tutorial beat: show a short intro and hold both fighters' first strikes
+    if (introTimerRef.current !== null) clearTimeout(introTimerRef.current);
+    if (stage.isBoss) {
+      setBossIntro(true);
+      playerCooldownRef.current = 1900;
+      opponentCooldownRef.current = 2100;
+      soundFx.playWhistle();
+      introTimerRef.current = setTimeout(() => {
+        introTimerRef.current = null;
+        setBossIntro(false);
+      }, 1700);
+    } else {
+      setBossIntro(false);
+    }
   };
 
   useEffect(() => () => {
     if (resultTimerRef.current !== null) clearTimeout(resultTimerRef.current);
+    if (introTimerRef.current !== null) clearTimeout(introTimerRef.current);
   }, []);
 
   const addFloatingText = (text: string, x: number, y: number, color: string, type: FloatingText['type'] = 'damage') => {
@@ -506,6 +524,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     battleRig.command('player', 'victory');
     soundFx.playVictoryFanfare();
     addCallout('PERFECT KO!', 160, 75, '#fbbf24');
+
+    // Show what the win paid out
+    const won = stageRef.current;
+    const coinMult = Date.now() < state.doubleCoinsUntil ? 2 : 1;
+    addFloatingText(`+${Math.round(won.coinReward * coinMult)} 🪙`, 140, 168, '#fbbf24', 'crit');
+    addFloatingText(`+${won.xpReward} XP`, 205, 168, '#c4b5fd', 'skill');
+    if (won.gemReward > 0) addFloatingText(`+${won.gemReward} 💎`, 172, 150, '#67e8f9', 'crit');
 
     if (stageRef.current.isBoss) {
       confetti({
@@ -1352,6 +1377,15 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             >
               <Hand className="w-4 h-4" /> {state.lang === 'tr' ? 'VUR' : 'HIT'}
             </button>
+          </div>
+        )}
+
+        {/* Boss intro banner */}
+        {bossIntro && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-b from-black/70 via-rose-950/55 to-black/70 animate-fadeIn">
+            <span className="text-[11px] font-black tracking-[0.35em] text-rose-300">{state.lang === 'tr' ? 'BOSS DÖVÜŞÜ' : 'BOSS FIGHT'}</span>
+            <span className="mt-1 text-2xl font-black italic text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">{currentStageData.opponent.name}</span>
+            <span className="text-[11px] font-bold text-amber-300">{currentStageData.opponent.title}</span>
           </div>
         )}
 

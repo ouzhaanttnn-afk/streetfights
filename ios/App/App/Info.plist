@@ -6,6 +6,13 @@
 	<false/>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-4229088811556918~1842473318</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>Bu kimlik, size daha uygun reklamlar göstermek için kullanılır. / This identifier is used to deliver more relevant ads.</string>
 	<key>CAPACITOR_DEBUG</key>

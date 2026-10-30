@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
-import { RARITY_CONFIG } from '../../core/lootGenerator';
+import { RARITY_CONFIG, skillSynergies } from '../../core/lootGenerator';
 import { t } from '../../i18n/translations';
 import { 
   Zap, 
@@ -62,6 +62,29 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
           <span>{t('rollSkill', state.lang)} (25 🪙)</span>
         </button>
       </div>
+
+      {/* Set bonuses */}
+      {(() => {
+        const syn = skillSynergies(state.playerFighter.equippedSkills);
+        return (
+          <div className="game-card rounded-3xl p-3.5 border border-fuchsia-500/25 space-y-1.5">
+            <div className="text-[10px] font-black text-fuchsia-300 uppercase tracking-wider">
+              {state.lang === 'tr' ? 'Set Bonusu (aynı türden 2 / 3+ beceri)' : 'Set bonus (2 / 3+ skills of one family)'}
+            </div>
+            {syn.length === 0 ? (
+              <div className="text-[10px] text-zinc-500">
+                {state.lang === 'tr' ? 'Aynı türden beceri topla: Vuruş, Kombo, Savunma, Hız, Vampir, Öfke.' : 'Collect skills of the same family to unlock bonuses.'}
+              </div>
+            ) : (
+              syn.map((s) => (
+                <div key={s.category} className={`text-[11px] font-black ${s.tier === 3 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  ✦ {state.lang === 'tr' ? s.tr : s.en}
+                </div>
+              ))
+            )}
+          </div>
+        );
+      })()}
 
       {/* Equipped Skills List */}
       <div className="space-y-3">

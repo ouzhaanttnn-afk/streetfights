@@ -73,6 +73,8 @@ const WORLDS: WorldConfig[] = [
 // Fighting styles rotate across the roster so neighbouring stages feel different.
 const NORMAL_PROFILES: OpponentProfile[] = ['aggressive', 'defensive', 'counter', 'fast', 'heavy'];
 
+export const BALANCE = { linear: 0.15, growth: 1.03, boss: 1.4, subBoss: 1.25, firstWorldBoss: 1.25 };
+
 export const WORLD_COUNT = WORLDS.length;
 
 export function getWorldName(worldNum: number): string {
@@ -97,9 +99,10 @@ export function getStageData(worldNum: number, subNum: number): Stage {
       ? { ...w.boss, name: `${w.boss.name} (Sub-Boss)`, title: 'Regional Champion' }
       : w.opponents[(subNum - 1) % w.opponents.length];
 
-  // Scale opponent stats dynamically with stage index
-  const scale = 1 + (totalStageIndex - 1) * 0.22;
-  const bossScale = isBoss ? 1.5 : 1.0;
+  // Scale opponent stats with the stage index: a linear ramp early on plus a compounding term so
+  // late stages keep pace with gear growth (see scripts/run-balance-sim.mjs for the tuning data).
+  const scale = (1 + (totalStageIndex - 1) * BALANCE.linear) * Math.pow(BALANCE.growth, totalStageIndex - 1);
+  const bossScale = isFinalBoss ? (worldNum === 1 ? BALANCE.firstWorldBoss : BALANCE.boss) : isBoss ? BALANCE.subBoss : 1.0;
 
   const maxHp = Math.round((140 + totalStageIndex * 45) * scale * bossScale);
   const atk = Math.round((14 + totalStageIndex * 4.2) * scale * bossScale);

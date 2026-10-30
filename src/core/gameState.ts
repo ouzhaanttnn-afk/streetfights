@@ -8,11 +8,13 @@ import { soundFx } from './audio';
 import { haptics } from './haptics';
 import { adMobManager } from './admob';
 import { battleRig, QualityLevel } from '../game/battleRig';
+import { ACHIEVEMENTS } from './achievements';
 
 const STORAGE_KEY = 'street_striker_rpg_save_v2';
 const SAVE_VERSION = 3;
 const BUFF_DURATION_MS = 10 * 60 * 1000;
 const LOSSES_BEFORE_RETREAT = 3;
+const BOSS_LOSSES_BEFORE_RETREAT = 2;
 
 export type QuestId = 'win_fights' | 'beat_boss' | 'train_gym' | 'use_super';
 
@@ -117,6 +119,8 @@ export interface GameStateData {
   saveVersion: number;
   quality: QualityLevel;
   reducedMotion: boolean;
+  tutorialStep: number;
+  claimedAchievements: string[];
   hapticsEnabled: boolean;
   autoAdvance: boolean;
   lossStreak: number;
@@ -297,6 +301,8 @@ function createDefaultState(): GameStateData {
     doubleCoinsUntil: 0,
     activeAdModal: null,
     saveVersion: SAVE_VERSION,
+    tutorialStep: 0,
+    claimedAchievements: [],
     quality: 'medium',
     reducedMotion: typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     hapticsEnabled: true,
@@ -440,6 +446,9 @@ class GameManager {
           lastOfflineTimestamp: parsed.lastOfflineTimestamp || Date.now(),
           // Legacy saves started the streak at 1 without a login date
           dailyLoginStreak: parsed.lastDailyLoginDate ? parsed.dailyLoginStreak || 0 : 0,
+          // Existing players have already played: skip the tutorial for them
+          tutorialStep: parsed.tutorialStep ?? (parsed.totalFightsWon > 0 ? 99 : 0),
+          claimedAchievements: parsed.claimedAchievements || [],
           saveVersion: SAVE_VERSION,
         };
       }
@@ -705,7 +714,7 @@ class GameManager {
   public onStageDefeat(stage: Stage): boolean {
     this.state.lossStreak += 1;
     let retreated = false;
-    if (!stage.isBoss && this.state.lossStreak >= LOSSES_BEFORE_RETREAT) {
+    if (this.state.lossStreak >= (stage.isBoss ? BOSS_LOSSES_BEFORE_RETREAT : LOSSES_BEFORE_RETREAT)) {
       const total = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
       if (total > 1) {
         const prev = total - 1;
@@ -721,6 +730,26 @@ class GameManager {
 
   public toggleAutoAdvance() {
     this.state.autoAdvance = !this.state.autoAdvance;
+    this.notify();
+  }
+
+  public advanceTutorial() {
+    this.state.tutorialStep += 1;
+    this.notify();
+  }
+
+  public skipTutorial() {
+    this.state.tutorialStep = 99;
+    this.notify();
+  }
+
+  public claimAchievement(id: string) {
+    const a = ACHIEVEMENTS.find((x) => x.id === id);
+    if (!a || this.state.claimedAchievements.includes(id) || a.value(this.state) < a.target) return;
+    this.state.claimedAchievements.push(id);
+    this.state.gems += a.gems;
+    soundFx.playCoin();
+    haptics.trigger('success');
     this.notify();
   }
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { GameStateData, gameManager } from "../../core/gameState";
 import { PREMIUM_AVATARS, FIGHTER_TITLES } from "../../core/avatarsData";
 import { t } from "../../i18n/translations";
+import { AchievementsCard } from "../AchievementsCard";
 import { 
   User, 
   Edit3, 
@@ -290,13 +291,15 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
         </div>
       </div>
 
+      <AchievementsCard state={state} />
+
       {/* 5. Secret Developer Debug Trigger for Testing */}
       <div className="text-center pt-2">
         <button
           onClick={handleVersionTap}
           className="text-[10px] text-zinc-500 font-mono tracking-wider hover:text-zinc-400 transition-colors"
         >
-          Street Striker v1.0.0 (Apple Ready)
+          Street Striker v{__APP_VERSION__}
         </button>
 
         {showDevTools && (

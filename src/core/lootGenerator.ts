@@ -326,11 +326,51 @@ export function generateEquipment(
   };
 }
 
+export type SkillCategory = 'strike' | 'combo' | 'defense' | 'speed' | 'lifesteal' | 'rage';
+
+export interface Synergy {
+  category: SkillCategory;
+  count: number;
+  tier: 2 | 3;
+  tr: string;
+  en: string;
+}
+
+const SYNERGY_TEXT: Record<SkillCategory, [string, string, string, string]> = {
+  strike: ['Vuruş', 'Strike', 'ATK', 'ATK'],
+  combo: ['Kombo', 'Combo', 'Kombo', 'Combo'],
+  defense: ['Savunma', 'Defense', 'HP & DEF', 'HP & DEF'],
+  speed: ['Hız', 'Speed', 'SPD', 'SPD'],
+  lifesteal: ['Vampir', 'Vampire', 'Can çalma', 'Lifesteal'],
+  rage: ['Öfke', 'Rage', 'Krit hasar', 'Crit DMG'],
+};
+
+// Equipping 2 or 3+ skills of the same family grants a set bonus.
+export function skillSynergies(skills: { category?: string }[]): Synergy[] {
+  const counts: Partial<Record<SkillCategory, number>> = {};
+  skills.forEach((s) => {
+    if (s.category) counts[s.category as SkillCategory] = (counts[s.category as SkillCategory] || 0) + 1;
+  });
+  const out: Synergy[] = [];
+  (Object.keys(counts) as SkillCategory[]).forEach((category) => {
+    const count = counts[category] || 0;
+    if (count < 2) return;
+    const tier = count >= 3 ? 3 : 2;
+    const [trName, enName, trStat, enStat] = SYNERGY_TEXT[category];
+    const bonus = category === 'combo' ? (tier === 3 ? '+9%' : '+4%')
+      : category === 'lifesteal' ? (tier === 3 ? '+3.5%' : '+1.5%')
+      : category === 'rage' ? (tier === 3 ? '+0.25x' : '+0.10x')
+      : tier === 3 ? '+14%' : category === 'speed' ? '+8%' : '+6%';
+    out.push({ category, count, tier, tr: `${trName} x${count}: ${bonus} ${trStat}`, en: `${enName} x${count}: ${bonus} ${enStat}` });
+  });
+  return out;
+}
+
 export function calculateTotalStats(
   base: Required<StatModifiers>,
   gymBonus: Required<StatModifiers>,
   equipped: Record<EquipmentSlot, EquipmentItem | null>,
-  skills: { statBonus: Partial<StatModifiers> }[]
+  skills: { statBonus: Partial<StatModifiers>; category?: string }[]
 ): Required<StatModifiers> {
   const result: Required<StatModifiers> = {
     hp: base.hp + gymBonus.hp,
@@ -375,6 +415,17 @@ export function calculateTotalStats(
       if (skill.statBonus.lifesteal) result.lifesteal += skill.statBonus.lifesteal;
       if (skill.statBonus.stamina) result.stamina += skill.statBonus.stamina;
     }
+  });
+
+  // Skill-family set bonuses
+  skillSynergies(skills).forEach(({ category, tier }) => {
+    const t3 = tier === 3;
+    if (category === 'strike') result.atk = Math.round(result.atk * (t3 ? 1.14 : 1.06));
+    else if (category === 'combo') result.comboRate += t3 ? 9 : 4;
+    else if (category === 'defense') { const m = t3 ? 1.14 : 1.06; result.hp = Math.round(result.hp * m); result.def = Math.round(result.def * m); }
+    else if (category === 'speed') result.spd = Math.round(result.spd * (t3 ? 1.18 : 1.08));
+    else if (category === 'lifesteal') result.lifesteal += t3 ? 3.5 : 1.5;
+    else if (category === 'rage') result.critDmg += t3 ? 0.25 : 0.1;
   });
 
   // Clamp percentages to realistic caps

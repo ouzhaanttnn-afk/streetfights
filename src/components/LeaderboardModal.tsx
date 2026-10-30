@@ -71,12 +71,12 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ state, onClo
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-500 text-black font-black flex items-center justify-center text-sm shadow-md border border-amber-300">
-                #{pTier.rank}
+                ★
               </div>
               <div>
                 <span className="text-sm font-black text-white">{state.playerFighter.name}</span>
                 <div className="text-[10px] font-black text-amber-300 flex items-center gap-1">
-                  <span>{pTier.tier} Division</span>
+                  <span>{pTier.tier} {state.lang === 'tr' ? 'Ligi' : 'Division'}</span>
                 </div>
               </div>
             </div>
@@ -104,7 +104,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ state, onClo
         {/* Top Tier Leaderboard Roster */}
         <div className="space-y-2.5">
           <span className="text-[11px] font-black text-zinc-400 uppercase tracking-wider block px-1">
-            Street Legends
+            {state.lang === 'tr' ? 'Efsane Rakipler (kurgusal karakterler)' : 'Legend Rivals (fictional characters)'}
           </span>
 
           {TOP_TIER_PLAYERS.map((entry) => {

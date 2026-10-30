@@ -79,7 +79,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
               <h2 className="text-sm font-black tracking-wider text-white uppercase">
                 {t('settingsTitle', state.lang)}
               </h2>
-              <span className="text-[10px] text-zinc-400 font-mono">Street Striker Pro v2.5</span>
+              <span className="text-[10px] text-zinc-400 font-mono">Street Striker v{__APP_VERSION__}</span>
             </div>
           </div>
           <button
@@ -208,7 +208,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
           {/* 3. Cloud / Local Save Management */}
           <div className="bg-black/50 rounded-2xl p-3.5 border border-white/10 space-y-2.5 shadow-inner">
             <span className="text-xs font-black text-zinc-200 block">
-              Cloud / Local Save Backup
+              {state.lang === 'tr' ? 'Kayıt Yedeği (kopyala / yapıştır)' : 'Save Backup (copy / paste)'}
             </span>
             <div className="grid grid-cols-2 gap-2">
               <button

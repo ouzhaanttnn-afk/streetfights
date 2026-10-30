@@ -19,6 +19,7 @@ import { DailyLoginModal } from './components/DailyLoginModal';
 import { LuckyWheelModal } from './components/LuckyWheelModal';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { SkillReplaceModal } from './components/SkillReplaceModal';
+import { TutorialHint } from './components/TutorialHint';
 import { Stage } from './types/game';
 
 export function App() {
@@ -109,6 +110,8 @@ export function App() {
 
         {/* Pinned Bottom Navigation Bar */}
         <BottomNav activeTab={state.activeTab} lang={state.lang} />
+
+        <TutorialHint state={state} blocked={isBattlePaused} />
 
         {/* 6. Loot Drop Decision Modal (SELL vs EQUIP) */}
         {state.pendingLootDrop && (

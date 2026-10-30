@@ -26,7 +26,7 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('legacy save: level/world/inventory kept', s.playerLevel === 9 && s.currentWorld === 2 && s.inventory.length === 1 && s.totalFightsWon >= 33 && s.bossDefeatedCount === 2, `lvl=${s.playerLevel} inv=${s.inventory.length} fights=${s.totalFightsWon}`);
     ok('legacy save: coins not reset (>=12345)', s.coins >= 12345, `coins=${s.coins}`);
     ok('legacy save: new fields filled', s.saveVersion === 3 && s.dailyQuests?.length === 4 && s.quality === 'medium');
-    ok('legacy save: daily login opens for old save', await p.getByText('7-DAY LOGIN REWARDS').count() > 0);
+    ok('legacy save: daily login opens for old save', await p.getByText(/7-DAY LOGIN REWARDS|7 GÜNLÜK GİRİŞ ÖDÜLÜ/).count() > 0);
     ok('legacy save: no page errors', errs.length === 0, errs.join('|'));
     await b.close();
   }

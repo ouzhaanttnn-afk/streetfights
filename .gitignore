@@ -26,3 +26,6 @@ dist-ssr
 
 # graphify knowledge graph output
 graphify-out/
+
+# generated store screenshots (regenerate with scripts/store-screenshots.cjs)
+store/screenshots/*/

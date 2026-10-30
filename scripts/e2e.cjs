@@ -6,6 +6,8 @@ const results = [];
 const ok = (n, c, extra='') => { results.push(`${c ? 'PASS' : 'FAIL'}  ${n} ${extra}`); };
 const today = () => new Date().toLocaleDateString('en-CA');
 const URL = process.env.URL || 'http://localhost:5199';
+// Wait until the app has booted and written its save (more reliable than fixed sleeps on a loaded machine)
+const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion === 3; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
 
 (async () => {
   // ---- 1. Legacy save compatibility (shape written by the ORIGINAL game, before my changes)
@@ -19,7 +21,7 @@ const URL = process.env.URL || 'http://localhost:5199';
       dailyLoginStreak: 1, lastDailyLoginDate: '', claimedDailyDays: [], lastOfflineTimestamp: Date.now(),
       unlockedCosmetics: ['outfit_street','hair_spiky_yellow','aura_none','ball_street'], equippedOutfit:'outfit_street', equippedHair:'hair_spiky_yellow', equippedAura:'aura_none', equippedBall:'ball_street', doubleDamageUntil:0, doubleCoinsUntil:0 };
     await p.addInitScript((l) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify(l)); }, legacy);
-    await p.goto(URL); await p.waitForTimeout(4500);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(4500);
     const s = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
     ok('legacy save: level/world/inventory kept', s.playerLevel === 9 && s.currentWorld === 2 && s.inventory.length === 1 && s.totalFightsWon >= 33 && s.bossDefeatedCount === 2, `lvl=${s.playerLevel} inv=${s.inventory.length} fights=${s.totalFightsWon}`);
     ok('legacy save: coins not reset (>=12345)', s.coins >= 12345, `coins=${s.coins}`);
@@ -35,7 +37,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     const base = {hp:3000,maxHp:3000,atk:120,def:200,spd:30,critRate:20,critDmg:1.6,comboRate:20,dodgeRate:5,lifesteal:0,stamina:100,powerScore:1};
     await p.addInitScript(([base,d]) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:false, playerFighter:{baseStats:base} })); }, [base, today()]);
-    await p.goto(URL); await p.waitForTimeout(4500);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(4500);
     ok('3D scene active', await p.evaluate(() => window.__battleRig.active === true));
     const hp0 = await p.evaluate(() => document.body.innerText.match(/(\d+) \/ (\d+)/g));
     // manual attacks
@@ -71,7 +73,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     const base = {hp:90000,maxHp:90000,atk:60,def:900,spd:30,critRate:5,critDmg:1.5,comboRate:5,dodgeRate:5,lifesteal:0,stamina:100,powerScore:1};
     await p.addInitScript(([base,d]) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:true, currentWorld:3,currentSubStage:2,highestWorld:3,highestSubStage:2, playerFighter:{baseStats:base} })); }, [base, today()]);
-    await p.goto(URL); await p.waitForTimeout(4000);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(4000);
     let used = 0;
     for (let i = 0; i < 40 && !used; i++) { await p.waitForTimeout(500); used = await p.evaluate(() => { const x = JSON.parse(localStorage.getItem('street_striker_rpg_save_v2') || '{}'); return ((x.dailyQuests || []).find(q => q.id === 'use_super') || {}).progress || 0; }); }
     ok('rage attack fires and is counted', used >= 1, `use_super=${used}`);
@@ -84,7 +86,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], autoBattle:true, currentWorld:4,currentSubStage:10,highestWorld:4,highestSubStage:10 })); }, today());
-    await p.goto(URL); await p.waitForTimeout(3000);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(3000);
     let retry = 0;
     for (let i = 0; i < 40 && !retry; i++) { await p.waitForTimeout(500); retry = await p.getByText(/Tekrar dene|Retry/).count(); }
     ok('boss defeat shows retry + revive-ad buttons', retry > 0 && await p.getByText(/CANLAN|REVIVE/i).count() > 0);
@@ -100,7 +102,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
-    await p.goto(URL); await p.waitForTimeout(3500);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(3500);
     await p.evaluate(() => { const c = document.querySelector('.battle-viewport canvas:not([class*="z-10"])') || document.querySelector('.battle-viewport canvas'); const gl = [...document.querySelectorAll('.battle-viewport canvas')].map(cv => cv.getContext('webgl2') || cv.getContext('webgl')).find(Boolean); window.__ext = gl.getExtension('WEBGL_lose_context'); window.__ext.loseContext(); });
     await p.waitForTimeout(500);
     const lost = await p.evaluate(() => window.__battleRig.active);
@@ -117,7 +119,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
-    await p.goto(URL); await p.waitForTimeout(6000);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(6000);
     const fights = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2') || '{}').totalFightsWon || 0);
     ok('no-WebGL: game still runs fights (2D fallback)', fights >= 1, `fights=${fights}`);
     ok('no-WebGL: no uncaught errors', errs.length === 0, errs.join('|'));
@@ -131,7 +133,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
-    await p.goto(URL); await p.waitForTimeout(3500);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(3500);
     ok('tutorial shows on a brand-new save', await p.getByText(/otomatik savaşıyor|battles automatically/i).count() > 0);
     await p.getByText(/^Tamam$|^Next$/).click({ force: true }); await p.waitForTimeout(300);
     ok('tutorial advances to step 2', await p.getByText(/SÜPER|SUPER/).count() > 0);
@@ -160,7 +162,7 @@ const URL = process.env.URL || 'http://localhost:5199';
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
     await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'ja', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
-    await p.goto(URL); await p.waitForTimeout(3500);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(3500);
     ok('Japanese: tutorial text is translated', await p.getByText('戦闘は自動です').count() > 0);
     await p.locator('nav button').nth(4).click(); await p.waitForTimeout(500);
     ok('Japanese: daily quests title is translated', await p.getByText('デイリークエスト').count() > 0);

@@ -1,190 +1,233 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { ArenaEnvironment } from '../types/game';
+import { battleRig } from '../game/battleRig';
+import { FighterAppearance, FighterRig } from '../game/fighter3d/FighterRig';
+import { buildArena, makeBlobShadow } from '../game/fighter3d/arenas';
 
 interface BattleScene3DProps {
   environment: ArenaEnvironment;
   screenShakeRef: React.RefObject<number>;
+  player: FighterAppearance;
+  opponent: FighterAppearance;
 }
 
-export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef }) => {
+const FIGHT_X = 0.8; // half the distance between the two fighters
+const CANVAS_W = 360;
+const CANVAS_H = 215;
+
+export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef, player, opponent }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const rigsRef = useRef<{ player: FighterRig; opp: FighterRig } | null>(null);
+  const appearanceRef = useRef({ player, opponent });
+  appearanceRef.current = { player, opponent };
+  // Bumped after a WebGL context loss so the whole scene is rebuilt
+  const [epoch, setEpoch] = useState(0);
+
+  const playerSig = JSON.stringify(player);
+  const opponentSig = JSON.stringify(opponent);
+
+  // Appearance changes (equipment, cosmetics, new opponent) only rebuild the fighters
+  useEffect(() => {
+    const rigs = rigsRef.current;
+    if (!rigs) return;
+    rigs.player.setAppearance(appearanceRef.current.player);
+    rigs.opp.setAppearance(appearanceRef.current.opponent);
+  }, [playerSig, opponentSig]);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
 
-    // 1. Scene & Camera
-    const scene = new THREE.Scene();
+    const quality = battleRig.quality;
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: false, antialias: quality !== 'low', powerPreference: 'high-performance' });
+    } catch {
+      battleRig.active = false; // 2D fallback takes over
+      return;
+    }
+    const dprCap = quality === 'high' ? 2 : quality === 'medium' ? 1.5 : 1;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprCap));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     const width = mount.clientWidth || 360;
     const height = mount.clientHeight || 205;
-
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    camera.position.set(0, 2.8, 6.5);
-    camera.lookAt(0, 0.4, 0);
-
-    // 2. WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     mount.appendChild(renderer.domElement);
 
-    // 3. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    const scene = new THREE.Scene();
+    const arena = buildArena(environment, quality);
+    scene.background = arena.background;
+    scene.fog = arena.fog;
+    scene.add(arena.group);
 
-    const stageLight = new THREE.PointLight(0xfbbf24, 2.5, 12);
-    stageLight.position.set(0, 3.5, 2);
-    scene.add(stageLight);
+    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 60);
+    const camBase = new THREE.Vector3(0, 1.3, 6.0);
+    const look = new THREE.Vector3(0, 1.02, 0);
 
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
-    rimLight.position.set(-4, 3, -2);
-    scene.add(rimLight);
+    scene.add(new THREE.AmbientLight(arena.ambient.color, arena.ambient.intensity));
+    const key = new THREE.DirectionalLight(0xffffff, 2.4);
+    key.position.set(2, 4, 5);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x7dd3fc, 1.1);
+    rim.position.set(-4, 3, -3);
+    scene.add(rim);
+    const warm = new THREE.PointLight(0xfbbf24, 1.6, 12);
+    warm.position.set(0, 3.5, 2);
+    scene.add(warm);
 
-    // 4. 3D Arena Stage Construction
-    const stageGroup = new THREE.Group();
-    scene.add(stageGroup);
+    const pRig = new FighterRig(quality);
+    const oRig = new FighterRig(quality);
+    pRig.holder.position.set(-FIGHT_X, 0, 0);
+    pRig.holder.rotation.y = Math.PI / 2;
+    oRig.holder.position.set(FIGHT_X, 0, 0);
+    oRig.holder.rotation.y = -Math.PI / 2;
+    pRig.setAppearance(appearanceRef.current.player);
+    oRig.setAppearance(appearanceRef.current.opponent);
+    scene.add(pRig.holder, oRig.holder);
+    rigsRef.current = { player: pRig, opp: oRig };
 
-    // 3D Floor Platform
-    let floorColor = 0x1e293b;
-    if (environment === 'cage') floorColor = 0x09090b;
-    else if (environment === 'neon_club') floorColor = 0x1e1b4b;
-    else if (environment === 'pro_ring') floorColor = 0x18181b;
-    else if (environment === 'mega_stadium') floorColor = 0x064e3b;
+    const pShadow = makeBlobShadow();
+    const oShadow = makeBlobShadow();
+    scene.add(pShadow, oShadow);
 
-    const floorGeo = new THREE.BoxGeometry(9, 0.4, 4.5);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: floorColor,
-      roughness: 0.4,
-      metalness: 0.3,
+    let specialUntil = 0;
+    battleRig.active = true;
+    const offCommand = battleRig.onCommand((side, cmd, opts) => {
+      (side === 'player' ? pRig : oRig).command(cmd, opts?.instant);
+      if (cmd === 'rage' && side === 'player') specialUntil = performance.now() + 950;
     });
-    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-    floorMesh.position.set(0, -0.2, 0);
-    stageGroup.add(floorMesh);
 
-    // Environment specific 3D props
-    if (environment === 'pro_ring') {
-      // 3D Ring Corner Posts & Ropes
-      [-4, 4].forEach((x) => {
-        [-2, 2].forEach((z) => {
-          const postGeo = new THREE.CylinderGeometry(0.08, 0.08, 2.2, 16);
-          const postMat = new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.8 });
-          const post = new THREE.Mesh(postGeo, postMat);
-          post.position.set(x, 1.1, z);
-          stageGroup.add(post);
-        });
-      });
-
-      // 3 Ring Ropes
-      [0.6, 1.1, 1.6].forEach((y, idx) => {
-        const ropeGeo = new THREE.BoxGeometry(8, 0.03, 0.03);
-        const ropeMat = new THREE.MeshStandardMaterial({
-          color: idx === 0 ? 0xef4444 : idx === 1 ? 0xffffff : 0x3b82f6,
-        });
-        const ropeFront = new THREE.Mesh(ropeGeo, ropeMat);
-        ropeFront.position.set(0, y, 2);
-        stageGroup.add(ropeFront);
-
-        const ropeBack = new THREE.Mesh(ropeGeo, ropeMat);
-        ropeBack.position.set(0, y, -2);
-        stageGroup.add(ropeBack);
-      });
-
-    } else if (environment === 'cage') {
-      // 3D Wire Mesh Posts
-      [-4.2, 4.2].forEach((x) => {
-        const fenceGeo = new THREE.CylinderGeometry(0.06, 0.06, 3, 16);
-        const fenceMat = new THREE.MeshStandardMaterial({ color: 0x71717a, metalness: 0.9 });
-        const post = new THREE.Mesh(fenceGeo, fenceMat);
-        post.position.set(x, 1.5, 0);
-        stageGroup.add(post);
-      });
-
-    } else if (environment === 'neon_club') {
-      // Neon Glow Grid Lines
-      const gridHelper = new THREE.GridHelper(8, 12, 0xd946ef, 0x06b6d4);
-      gridHelper.position.set(0, 0.02, 0);
-      stageGroup.add(gridHelper);
-
-    } else if (environment === 'mega_stadium') {
-      // Stadium Turf Lines
-      const lineGeo = new THREE.BoxGeometry(8, 0.02, 0.05);
-      const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
-      const line = new THREE.Mesh(lineGeo, lineMat);
-      line.position.set(0, 0.02, 0);
-      stageGroup.add(line);
-    }
-
-    // 5. Animation Loop
+    let zoom = 0;
     let animId: number | null = null;
+    let last = performance.now();
+    const v = new THREE.Vector3();
+
+    const project = (rig: FighterRig, part: 'chest' | 'head' | 'feet') => {
+      rig.worldPoint(part, v);
+      v.project(camera);
+      const cw = mount.clientWidth || 360;
+      const ch = mount.clientHeight || 205;
+      const s = Math.min(cw / CANVAS_W, ch / CANVAS_H);
+      const ox = (cw - CANVAS_W * s) / 2;
+      const oy = (ch - CANVAS_H * s) / 2;
+      return { x: (((v.x + 1) / 2) * cw - ox) / s, y: (((1 - v.y) / 2) * ch - oy) / s };
+    };
+
     const animate = (time: number) => {
       animId = requestAnimationFrame(animate);
-      const screenShake = screenShakeRef.current;
+      const real = Math.min(50, time - last);
+      last = time;
+      const dt = real * battleRig.timeScale;
 
-      // Subtle breathing float on 3D camera
-      camera.position.x = Math.sin(time * 0.001) * 0.15;
-      camera.position.y = 2.8 + Math.cos(time * 0.0012) * 0.08;
+      pRig.update(dt, time);
+      oRig.update(dt, time);
+      if (battleRig.flashPlayer > 0) { pRig.flash(battleRig.flashPlayer); battleRig.flashPlayer = 0; }
+      if (battleRig.flashOpp > 0) { oRig.flash(battleRig.flashOpp); battleRig.flashOpp = 0; }
 
-      // Dynamic stage lighting intensity & flash on combat hits
-      stageLight.intensity = 2.2 + Math.sin(time * 0.004) * 0.5 + (screenShake > 0 ? screenShake * 0.4 : 0);
-      stageLight.position.x = Math.sin(time * 0.002) * 2;
+      const reduced = battleRig.reducedMotion;
+      const shake = reduced ? 0 : screenShakeRef.current ?? 0;
+      zoom += ((time < specialUntil ? 1 : 0) - zoom) * Math.min(1, real * 0.012);
+      battleRig.cameraKick *= Math.pow(0.0025, real / 1000);
 
-      if (screenShake > 0) {
-        camera.position.x += (Math.random() - 0.5) * screenShake * 0.04;
-        camera.position.y += (Math.random() - 0.5) * screenShake * 0.04;
+      const pull = (reduced ? 0.25 : 1) * (zoom * 0.7 + battleRig.cameraKick * 0.35);
+      camera.position.set(
+        camBase.x + Math.sin(time * 0.0007) * 0.07 + (Math.random() - 0.5) * shake * 0.03,
+        camBase.y + Math.cos(time * 0.0009) * 0.04 + (Math.random() - 0.5) * shake * 0.03,
+        camBase.z - pull,
+      );
+      camera.lookAt(look.x + zoom * 0.6, look.y, look.z);
+      camera.rotation.z += battleRig.cameraKick * 0.02 * (reduced ? 0 : 1);
+      warm.intensity = 1.4 + Math.sin(time * 0.003) * 0.3 + shake * 0.12;
+
+      pShadow.position.set(pRig.holder.position.x + pRig.ctrl.pose.rz, 0.012, 0);
+      oShadow.position.set(oRig.holder.position.x - oRig.ctrl.pose.rz, 0.012, 0);
+      pShadow.scale.setScalar(1 / (1 + Math.max(0, pRig.ctrl.pose.ry) * 1.5));
+      oShadow.scale.setScalar(1 / (1 + Math.max(0, oRig.ctrl.pose.ry) * 1.5));
+
+      arena.update(time);
+      camera.updateMatrixWorld();
+      for (const [side, rig] of [['player', pRig], ['opp', oRig]] as const) {
+        battleRig.anchors[side].chest = project(rig, 'chest');
+        battleRig.anchors[side].head = project(rig, 'head');
+        battleRig.anchors[side].feet = project(rig, 'feet');
       }
-
+      const t0 = performance.now();
       renderer.render(scene, camera);
+      battleRig.perf.frameMs += (performance.now() - t0 - battleRig.perf.frameMs) * 0.1;
+      battleRig.perf.calls = renderer.info.render.calls;
+      battleRig.perf.triangles = renderer.info.render.triangles;
     };
 
     let isInView = true;
-    const onVisibilityChange = () => {
+    const syncLoop = () => {
       if (document.hidden || !isInView) {
         if (animId !== null) cancelAnimationFrame(animId);
         animId = null;
       } else if (animId === null) {
+        last = performance.now();
         animId = requestAnimationFrame(animate);
       }
     };
+    const onVisibility = () => {
+      // iOS can drop the GL context while backgrounded: rebuild when we come back
+      if (!document.hidden && renderer.getContext().isContextLost()) setEpoch((e) => e + 1);
+      syncLoop();
+    };
+    const onLost = (e: Event) => {
+      e.preventDefault();
+      battleRig.active = false;
+      if (animId !== null) cancelAnimationFrame(animId);
+      animId = null;
+    };
+    const onRestored = () => setEpoch((e) => e + 1);
+    renderer.domElement.addEventListener('webglcontextlost', onLost);
+    renderer.domElement.addEventListener('webglcontextrestored', onRestored);
+
     const resizeObserver = new ResizeObserver(() => {
-      const nextWidth = mount.clientWidth || 360;
-      const nextHeight = mount.clientHeight || 205;
-      camera.aspect = nextWidth / nextHeight;
+      const w = mount.clientWidth || 360;
+      const h = mount.clientHeight || 205;
+      camera.aspect = w / h;
+      // Keep both fighters framed on narrow screens
+      camera.fov = w / h < 1.6 ? 42 : 36;
       camera.updateProjectionMatrix();
-      renderer.setSize(nextWidth, nextHeight);
+      renderer.setSize(w, h);
     });
     resizeObserver.observe(mount);
     const intersectionObserver = new IntersectionObserver(([entry]) => {
       isInView = entry.isIntersecting;
-      onVisibilityChange();
+      syncLoop();
     });
     intersectionObserver.observe(mount);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    onVisibilityChange();
+    document.addEventListener('visibilitychange', onVisibility);
+    syncLoop();
 
     return () => {
+      battleRig.active = false;
+      offCommand();
+      rigsRef.current = null;
       if (animId !== null) cancelAnimationFrame(animId);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('visibilitychange', onVisibility);
+      renderer.domElement.removeEventListener('webglcontextlost', onLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
+      pRig.dispose();
+      oRig.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
           object.geometry.dispose();
           const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach((material) => material.dispose());
+          materials.forEach((material) => {
+            (material as THREE.MeshBasicMaterial).map?.dispose();
+            material.dispose();
+          });
         }
       });
       renderer.dispose();
-      if (mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
-      }
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };
-  }, [environment, screenShakeRef]);
+  }, [environment, screenShakeRef, epoch]);
 
-  return (
-    <div
-      ref={mountRef}
-      className="absolute inset-0 w-full h-full pointer-events-none opacity-80"
-    />
-  );
+  return <div ref={mountRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
 };

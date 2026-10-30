@@ -6,6 +6,8 @@ import { COSMETICS_LIST, CosmeticItem } from './cosmeticsData';
 import { Language } from '../i18n/translations';
 import { soundFx } from './audio';
 import { haptics } from './haptics';
+import { adMobManager } from './admob';
+import { battleRig, QualityLevel } from '../game/battleRig';
 
 const STORAGE_KEY = 'street_striker_rpg_save_v2';
 const SAVE_VERSION = 3;
@@ -113,6 +115,8 @@ export interface GameStateData {
 
   // Mobile QoL & Progression
   saveVersion: number;
+  quality: QualityLevel;
+  reducedMotion: boolean;
   hapticsEnabled: boolean;
   autoAdvance: boolean;
   lossStreak: number;
@@ -293,6 +297,8 @@ function createDefaultState(): GameStateData {
     doubleCoinsUntil: 0,
     activeAdModal: null,
     saveVersion: SAVE_VERSION,
+    quality: 'medium',
+    reducedMotion: typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     hapticsEnabled: true,
     autoAdvance: true,
     lossStreak: 0,
@@ -310,6 +316,8 @@ class GameManager {
     this.state = this.loadState();
     soundFx.soundEnabled = this.state.soundEnabled;
     haptics.enabled = this.state.hapticsEnabled;
+    battleRig.quality = this.state.quality;
+    battleRig.reducedMotion = this.state.reducedMotion;
     this.applyCosmeticsToPlayer();
     this.recalculatePlayerStats();
     this.refreshSession();
@@ -319,6 +327,7 @@ class GameManager {
 
   // Runs on launch and every time the app returns from the background
   public refreshSession() {
+    adMobManager.preload();
     this.checkOfflineEarnings();
     this.checkDailyLogin();
     this.ensureDailyQuests();
@@ -361,11 +370,13 @@ class GameManager {
     }
   }
 
-  public recordQuest(id: QuestId, amount = 1) {
+  // `silent` is for callers that notify right after (victory, gym) to avoid a duplicate render
+  public recordQuest(id: QuestId, amount = 1, silent = false) {
     this.ensureDailyQuests();
     const quest = this.state.dailyQuests.find((q) => q.id === id);
     if (!quest || quest.claimed || quest.progress >= quest.target) return;
     quest.progress = Math.min(quest.target, quest.progress + amount);
+    if (!silent) this.notify();
   }
 
   public claimQuest(id: QuestId) {
@@ -634,8 +645,8 @@ class GameManager {
     if (stage.isBoss) this.state.bossDefeatedCount += 1;
     this.state.lossStreak = 0;
     this.state.battleNonce += 1;
-    this.recordQuest('win_fights');
-    if (stage.isBoss) this.recordQuest('beat_boss');
+    this.recordQuest('win_fights', 1, true);
+    if (stage.isBoss) this.recordQuest('beat_boss', 1, true);
 
     // Add XP
     this.addPlayerXp(stage.xpReward);
@@ -710,6 +721,18 @@ class GameManager {
 
   public toggleAutoAdvance() {
     this.state.autoAdvance = !this.state.autoAdvance;
+    this.notify();
+  }
+
+  public setQuality(q: QualityLevel) {
+    this.state.quality = q;
+    battleRig.quality = q;
+    this.notify();
+  }
+
+  public toggleReducedMotion() {
+    this.state.reducedMotion = !this.state.reducedMotion;
+    battleRig.reducedMotion = this.state.reducedMotion;
     this.notify();
   }
 
@@ -1003,7 +1026,7 @@ class GameManager {
     }
 
     soundFx.playGymTap();
-    this.recordQuest('train_gym');
+    this.recordQuest('train_gym', 1, true);
     this.recalculatePlayerStats();
     this.saveState();
     this.notify();

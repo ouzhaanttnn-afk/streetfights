@@ -16,6 +16,94 @@ class SoundSystem {
     }
   }
 
+  // Short filtered noise burst: the "body" of impacts, whooshes and metal clanks
+  private noise(duration: number, type: BiquadFilterType, freq: number, gainValue: number, delay = 0) {
+    if (!this.ctx) return;
+    const rate = this.ctx.sampleRate;
+    const buffer = this.ctx.createBuffer(1, Math.max(1, Math.floor(rate * duration)), rate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = type;
+    filter.frequency.value = freq;
+    const gain = this.ctx.createGain();
+    const now = this.ctx.currentTime + delay;
+    gain.gain.setValueAtTime(gainValue, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    src.start(now);
+  }
+
+  private sweep(type: OscillatorType, from: number, to: number, duration: number, gainValue: number, delay = 0) {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const now = this.ctx.currentTime + delay;
+    osc.type = type;
+    osc.frequency.setValueAtTime(from, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1, to), now + duration);
+    gain.gain.setValueAtTime(gainValue, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  }
+
+  private begin(): boolean {
+    if (!this.soundEnabled) return false;
+    this.initCtx();
+    return !!this.ctx;
+  }
+
+  playHeavyPunch() {
+    if (!this.begin()) return;
+    this.sweep('sine', 120, 32, 0.24, 0.42);
+    this.noise(0.16, 'lowpass', 700, 0.3);
+  }
+
+  playKickHit() {
+    if (!this.begin()) return;
+    this.noise(0.07, 'bandpass', 1800, 0.12); // whip of the leg
+    this.sweep('sine', 190, 48, 0.2, 0.38, 0.03);
+    this.noise(0.12, 'lowpass', 900, 0.25, 0.03);
+  }
+
+  playBlock() {
+    if (!this.begin()) return;
+    this.sweep('square', 540, 300, 0.09, 0.1);
+    this.noise(0.08, 'highpass', 3200, 0.18);
+    this.sweep('sine', 140, 70, 0.1, 0.2);
+  }
+
+  playKnockdown() {
+    if (!this.begin()) return;
+    this.sweep('sine', 100, 28, 0.55, 0.45);
+    this.noise(0.4, 'lowpass', 420, 0.35, 0.05);
+  }
+
+  playWindup() {
+    if (!this.begin()) return;
+    this.sweep('sawtooth', 70, 190, 0.4, 0.07);
+  }
+
+  playSuperCharge() {
+    if (!this.begin()) return;
+    this.sweep('sawtooth', 110, 560, 0.42, 0.12);
+    this.sweep('sine', 220, 900, 0.42, 0.1);
+  }
+
+  playSuperHit() {
+    if (!this.begin()) return;
+    this.sweep('sawtooth', 300, 28, 0.5, 0.4);
+    this.sweep('sine', 80, 30, 0.45, 0.45);
+    this.noise(0.35, 'lowpass', 1200, 0.35);
+  }
+
   playPunch() {
     if (!this.soundEnabled) return;
     this.initCtx();
@@ -180,6 +268,9 @@ class SoundSystem {
 
     osc.start(now);
     osc.stop(now + 0.18);
+
+    // Sparkle arpeggio: reads as "treasure" without being loud
+    [1318.5, 1568, 2093].forEach((f, i) => this.sweep('sine', f, f * 1.01, 0.14, 0.09, 0.14 + i * 0.07));
   }
 
   playEquip() {

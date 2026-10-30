@@ -24,27 +24,30 @@ interface RewardedAdModalProps {
 export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviveClaimed }) => {
   const [secondsLeft, setSecondsLeft] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [useSimulation, setUseSimulation] = useState<boolean>(!adMobManager.isNative);
+  const [useSimulation] = useState<boolean>(!adMobManager.isNative);
+  const [nativeFailed, setNativeFailed] = useState<boolean>(false);
   const offer = state.activeAdModal;
   const offerType = offer?.type;
 
-  // Native platforms show a real rewarded ad; the in-app simulation is only a web/dev fallback
+  // Native: wait (briefly) for the preloaded ad, then show it. Reward only after a completed view.
   useEffect(() => {
     if (!adMobManager.isNative || !offerType) return;
     let cancelled = false;
-    adMobManager.showRewarded().then((result) => {
+    (async () => {
+      const ready = await adMobManager.whenReady(8000);
       if (cancelled) return;
-      if (result === true) {
+      const result = ready ? await adMobManager.showRewarded() : 'unavailable';
+      if (cancelled) return;
+      if (result === 'rewarded') {
         const isRevive = offerType === 'revive';
         gameManager.claimRewardedAdReward();
         if (isRevive) onReviveClaimed?.();
-      } else if (result === false) {
-        gameManager.closeRewardedAd();
+      } else if (result === 'unavailable') {
+        setNativeFailed(true);
       } else {
-        // No ad inventory right now: tell the player instead of granting a free reward
         gameManager.closeRewardedAd();
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -67,7 +70,31 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
     }
   }, [secondsLeft, useSimulation]);
 
-  if (!offer || !useSimulation) return null;
+  if (!offer) return null;
+
+  if (!useSimulation) {
+    const isTr = state.lang === 'tr';
+    return (
+      <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none animate-fadeIn">
+        <div className="w-full max-w-xs game-card rounded-3xl p-5 border border-amber-500/40 text-center text-white space-y-3">
+          {nativeFailed ? (
+            <>
+              <div className="text-sm font-black">{isTr ? 'Reklam şu an hazır değil' : 'No ad available right now'}</div>
+              <div className="text-[11px] text-zinc-400">{isTr ? 'Birkaç saniye sonra tekrar dene.' : 'Please try again in a few seconds.'}</div>
+              <button onClick={() => gameManager.closeRewardedAd()} className="w-full min-h-11 rounded-2xl bg-neutral-800 border border-zinc-700 text-xs font-black active:scale-95">
+                {isTr ? 'Tamam' : 'OK'}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto w-9 h-9 rounded-full border-4 border-amber-400/30 border-t-amber-400 animate-spin" />
+              <div className="text-xs font-black">{isTr ? 'Reklam hazırlanıyor…' : 'Preparing ad…'}</div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const handleClaim = () => {
     if (!isCompleted) return;

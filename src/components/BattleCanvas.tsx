@@ -1,13 +1,27 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { ArenaEnvironment, FloatingText, Stage } from '../types/game';
+import { FloatingText, OpponentProfile, Stage } from '../types/game';
 import { GameStateData, gameManager } from '../core/gameState';
 import { soundFx } from '../core/audio';
 import { haptics } from '../core/haptics';
+import { battleRig, FighterCmd } from '../game/battleRig';
+import { impactTime } from '../game/fighter3d/clips';
+import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
 
 const BattleScene3D = lazy(() => import('./BattleScene3D').then((module) => ({ default: module.BattleScene3D })));
+
+const SPECIAL_MS = 940;
+
+const PROFILE_LABEL: Record<OpponentProfile, { tr: string; en: string }> = {
+  aggressive: { tr: 'Saldırgan', en: 'Aggressive' },
+  defensive: { tr: 'Savunmacı', en: 'Defensive' },
+  counter: { tr: 'Kontracı', en: 'Counter' },
+  fast: { tr: 'Hızlı', en: 'Fast' },
+  heavy: { tr: 'Ağır', en: 'Heavy' },
+  boss: { tr: 'Boss', en: 'Boss' },
+};
 
 interface BattleCanvasProps {
   state: GameStateData;
@@ -59,6 +73,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const guardCooldownRef = useRef(0);
   const isMatchOverRef = useRef<boolean>(false);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<{ t: number; fn: () => void }[]>([]);
+  const oppAttackCountRef = useRef(0);
+
+  // Scale particle counts with the quality setting
+  const particleCount = (n: number) => (battleRig.quality === 'low' ? Math.ceil(n / 3) : battleRig.quality === 'medium' ? Math.ceil(n * 0.7) : n);
 
   useEffect(() => {
     const current = gameManager.getCurrentStage();
@@ -80,6 +99,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     opponentCooldownRef.current = 400;
     manualAttackReadyRef.current = false;
     setManualAttackReady(false);
+    battleRig.command('player', 'idle');
+    battleRig.command('opp', 'idle');
   }, [reviveToken]);
 
   const resetBattle = (stage: Stage) => {
@@ -109,6 +130,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     setPlayerRageDisplay(0);
     playerCooldownRef.current = 300;
     opponentCooldownRef.current = 400;
+    pendingRef.current = [];
+    oppAttackCountRef.current = 0;
+    battleRig.command('player', 'idle', { instant: true });
+    battleRig.command('opp', 'idle', { instant: true });
   };
 
   useEffect(() => () => {
@@ -162,30 +187,61 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     haptics.trigger(type);
   };
 
+  // --- Animation-synced combat ---------------------------------------------------------------
+  // Damage is resolved on the animation's impact frame (not when the swing starts), using
+  // simulation time so pause, hit-stop and battle speed all stay consistent.
+  const schedule = (delayMs: number, fn: () => void) => {
+    pendingRef.current.push({ t: delayMs, fn });
+  };
+
+  const chestOf = (side: 'player' | 'opp') => (battleRig.active ? battleRig.anchors[side].chest : side === 'opp' ? { x: 235, y: 110 } : { x: 85, y: 110 });
+  const headOf = (side: 'player' | 'opp') => (battleRig.active ? battleRig.anchors[side].head : side === 'opp' ? { x: 235, y: 78 } : { x: 85, y: 78 });
+
+  const pickPlayerMove = (isSpecialRage: boolean, isCrit: boolean): FighterCmd => {
+    if (isSpecialRage) return 'rage';
+    const r = Math.random();
+    if (isCrit) return r < 0.6 ? 'heavy' : 'kick';
+    return r < 0.6 ? 'jab' : r < 0.85 ? 'kick' : 'heavy';
+  };
+
   const performPlayerAttack = (isSpecialRage: boolean = false) => {
     if (isMatchOverRef.current) return;
     const pStats = state.playerFighter.stats;
-    const oppStats = stageRef.current.opponent.stats;
+    // Crit is rolled up front so a critical hit gets a heavy-looking animation (same odds as before).
+    const isCrit = Math.random() * 100 < pStats.critRate;
+    const move = pickPlayerMove(isSpecialRage, isCrit);
 
     playerPoseRef.current = {
       xOffset: 48,
       animState: 'attacking',
-      stateTimer: 180,
-      attackType: isSpecialRage ? 'special' : Math.random() > 0.4 ? 'punch' : 'kick',
+      stateTimer: isSpecialRage && battleRig.active ? SPECIAL_MS : 180,
+      attackType: isSpecialRage ? 'special' : move === 'kick' ? 'kick' : 'punch',
     };
+    battleRig.command('player', move);
+    if (isSpecialRage) soundFx.playSuperCharge();
+    schedule(impactTime(move), () => resolvePlayerAttack(isSpecialRage, isCrit, move));
+  };
+
+  const resolvePlayerAttack = (isSpecialRage: boolean, isCrit: boolean, move: FighterCmd) => {
+    if (isMatchOverRef.current) return;
+    const pStats = state.playerFighter.stats;
+    const oppStats = stageRef.current.opponent.stats;
+    const profile = stageRef.current.opponent.profile;
+    const oppChest = chestOf('opp');
+    const oppHead = headOf('opp');
 
     const dodgeRoll = Math.random() * 100;
     if (!isSpecialRage && dodgeRoll < oppStats.dodgeRate) {
       soundFx.playDodge();
+      battleRig.command('opp', 'dodge');
       comboStreakRef.current = 0;
       setComboStreak(0);
-      addFloatingText(t('missDodge', state.lang), 240, 95, '#38bdf8', 'dodge');
+      addFloatingText(t('missDodge', state.lang), oppHead.x, oppHead.y, '#38bdf8', 'dodge');
       return;
     }
 
-    const isCrit = Math.random() * 100 < pStats.critRate;
     let baseDmg = pStats.atk * (0.85 + Math.random() * 0.3);
-    
+
     // Asymptotic Defense Formula (eliminates 1 DMG wall)
     const defMultiplier = 100 / (100 + oppStats.def * 0.45);
     let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
@@ -211,13 +267,31 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       }
     });
 
-    // Combo Rate now grants a real follow-up strike, with a small streak bonus.
+    // Combo Rate grants a real follow-up strike, with a small streak bonus.
     const comboChance = Math.min(75, pStats.comboRate + Math.min(15, comboStreakRef.current * 2));
     if (!isSpecialRage && Math.random() * 100 < comboChance) {
       const extraDamage = Math.max(1, Math.round(finalDmg * 0.35));
       finalDmg += extraDamage;
-      addFloatingText(`KOMBO +${extraDamage}`, 225, 55, '#fde047', 'skill');
-      spawnHitParticles(235, 110, '#fde047', 6);
+      addFloatingText(`KOMBO +${extraDamage}`, oppChest.x - 12, oppHead.y - 22, '#fde047', 'skill');
+      // The follow-up is shown as a quick second jab landing right after the main hit
+      schedule(150, () => {
+        if (isMatchOverRef.current) return;
+        battleRig.command('player', 'jab');
+        schedule(impactTime('jab'), () => {
+          if (isMatchOverRef.current) return;
+          const c = chestOf('opp');
+          spawnHitParticles(c.x, c.y, '#fde047', 6);
+          soundFx.playPunch();
+          battleRig.command('opp', 'hit');
+        });
+      });
+    }
+
+    // Defensive fighters sometimes brace and soak part of the blow
+    let blocked = false;
+    if (!isSpecialRage && profile === 'defensive' && Math.random() < 0.15) {
+      finalDmg = Math.max(1, Math.round(finalDmg * 0.4));
+      blocked = true;
     }
 
     opponentHpRef.current = Math.max(0, opponentHpRef.current - finalDmg);
@@ -230,68 +304,127 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       const healAmount = Math.max(1, Math.round(finalDmg * (pStats.lifesteal / 100)));
       playerHpRef.current = Math.min(pStats.maxHp, playerHpRef.current + healAmount);
       setPlayerHpDisplay(playerHpRef.current);
-      addFloatingText(`+${healAmount} HP`, 85, 90, '#10b981', 'heal');
+      const ph = headOf('player');
+      addFloatingText(`+${healAmount} HP`, ph.x, ph.y + 14, '#10b981', 'heal');
     }
 
+    const killed = opponentHpRef.current <= 0;
+    const strong = isSpecialRage || isCrit;
     if (isSpecialRage) {
-      soundFx.playCritHit();
+      soundFx.playSuperHit();
       triggerHaptic('super');
-      screenShakeRef.current = 12;
-      hitStopTimerRef.current = 70; // 70ms AAA Hit-Stop Freeze
-      spawnHitParticles(235, 110, '#fbbf24', 24);
-      addCallout('SUPER VOLE!', 210, 60, '#fde047');
-      addFloatingText(`${t('superCrit', state.lang)} ${finalDmg}`, 235, 78, '#fbbf24', 'crit');
+      screenShakeRef.current = battleRig.reducedMotion ? 3 : 12;
+      hitStopTimerRef.current = 70; // 70ms Hit-Stop Freeze
+      spawnHitParticles(oppChest.x, oppChest.y, '#fbbf24', particleCount(24));
+      addCallout('SUPER VOLE!', oppChest.x - 25, oppHead.y - 15, '#fde047');
+      addFloatingText(`${t('superCrit', state.lang)} ${finalDmg}`, oppHead.x, oppHead.y, '#fbbf24', 'crit');
+      battleRig.kickCamera(1);
     } else if (isCrit) {
       soundFx.playCritHit();
       triggerHaptic('medium');
-      screenShakeRef.current = 8;
+      screenShakeRef.current = battleRig.reducedMotion ? 2 : 8;
       hitStopTimerRef.current = 45; // 45ms Hit-Stop Freeze
-      spawnHitParticles(235, 110, '#fbbf24', 16);
+      spawnHitParticles(oppChest.x, oppChest.y, '#fbbf24', particleCount(16));
       const critCallouts = ['CRUNCH!', 'POW!', 'SMASH!', 'BOOM!'];
-      addCallout(critCallouts[Math.floor(Math.random() * critCallouts.length)], 225, 65, '#f59e0b');
-      addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 235, 78, '#fbbf24', 'crit');
+      addCallout(critCallouts[Math.floor(Math.random() * critCallouts.length)], oppChest.x - 10, oppHead.y - 15, '#f59e0b');
+      addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, oppHead.x, oppHead.y, '#fbbf24', 'crit');
+      battleRig.kickCamera(0.6);
     } else {
-      soundFx.playPunch();
-      triggerHaptic('light');
-      screenShakeRef.current = 3;
-      spawnHitParticles(235, 110, '#ef4444', 8);
-      addFloatingText(`-${finalDmg}`, 235, 82, '#ffffff', 'damage');
+      if (move === 'heavy') soundFx.playHeavyPunch();
+      else if (move === 'kick') soundFx.playKickHit();
+      else soundFx.playPunch();
+      triggerHaptic(move === 'heavy' || move === 'kick' ? 'medium' : 'light');
+      screenShakeRef.current = battleRig.reducedMotion ? 1 : move === 'jab' ? 3 : 5;
+      if (move !== 'jab') hitStopTimerRef.current = 25;
+      spawnHitParticles(oppChest.x, oppChest.y, '#ef4444', particleCount(8));
+      addFloatingText(`-${finalDmg}`, oppHead.x, oppHead.y + 4, '#ffffff', 'damage');
+    }
+    if (blocked) {
+      addCallout('BLOK!', oppChest.x, oppHead.y - 15, '#67e8f9');
+    }
+
+    // Defender reaction on the same frame as the impact
+    battleRig.flash('opp', strong ? 1 : 0.7);
+    if (killed) {
+      battleRig.command('opp', 'knockdown');
+    } else {
+      battleRig.command('opp', blocked ? 'guard' : strong ? 'crit_hit' : 'hit');
+      if (blocked) schedule(280, () => battleRig.command('opp', 'idle'));
+      // Counter fighters answer a hit by striking back sooner
+      if (profile === 'counter' && Math.random() < 0.2) {
+        opponentCooldownRef.current = Math.min(opponentCooldownRef.current, 220);
+        addCallout('KONTRA!', oppChest.x, oppHead.y - 30, '#fb923c');
+      }
     }
 
     if (skillProcText) {
-      addFloatingText(`★ ${skillProcText}!`, 160, 65, '#c084fc', 'skill');
+      const ph = headOf('player');
+      addFloatingText(`★ ${skillProcText}!`, ph.x + 60, ph.y - 12, '#c084fc', 'skill');
     }
 
-    if (opponentHpRef.current <= 0) {
+    if (killed) {
       handleVictory();
     }
   };
 
+  // Fighting styles tune tempo and weight of attacks; average damage per second stays close to equal.
+  const INTERVAL_MULT: Record<OpponentProfile, number> = {
+    aggressive: 0.8, defensive: 1.2, counter: 1.2, fast: 0.7, heavy: 1.5, boss: 0.95,
+  };
+  const DAMAGE_MULT: Record<OpponentProfile, number> = {
+    aggressive: 0.85, defensive: 1.0, counter: 1.0, fast: 0.7, heavy: 1.45, boss: 1.0,
+  };
+
   const performOpponentAttack = () => {
     if (isMatchOverRef.current) return;
-    const pStats = state.playerFighter.stats;
     const oppStats = stageRef.current.opponent.stats;
+    const profile = stageRef.current.opponent.profile;
+    oppAttackCountRef.current += 1;
+
+    const isCrit = Math.random() * 100 < oppStats.critRate;
+    const r = Math.random();
+    let move: FighterCmd;
+    let dmgMult = DAMAGE_MULT[profile];
+    if (profile === 'heavy') move = 'heavy_slow';
+    else if (profile === 'boss' && oppAttackCountRef.current % 4 === 0) {
+      move = 'heavy_slow';
+      dmgMult = 1.5; // telegraphed power strike: guard it!
+    } else if (profile === 'fast') move = r < 0.8 ? 'jab' : 'kick';
+    else if (isCrit) move = r < 0.6 ? 'heavy' : 'kick';
+    else move = r < 0.55 ? 'jab' : r < 0.8 ? 'kick' : 'heavy';
 
     opponentPoseRef.current = {
       xOffset: -48,
       animState: 'attacking',
       stateTimer: 180,
-      attackType: Math.random() > 0.4 ? 'punch' : 'kick',
+      attackType: move === 'kick' ? 'kick' : 'punch',
     };
+    battleRig.command('opp', move);
+    if (move === 'heavy_slow') soundFx.playWindup();
+    schedule(impactTime(move), () => resolveOpponentAttack(isCrit, move, dmgMult));
+  };
+
+  const resolveOpponentAttack = (isCrit: boolean, move: FighterCmd, dmgMult: number) => {
+    if (isMatchOverRef.current) return;
+    const pStats = state.playerFighter.stats;
+    const oppStats = stageRef.current.opponent.stats;
+    const profile = stageRef.current.opponent.profile;
+    const playerChest = chestOf('player');
+    const playerHead = headOf('player');
 
     const dodgeRoll = Math.random() * 100;
     if (dodgeRoll < pStats.dodgeRate) {
       soundFx.playDodge();
+      battleRig.command('player', 'dodge');
       // Clutch evasion generates +15 rage
       playerRageRef.current = Math.min(100, playerRageRef.current + 15);
       setPlayerRageDisplay(playerRageRef.current);
-      addFloatingText(t('dodge', state.lang), 85, 95, '#38bdf8', 'dodge');
+      addFloatingText(t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
       return;
     }
 
-    const isCrit = Math.random() * 100 < oppStats.critRate;
-    let baseDmg = oppStats.atk * (0.85 + Math.random() * 0.3);
-    
+    let baseDmg = oppStats.atk * (0.85 + Math.random() * 0.3) * dmgMult;
+
     // Asymptotic Defense Formula for Player
     const defMultiplier = 100 / (100 + pStats.def * 0.45);
     let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
@@ -302,14 +435,16 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     const guarded = guardTimerRef.current > 0;
     if (guarded) {
-      finalDmg = Math.max(1, Math.round(finalDmg * 0.25));
+      // Heavy hitters push through a guard a little more than regular fighters
+      const guardPass = profile === 'heavy' || move === 'heavy_slow' ? 0.4 : 0.25;
+      finalDmg = Math.max(1, Math.round(finalDmg * guardPass));
       guardTimerRef.current = 0;
       isGuardingRef.current = false;
       setIsGuarding(false);
       playerRageRef.current = Math.min(100, playerRageRef.current + 20);
       setPlayerRageDisplay(playerRageRef.current);
-      addCallout('BLOK!', 95, 65, '#67e8f9');
-      spawnHitParticles(85, 110, '#67e8f9', 8);
+      addCallout('BLOK!', playerChest.x, playerHead.y - 15, '#67e8f9');
+      spawnHitParticles(playerChest.x, playerChest.y, '#67e8f9', particleCount(8));
     } else {
       comboStreakRef.current = 0;
       setComboStreak(0);
@@ -322,28 +457,42 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     playerRageRef.current = Math.min(100, playerRageRef.current + 8);
     setPlayerRageDisplay(playerRageRef.current);
 
+    const killed = playerHpRef.current <= 0;
     if (guarded) {
-      soundFx.playDodge();
+      soundFx.playBlock();
       triggerHaptic('medium');
-      screenShakeRef.current = 2;
-      addFloatingText(`-${finalDmg}`, 85, 82, '#67e8f9', 'damage');
+      screenShakeRef.current = battleRig.reducedMotion ? 0 : 2;
+      addFloatingText(`-${finalDmg}`, playerHead.x, playerHead.y + 4, '#67e8f9', 'damage');
+      battleRig.flash('player', 0.3);
+      if (!killed) {
+        battleRig.command('player', 'guard');
+        schedule(250, () => !isMatchOverRef.current && battleRig.command('player', 'idle'));
+      }
     } else if (isCrit) {
       soundFx.playCritHit();
       triggerHaptic('medium');
-      screenShakeRef.current = 7;
+      screenShakeRef.current = battleRig.reducedMotion ? 2 : 7;
       hitStopTimerRef.current = 40;
-      spawnHitParticles(85, 110, '#f97316', 12);
-      addCallout('OUCH!', 95, 65, '#ef4444');
-      addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, 85, 78, '#ef4444', 'crit');
+      spawnHitParticles(playerChest.x, playerChest.y, '#f97316', particleCount(12));
+      addCallout('OUCH!', playerChest.x, playerHead.y - 15, '#ef4444');
+      addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, playerHead.x, playerHead.y + 4, '#ef4444', 'crit');
+      battleRig.flash('player', 1);
+      battleRig.kickCamera(0.35);
+      if (!killed) battleRig.command('player', 'crit_hit');
     } else {
-      soundFx.playPunch();
-      triggerHaptic('light');
-      screenShakeRef.current = 2;
-      spawnHitParticles(85, 110, '#fca5a5', 6);
-      addFloatingText(`-${finalDmg}`, 85, 82, '#f87171', 'damage');
+      if (move === 'heavy' || move === 'heavy_slow') soundFx.playHeavyPunch();
+      else if (move === 'kick') soundFx.playKickHit();
+      else soundFx.playPunch();
+      triggerHaptic(move === 'jab' ? 'light' : 'medium');
+      screenShakeRef.current = battleRig.reducedMotion ? 0 : move === 'jab' ? 2 : 4;
+      spawnHitParticles(playerChest.x, playerChest.y, '#fca5a5', particleCount(6));
+      addFloatingText(`-${finalDmg}`, playerHead.x, playerHead.y + 4, '#f87171', 'damage');
+      battleRig.flash('player', 0.7);
+      if (!killed) battleRig.command('player', 'hit');
     }
 
-    if (playerHpRef.current <= 0) {
+    if (killed) {
+      battleRig.command('player', 'knockdown');
       handleDefeat();
     }
   };
@@ -354,6 +503,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     isGuardingRef.current = false;
     setIsGuarding(false);
     setMatchStatus('victory');
+    battleRig.command('player', 'victory');
     soundFx.playVictoryFanfare();
     addCallout('PERFECT KO!', 160, 75, '#fbbf24');
 
@@ -378,6 +528,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     isGuardingRef.current = false;
     setIsGuarding(false);
     setMatchStatus('defeat');
+    battleRig.command('opp', 'victory');
+    soundFx.playKnockdown();
     addFloatingText(t('knockout', state.lang), 160, 90, '#ef4444', 'crit');
 
     const retreated = gameManager.onStageDefeat(stageRef.current);
@@ -428,7 +580,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     isGuardingRef.current = true;
     setGuardReady(false);
     setIsGuarding(true);
-    addFloatingText('SAVUNMA', 85, 80, '#67e8f9', 'skill');
+    battleRig.command('player', 'guard');
+    addFloatingText('SAVUNMA', headOf('player').x, headOf('player').y, '#67e8f9', 'skill');
   };
 
   // Main Canvas Render Loop
@@ -457,6 +610,17 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       }
 
       const simDt = isHitStopActive || paused ? 0 : dt * state.battleSpeed;
+      battleRig.timeScale = simDt === 0 ? 0 : state.battleSpeed;
+
+      // Fire animation-synced impacts whose time has come
+      if (isMatchOverRef.current) {
+        pendingRef.current = [];
+      } else if (simDt > 0 && pendingRef.current.length) {
+        const queue = pendingRef.current;
+        queue.forEach((e) => (e.t -= simDt));
+        pendingRef.current = queue.filter((e) => e.t > 0);
+        queue.filter((e) => e.t <= 0).forEach((e) => e.fn());
+      }
 
       if (!isMatchOverRef.current && !paused && !isHitStopActive) {
         playerCooldownRef.current -= simDt;
@@ -466,6 +630,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         if (guardTimerRef.current === 0 && isGuardingRef.current) {
           isGuardingRef.current = false;
           setIsGuarding(false);
+          battleRig.command('player', 'idle');
         }
         if (guardCooldownRef.current === 0 && !guardReadyRef.current) {
           guardReadyRef.current = true;
@@ -480,7 +645,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         const oppSpd = Math.max(10, stageRef.current.opponent.stats.spd);
 
         const pInterval = Math.max(450, 1500 - pSpd * 18);
-        const oppInterval = Math.max(500, 1600 - oppSpd * 16);
+        const oppInterval = Math.max(500, 1600 - oppSpd * 16) * INTERVAL_MULT[stageRef.current.opponent.profile];
 
         if (state.autoBattle && playerCooldownRef.current <= 0) {
           playerCooldownRef.current = pInterval;
@@ -556,14 +721,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     // Dynamic Camera Zoom & Punch-in during Hit-Stop or Super Move
     const isSpecialVole = playerPoseRef.current.animState === 'attacking' && playerPoseRef.current.attackType === 'special';
-    if (isHitStop || isSpecialVole) {
+    if (!battleRig.active && (isHitStop || isSpecialVole)) {
       ctx.translate(width * 0.5, height * 0.5);
       const zoomFactor = isSpecialVole ? 1.07 : 1.05;
       ctx.scale(zoomFactor, zoomFactor);
       ctx.translate(-width * 0.5, -height * 0.5);
     }
 
-    if (screenShakeRef.current > 0) {
+    if (!battleRig.active && screenShakeRef.current > 0) {
       const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 2;
       const shakeY = (Math.random() - 0.5) * screenShakeRef.current * 2;
       ctx.translate(shakeX, shakeY);
@@ -588,53 +753,61 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       ctx.restore();
     }
 
+    // 2D sprites are only a fallback when WebGL is unavailable; the 3D scene draws the fighters.
+    if (!battleRig.active) {
     // Shadows on 3D floor
-    const pIdleBob = Math.sin(time * 0.006) * 3;
-    const oppIdleBob = Math.sin((time + 500) * 0.006) * 3;
+      const pIdleBob = Math.sin(time * 0.006) * 3;
+      const oppIdleBob = Math.sin((time + 500) * 0.006) * 3;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(85 + playerPoseRef.current.xOffset, 162, 24, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath();
+      ctx.ellipse(85 + playerPoseRef.current.xOffset, 162, 24, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-    ctx.beginPath();
-    ctx.ellipse(245 + opponentPoseRef.current.xOffset, 162, 24, 7, 0, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(245 + opponentPoseRef.current.xOffset, 162, 24, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Player Aura FX
-    drawPlayerAura(ctx, 85 + playerPoseRef.current.xOffset, 138 + pIdleBob, state.playerFighter.avatarStyle.auraEffect, time);
+      // Player Aura FX
+      drawPlayerAura(ctx, 85 + playerPoseRef.current.xOffset, 138 + pIdleBob, state.playerFighter.avatarStyle.auraEffect, time);
 
-    // Player Fighter (with Full Live Paperdoll)
-    drawFighter(
-      ctx,
-      85 + playerPoseRef.current.xOffset,
-      138 + (playerPoseRef.current.animState === 'idle' ? pIdleBob : 0),
-      1,
-      state.playerFighter.avatarStyle,
-      playerPoseRef.current.animState,
-      playerPoseRef.current.attackType,
-      state.playerFighter.equipped,
-      time
-    );
+      // Player Fighter (with Full Live Paperdoll)
+      drawFighter(
+        ctx,
+        85 + playerPoseRef.current.xOffset,
+        138 + (playerPoseRef.current.animState === 'idle' ? pIdleBob : 0),
+        1,
+        state.playerFighter.avatarStyle,
+        playerPoseRef.current.animState,
+        playerPoseRef.current.attackType,
+        state.playerFighter.equipped,
+        time
+      );
 
-    // Opponent Fighter
-    drawFighter(
-      ctx,
-      245 + opponentPoseRef.current.xOffset,
-      138 + (opponentPoseRef.current.animState === 'idle' ? oppIdleBob : 0),
-      -1,
-      stageRef.current.opponent.avatarStyle,
-      opponentPoseRef.current.animState,
-      opponentPoseRef.current.attackType,
-      null,
-      time
-    );
+      // Opponent Fighter
+      drawFighter(
+        ctx,
+        245 + opponentPoseRef.current.xOffset,
+        138 + (opponentPoseRef.current.animState === 'idle' ? oppIdleBob : 0),
+        -1,
+        stageRef.current.opponent.avatarStyle,
+        opponentPoseRef.current.animState,
+        opponentPoseRef.current.attackType,
+        null,
+        time
+      );
+
+    }
 
     // Special Ball FX (Orbiting / Shot)
     if (isSpecialVole) {
-      const ballProgress = 1 - (playerPoseRef.current.stateTimer / 180);
-      const ballX = 85 + ballProgress * 150;
-      const ballY = 130 - Math.sin(ballProgress * Math.PI) * 45;
+      const span = battleRig.active ? SPECIAL_MS : 180;
+      const ballProgress = Math.min(1, Math.max(0, 1 - playerPoseRef.current.stateTimer / span));
+      const from = battleRig.active ? battleRig.anchors.player.chest : { x: 85, y: 130 };
+      const to = battleRig.active ? battleRig.anchors.opp.chest : { x: 235, y: 130 };
+      const arc = Math.max(0, (ballProgress - 0.35) / 0.65);
+      const ballX = from.x + (to.x - from.x) * arc;
+      const ballY = from.y - Math.sin(arc * Math.PI) * 30;
       const ballColor = state.playerFighter.avatarStyle.ballColor || '#f59e0b';
 
       const grad = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 24);
@@ -1117,8 +1290,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             </span>
           </div>
 
-          <div className="text-[9px] text-zinc-400 truncate mt-1 italic font-medium">
-            "{currentStageData.opponent.dialogue}"
+          <div className="flex items-center justify-end gap-1.5 mt-1 min-w-0">
+            <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[8px] font-black tracking-wider text-amber-300 uppercase">
+              {PROFILE_LABEL[currentStageData.opponent.profile][state.lang === 'tr' ? 'tr' : 'en']}
+            </span>
+            <span className="text-[9px] text-zinc-400 truncate italic font-medium">"{currentStageData.opponent.dialogue}"</span>
           </div>
         </div>
       </div>
@@ -1128,7 +1304,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/45 via-transparent to-sky-950/20" />
         {/* 1. 3D WebGL Arena Backdrop */}
         <Suspense fallback={null}>
-          <BattleScene3D environment={currentStageData.environment} screenShakeRef={screenShakeRef} />
+          <BattleScene3D
+            key={state.quality}
+            environment={currentStageData.environment}
+            screenShakeRef={screenShakeRef}
+            player={playerAppearance(state.playerFighter)}
+            opponent={opponentAppearance(currentStageData)}
+          />
         </Suspense>
 
         {/* 2. 2D Animated Combat Sprite Layer */}

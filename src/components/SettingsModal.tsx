@@ -160,6 +160,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
+                <Zap className="w-4 h-4 text-fuchsia-400" />
+                <span>{state.lang === 'tr' ? 'Azaltılmış hareket' : 'Reduce motion'}</span>
+              </div>
+              <button
+                onClick={() => gameManager.toggleReducedMotion()}
+                aria-label="Reduce motion"
+                className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
+                  state.reducedMotion ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
+                }`}
+              >
+                <div className="w-5 h-5 rounded-full bg-white shadow-md" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
+                <Zap className="w-4 h-4 text-sky-400" />
+                <span>{state.lang === 'tr' ? 'Grafik kalitesi' : 'Graphics quality'}</span>
+              </div>
+              <div className="flex gap-1">
+                {(['low', 'medium', 'high'] as const).map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => gameManager.setQuality(q)}
+                    className={`px-2.5 min-h-8 rounded-lg text-[10px] font-black border ${
+                      state.quality === q ? 'game-btn-gold text-black border-amber-300' : 'bg-neutral-900 text-zinc-400 border-zinc-700'
+                    }`}
+                  >
+                    {q === 'low' ? (state.lang === 'tr' ? 'DÜŞÜK' : 'LOW') : q === 'medium' ? (state.lang === 'tr' ? 'ORTA' : 'MED') : (state.lang === 'tr' ? 'YÜKSEK' : 'HIGH')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
                 <Zap className="w-4 h-4 text-amber-400" />
                 <span>{t('highPerformance', state.lang)}</span>
               </div>

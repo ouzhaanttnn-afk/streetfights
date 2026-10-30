@@ -1,4 +1,4 @@
-import { ArenaEnvironment, Stage } from '../types/game';
+import { ArenaEnvironment, OpponentProfile, Stage } from '../types/game';
 
 interface WorldConfig {
   world: number;
@@ -70,6 +70,9 @@ const WORLDS: WorldConfig[] = [
   },
 ];
 
+// Fighting styles rotate across the roster so neighbouring stages feel different.
+const NORMAL_PROFILES: OpponentProfile[] = ['aggressive', 'defensive', 'counter', 'fast', 'heavy'];
+
 export const WORLD_COUNT = WORLDS.length;
 
 export function getWorldName(worldNum: number): string {
@@ -126,6 +129,7 @@ export function getStageData(worldNum: number, subNum: number): Stage {
       title: opponentTemplate.title,
       level: totalStageIndex,
       dialogue: opponentTemplate.dialogue,
+      profile: isBoss ? 'boss' : NORMAL_PROFILES[(subNum - 1 + worldIdx) % NORMAL_PROFILES.length],
       avatarStyle: {
         skinTone: opponentTemplate.skinTone,
         hairColor: opponentTemplate.hairColor,

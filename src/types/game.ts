@@ -96,6 +96,8 @@ export interface Fighter {
   };
 }
 
+export type OpponentProfile = 'aggressive' | 'defensive' | 'counter' | 'fast' | 'heavy' | 'boss';
+
 export type ArenaEnvironment = 'alley' | 'cage' | 'subway' | 'neon_club' | 'pro_ring' | 'mega_stadium';
 
 export interface Stage {
@@ -113,6 +115,7 @@ export interface Stage {
     stats: FighterStats;
     avatarStyle: Fighter['avatarStyle'];
     dialogue: string;
+    profile: OpponentProfile;
   };
   coinReward: number;
   gemReward: number;

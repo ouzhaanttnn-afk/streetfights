@@ -34,6 +34,14 @@ const QUEST_TEMPLATES: Omit<DailyQuest, 'progress' | 'claimed'>[] = [
   { id: 'use_super', target: 5, gems: 12, coins: 500 },
 ];
 
+const SUPPORTED_LANGS: Language[] = ['tr', 'en', 'es', 'de', 'fr', 'pt', 'it', 'ja'];
+
+// First launch follows the device language (App Review and most players are not Turkish); saved games keep their choice.
+function detectLanguage(): Language {
+  const code = (typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en').slice(0, 2).toLowerCase() as Language;
+  return SUPPORTED_LANGS.includes(code) ? code : 'en';
+}
+
 function createDailyQuests(): DailyQuest[] {
   return QUEST_TEMPLATES.map((q) => ({ ...q, progress: 0, claimed: false }));
 }
@@ -257,7 +265,7 @@ function createInitialPlayer(): Fighter {
 
 function createDefaultState(): GameStateData {
   return {
-    lang: 'tr',
+    lang: detectLanguage(),
     coins: 200,
     gems: 30,
     trophies: 0,

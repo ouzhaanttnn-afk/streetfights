@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { getStageData, getWorldName, WORLD_COUNT } from '../../core/stageDatabase';
 import { DailyQuestsCard } from '../DailyQuestsCard';
+import { ui } from '../../i18n/ui';
 import { t } from '../../i18n/translations';
 import { 
   Trophy, 
@@ -47,12 +48,10 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
         className="w-full min-h-11 rounded-2xl game-card border border-white/10 px-4 flex items-center justify-between text-xs font-black active:scale-[0.98]"
       >
         <span className="text-zinc-200">
-          {state.lang === 'tr' ? 'Zafer sonrası' : 'After victory'}
+          {ui(state.lang, 'after_victory')}
         </span>
         <span className={state.autoAdvance ? 'text-emerald-300' : 'text-amber-300'}>
-          {state.autoAdvance
-            ? (state.lang === 'tr' ? '➜ Sonraki bölüm' : '➜ Next stage')
-            : (state.lang === 'tr' ? '⟳ Aynı bölümü tekrarla (farm)' : '⟳ Repeat stage (farm)')}
+          {ui(state.lang, state.autoAdvance ? 'next_stage' : 'repeat_stage')}
         </span>
       </button>
 

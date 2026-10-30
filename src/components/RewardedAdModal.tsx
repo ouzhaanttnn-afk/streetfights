@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
+import { ui } from '../i18n/ui';
 import { soundFx } from '../core/audio';
 import { adMobManager } from '../core/admob';
 import confetti from 'canvas-confetti';
@@ -73,22 +74,21 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
   if (!offer) return null;
 
   if (!useSimulation) {
-    const isTr = state.lang === 'tr';
     return (
       <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none animate-fadeIn">
         <div className="w-full max-w-xs game-card rounded-3xl p-5 border border-amber-500/40 text-center text-white space-y-3">
           {nativeFailed ? (
             <>
-              <div className="text-sm font-black">{isTr ? 'Reklam şu an hazır değil' : 'No ad available right now'}</div>
-              <div className="text-[11px] text-zinc-400">{isTr ? 'Birkaç saniye sonra tekrar dene.' : 'Please try again in a few seconds.'}</div>
+              <div className="text-sm font-black">{ui(state.lang, 'ad_none')}</div>
+              <div className="text-[11px] text-zinc-400">{ui(state.lang, 'ad_retry')}</div>
               <button onClick={() => gameManager.closeRewardedAd()} className="w-full min-h-11 rounded-2xl bg-neutral-800 border border-zinc-700 text-xs font-black active:scale-95">
-                {isTr ? 'Tamam' : 'OK'}
+                {ui(state.lang, 'ok')}
               </button>
             </>
           ) : (
             <>
               <div className="mx-auto w-9 h-9 rounded-full border-4 border-amber-400/30 border-t-amber-400 animate-spin" />
-              <div className="text-xs font-black">{isTr ? 'Reklam hazırlanıyor…' : 'Preparing ad…'}</div>
+              <div className="text-xs font-black">{ui(state.lang, 'ad_preparing')}</div>
             </>
           )}
         </div>

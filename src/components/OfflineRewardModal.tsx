@@ -1,6 +1,7 @@
 import React from "react";
 import { GameStateData, gameManager } from "../core/gameState";
 import { t } from "../i18n/translations";
+import { ui } from "../i18n/ui";
 import confetti from "canvas-confetti";
 import { 
   Coins, 
@@ -38,7 +39,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
   const handleDoubleWithAd = () => {
     gameManager.openRewardedAd({
       type: 'offline_double',
-      title: state.lang === 'tr' ? 'AFK Kazancını 2x Yap' : 'Double AFK Earnings',
+      title: ui(state.lang, 'double_afk'),
       rewardDesc: `+${(amount * 2).toLocaleString()} Coins`,
     });
   };

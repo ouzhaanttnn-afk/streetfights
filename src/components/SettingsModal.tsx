@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { Language, t } from '../i18n/translations';
+import { ui } from '../i18n/ui';
 import { 
   Settings, 
   Volume2, 
@@ -145,7 +146,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
                 <Zap className="w-4 h-4 text-cyan-400" />
-                <span>{state.lang === 'tr' ? 'Titreşim (Haptic)' : 'Haptics'}</span>
+                <span>{ui(state.lang, 'haptics')}</span>
               </div>
               <button
                 onClick={() => gameManager.toggleHaptics()}
@@ -161,7 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
                 <Zap className="w-4 h-4 text-fuchsia-400" />
-                <span>{state.lang === 'tr' ? 'Azaltılmış hareket' : 'Reduce motion'}</span>
+                <span>{ui(state.lang, 'reduce_motion')}</span>
               </div>
               <button
                 onClick={() => gameManager.toggleReducedMotion()}
@@ -177,7 +178,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
                 <Zap className="w-4 h-4 text-sky-400" />
-                <span>{state.lang === 'tr' ? 'Grafik kalitesi' : 'Graphics quality'}</span>
+                <span>{ui(state.lang, 'quality')}</span>
               </div>
               <div className="flex gap-1">
                 {(['low', 'medium', 'high'] as const).map((q) => (
@@ -188,7 +189,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
                       state.quality === q ? 'game-btn-gold text-black border-amber-300' : 'bg-neutral-900 text-zinc-400 border-zinc-700'
                     }`}
                   >
-                    {q === 'low' ? (state.lang === 'tr' ? 'DÜŞÜK' : 'LOW') : q === 'medium' ? (state.lang === 'tr' ? 'ORTA' : 'MED') : (state.lang === 'tr' ? 'YÜKSEK' : 'HIGH')}
+                    {ui(state.lang, 'q_' + q)}
                   </button>
                 ))}
               </div>
@@ -208,7 +209,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
           {/* 3. Cloud / Local Save Management */}
           <div className="bg-black/50 rounded-2xl p-3.5 border border-white/10 space-y-2.5 shadow-inner">
             <span className="text-xs font-black text-zinc-200 block">
-              {state.lang === 'tr' ? 'Kayıt Yedeği (kopyala / yapıştır)' : 'Save Backup (copy / paste)'}
+              {ui(state.lang, 'backup')}
             </span>
             <div className="grid grid-cols-2 gap-2">
               <button

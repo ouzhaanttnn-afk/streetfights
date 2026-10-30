@@ -332,18 +332,8 @@ export interface Synergy {
   category: SkillCategory;
   count: number;
   tier: 2 | 3;
-  tr: string;
-  en: string;
+  bonus: string;
 }
-
-const SYNERGY_TEXT: Record<SkillCategory, [string, string, string, string]> = {
-  strike: ['Vuruş', 'Strike', 'ATK', 'ATK'],
-  combo: ['Kombo', 'Combo', 'Kombo', 'Combo'],
-  defense: ['Savunma', 'Defense', 'HP & DEF', 'HP & DEF'],
-  speed: ['Hız', 'Speed', 'SPD', 'SPD'],
-  lifesteal: ['Vampir', 'Vampire', 'Can çalma', 'Lifesteal'],
-  rage: ['Öfke', 'Rage', 'Krit hasar', 'Crit DMG'],
-};
 
 // Equipping 2 or 3+ skills of the same family grants a set bonus.
 export function skillSynergies(skills: { category?: string }[]): Synergy[] {
@@ -356,12 +346,11 @@ export function skillSynergies(skills: { category?: string }[]): Synergy[] {
     const count = counts[category] || 0;
     if (count < 2) return;
     const tier = count >= 3 ? 3 : 2;
-    const [trName, enName, trStat, enStat] = SYNERGY_TEXT[category];
     const bonus = category === 'combo' ? (tier === 3 ? '+9%' : '+4%')
       : category === 'lifesteal' ? (tier === 3 ? '+3.5%' : '+1.5%')
       : category === 'rage' ? (tier === 3 ? '+0.25x' : '+0.10x')
       : tier === 3 ? '+14%' : category === 'speed' ? '+8%' : '+6%';
-    out.push({ category, count, tier, tr: `${trName} x${count}: ${bonus} ${trStat}`, en: `${enName} x${count}: ${bonus} ${enStat}` });
+    out.push({ category, count, tier, bonus });
   });
   return out;
 }

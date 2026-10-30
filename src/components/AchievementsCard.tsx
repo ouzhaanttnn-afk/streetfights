@@ -1,10 +1,10 @@
 import React from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { ACHIEVEMENTS } from '../core/achievements';
+import { ui } from '../i18n/ui';
 import { Award, Check, Gem } from 'lucide-react';
 
 export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) => {
-  const isTr = state.lang === 'tr';
   const claimed = state.claimedAchievements || [];
   const rows = ACHIEVEMENTS.map((a) => ({ a, value: a.value(state), done: claimed.includes(a.id) }));
   // claimable first, then in progress, then finished
@@ -16,7 +16,7 @@ export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) 
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
           <Award className="w-4 h-4" />
-          {isTr ? 'Başarımlar' : 'Achievements'}
+          {ui(state.lang, 'ach_title')}
         </h3>
         <span className="text-[10px] font-mono text-zinc-400">{claimed.length}/{ACHIEVEMENTS.length}{ready > 0 ? ` • ${ready}!` : ''}</span>
       </div>
@@ -27,7 +27,7 @@ export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) 
           <div key={a.id} className={`flex items-center gap-3 rounded-2xl bg-black/40 border border-white/5 p-2.5 ${done ? 'opacity-55' : ''}`}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between text-[11px] font-black text-zinc-100">
-                <span className="truncate">{isTr ? a.tr : a.en}</span>
+                <span className="truncate">{ui(state.lang, a.key, { n: a.n ?? 0 })}</span>
                 <span className="font-mono text-zinc-400 ml-2">{Math.min(value, a.target)}/{a.target}</span>
               </div>
               <div className="h-1.5 mt-1.5 rounded-full bg-black/80 overflow-hidden">

@@ -1,16 +1,9 @@
 import React from 'react';
 import { GameStateData, QuestId, gameManager } from '../core/gameState';
+import { ui } from '../i18n/ui';
 import { Check, Coins, Gem, ListChecks } from 'lucide-react';
 
-const QUEST_LABELS: Record<QuestId, { tr: string; en: string }> = {
-  win_fights: { tr: 'Dövüş kazan', en: 'Win fights' },
-  beat_boss: { tr: 'Boss yen', en: 'Defeat a boss' },
-  train_gym: { tr: 'Salonda antrenman yap', en: 'Train at the gym' },
-  use_super: { tr: 'Süper hamle kullan', en: 'Use the Super Move' },
-};
-
 export const DailyQuestsCard: React.FC<{ state: GameStateData }> = ({ state }) => {
-  const isTr = state.lang === 'tr';
   const quests = state.dailyQuests || [];
   const claimable = quests.filter((q) => !q.claimed && q.progress >= q.target).length;
 
@@ -19,7 +12,7 @@ export const DailyQuestsCard: React.FC<{ state: GameStateData }> = ({ state }) =
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-2">
           <ListChecks className="w-4 h-4" />
-          {isTr ? 'Günlük Görevler' : 'Daily Quests'}
+          {ui(state.lang, 'quests_title')}
         </h3>
         {claimable > 0 && (
           <span className="text-[10px] font-black text-black bg-emerald-400 rounded-full px-2 py-0.5 animate-pulse">
@@ -35,7 +28,7 @@ export const DailyQuestsCard: React.FC<{ state: GameStateData }> = ({ state }) =
           <div key={q.id} className="flex items-center gap-3 rounded-2xl bg-black/40 border border-white/5 p-2.5">
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between text-[11px] font-black text-zinc-100">
-                <span className="truncate">{isTr ? QUEST_LABELS[q.id].tr : QUEST_LABELS[q.id].en}</span>
+                <span className="truncate">{ui(state.lang, 'q_' + q.id)}</span>
                 <span className="font-mono text-zinc-400 ml-2">{q.progress}/{q.target}</span>
               </div>
               <div className="h-1.5 mt-1.5 rounded-full bg-black/80 overflow-hidden">
@@ -56,7 +49,7 @@ export const DailyQuestsCard: React.FC<{ state: GameStateData }> = ({ state }) =
                   done ? 'game-btn-emerald text-black shine-effect' : 'bg-neutral-900 text-zinc-600 border border-zinc-800'
                 }`}
               >
-                {isTr ? 'AL' : 'CLAIM'}
+                {ui(state.lang, 'claim')}
               </button>
             )}
           </div>

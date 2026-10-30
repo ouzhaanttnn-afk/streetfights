@@ -154,6 +154,19 @@ const URL = process.env.URL || 'http://localhost:5199';
     ok('boss intro banner appears on a boss stage', seen);
     await b.close();
   }
+  // ---- 8. Localisation of the newest strings
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'ja', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
+    await p.goto(URL); await p.waitForTimeout(3500);
+    ok('Japanese: tutorial text is translated', await p.getByText('戦闘は自動です').count() > 0);
+    await p.locator('nav button').nth(4).click(); await p.waitForTimeout(500);
+    ok('Japanese: daily quests title is translated', await p.getByText('デイリークエスト').count() > 0);
+    ok('Japanese: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
   console.log(results.join('\n'));
   if (results.some((r) => r.startsWith('FAIL'))) process.exitCode = 1;
 })();

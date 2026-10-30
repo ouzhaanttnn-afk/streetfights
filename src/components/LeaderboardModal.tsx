@@ -1,3 +1,4 @@
+import { ui } from '../i18n/ui';
 import React from 'react';
 import { GameStateData } from '../core/gameState';
 import { TOP_TIER_PLAYERS } from '../core/leaderboardData';
@@ -76,7 +77,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ state, onClo
               <div>
                 <span className="text-sm font-black text-white">{state.playerFighter.name}</span>
                 <div className="text-[10px] font-black text-amber-300 flex items-center gap-1">
-                  <span>{pTier.tier} {state.lang === 'tr' ? 'Ligi' : 'Division'}</span>
+                  <span>{pTier.tier} {ui(state.lang, 'division')}</span>
                 </div>
               </div>
             </div>
@@ -104,7 +105,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ state, onClo
         {/* Top Tier Leaderboard Roster */}
         <div className="space-y-2.5">
           <span className="text-[11px] font-black text-zinc-400 uppercase tracking-wider block px-1">
-            {state.lang === 'tr' ? 'Efsane Rakipler (kurgusal karakterler)' : 'Legend Rivals (fictional characters)'}
+            {ui(state.lang, 'legend_rivals')}
           </span>
 
           {TOP_TIER_PLAYERS.map((entry) => {

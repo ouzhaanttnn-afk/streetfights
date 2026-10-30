@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { COSMETICS_LIST, CosmeticCategory, CosmeticItem } from '../../core/cosmeticsData';
 import { t } from '../../i18n/translations';
+import { ui } from '../../i18n/ui';
 import { 
   ShoppingBag, 
   Sparkles, 
@@ -92,13 +93,13 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
           <button
             onClick={() => gameManager.openRewardedAd({
               type: 'double_coins',
-              title: state.lang === 'tr' ? '2x Altın' : '2x Coins',
+              title: ui(state.lang, 'coins2x'),
               rewardDesc: '2x Coin rewards for 10 min',
             })}
             className="p-3 rounded-2xl bg-gradient-to-b from-yellow-950/60 via-black to-neutral-950 border border-yellow-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-yellow-400 group"
           >
             <Coins className="w-6 h-6 text-yellow-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{state.lang === 'tr' ? '2x Altın' : '2x Coins'}</span>
+            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{ui(state.lang, 'coins2x')}</span>
             <span className="text-[9px] font-mono font-bold text-yellow-300 mt-1.5 bg-yellow-950/90 px-2.5 py-0.5 rounded-lg border border-yellow-500/40">
               {Date.now() < state.doubleCoinsUntil ? `${Math.ceil((state.doubleCoinsUntil - Date.now()) / 60000)}m` : '🪙 2x'}
             </span>

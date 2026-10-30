@@ -7,6 +7,7 @@ import { battleRig, FighterCmd } from '../game/battleRig';
 import { impactTime } from '../game/fighter3d/clips';
 import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
+import { ui } from '../i18n/ui';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
 
@@ -14,14 +15,6 @@ const BattleScene3D = lazy(() => import('./BattleScene3D').then((module) => ({ d
 
 const SPECIAL_MS = 940;
 
-const PROFILE_LABEL: Record<OpponentProfile, { tr: string; en: string }> = {
-  aggressive: { tr: 'Saldırgan', en: 'Aggressive' },
-  defensive: { tr: 'Savunmacı', en: 'Defensive' },
-  counter: { tr: 'Kontracı', en: 'Counter' },
-  fast: { tr: 'Hızlı', en: 'Fast' },
-  heavy: { tr: 'Ağır', en: 'Heavy' },
-  boss: { tr: 'Boss', en: 'Boss' },
-};
 
 interface BattleCanvasProps {
   state: GameStateData;
@@ -290,7 +283,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     if (!isSpecialRage && Math.random() * 100 < comboChance) {
       const extraDamage = Math.max(1, Math.round(finalDmg * 0.35));
       finalDmg += extraDamage;
-      addFloatingText(`KOMBO +${extraDamage}`, oppChest.x - 12, oppHead.y - 22, '#fde047', 'skill');
+      addFloatingText(`${ui(state.lang, 'c_combo')} +${extraDamage}`, oppChest.x - 12, oppHead.y - 22, '#fde047', 'skill');
       // The follow-up is shown as a quick second jab landing right after the main hit
       schedule(150, () => {
         if (isMatchOverRef.current) return;
@@ -358,7 +351,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       addFloatingText(`-${finalDmg}`, oppHead.x, oppHead.y + 4, '#ffffff', 'damage');
     }
     if (blocked) {
-      addCallout('BLOK!', oppChest.x, oppHead.y - 15, '#67e8f9');
+      addCallout(ui(state.lang, 'c_block'), oppChest.x, oppHead.y - 15, '#67e8f9');
     }
 
     // Defender reaction on the same frame as the impact
@@ -371,7 +364,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       // Counter fighters answer a hit by striking back sooner
       if (profile === 'counter' && Math.random() < 0.2) {
         opponentCooldownRef.current = Math.min(opponentCooldownRef.current, 220);
-        addCallout('KONTRA!', oppChest.x, oppHead.y - 30, '#fb923c');
+        addCallout(ui(state.lang, 'c_counter'), oppChest.x, oppHead.y - 30, '#fb923c');
       }
     }
 
@@ -461,7 +454,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       setIsGuarding(false);
       playerRageRef.current = Math.min(100, playerRageRef.current + 20);
       setPlayerRageDisplay(playerRageRef.current);
-      addCallout('BLOK!', playerChest.x, playerHead.y - 15, '#67e8f9');
+      addCallout(ui(state.lang, 'c_block'), playerChest.x, playerHead.y - 15, '#67e8f9');
       spawnHitParticles(playerChest.x, playerChest.y, '#67e8f9', particleCount(8));
     } else {
       comboStreakRef.current = 0;
@@ -560,7 +553,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     const retreated = gameManager.onStageDefeat(stageRef.current);
     if (retreated) {
       // The stage change triggers a fresh battle on the previous stage
-      addFloatingText(state.lang === 'tr' ? 'Geri çekildin: biraz güçlen!' : 'Falling back: power up!', 160, 120, '#fbbf24', 'skill');
+      addFloatingText(ui(state.lang, 'fallback_msg'), 160, 120, '#fbbf24', 'skill');
     } else if (stageRef.current.isBoss) {
       setShowReviveAd(true);
     } else {
@@ -606,7 +599,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     setGuardReady(false);
     setIsGuarding(true);
     battleRig.command('player', 'guard');
-    addFloatingText('SAVUNMA', headOf('player').x, headOf('player').y, '#67e8f9', 'skill');
+    addFloatingText(ui(state.lang, 'c_guard'), headOf('player').x, headOf('player').y, '#67e8f9', 'skill');
   };
 
   // Main Canvas Render Loop
@@ -1317,7 +1310,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
           <div className="flex items-center justify-end gap-1.5 mt-1 min-w-0">
             <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[8px] font-black tracking-wider text-amber-300 uppercase">
-              {PROFILE_LABEL[currentStageData.opponent.profile][state.lang === 'tr' ? 'tr' : 'en']}
+              {ui(state.lang, 'p_' + currentStageData.opponent.profile)}
             </span>
             <span className="text-[9px] text-zinc-400 truncate italic font-medium">"{currentStageData.opponent.dialogue}"</span>
           </div>
@@ -1367,7 +1360,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               disabled={!guardReady || paused}
               className="min-h-11 px-3 rounded-xl border border-cyan-300/60 bg-cyan-950/90 text-cyan-100 shadow-lg flex items-center gap-1.5 text-xs font-black disabled:opacity-45 active:scale-95"
             >
-              <Shield className="w-4 h-4" /> {state.lang === 'tr' ? 'KORUN' : 'GUARD'}
+              <Shield className="w-4 h-4" /> {ui(state.lang, 'guard_btn')}
             </button>
             <button
               type="button"
@@ -1375,7 +1368,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               disabled={!manualAttackReady || paused}
               className="min-h-11 px-4 rounded-xl game-btn-crimson border border-rose-300/70 text-white shadow-lg flex items-center gap-1.5 text-xs font-black disabled:opacity-45 active:scale-95"
             >
-              <Hand className="w-4 h-4" /> {state.lang === 'tr' ? 'VUR' : 'HIT'}
+              <Hand className="w-4 h-4" /> {ui(state.lang, 'hit_btn')}
             </button>
           </div>
         )}
@@ -1383,7 +1376,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         {/* Boss intro banner */}
         {bossIntro && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-b from-black/70 via-rose-950/55 to-black/70 animate-fadeIn">
-            <span className="text-[11px] font-black tracking-[0.35em] text-rose-300">{state.lang === 'tr' ? 'BOSS DÖVÜŞÜ' : 'BOSS FIGHT'}</span>
+            <span className="text-[11px] font-black tracking-[0.35em] text-rose-300">{ui(state.lang, 'boss_fight')}</span>
             <span className="mt-1 text-2xl font-black italic text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">{currentStageData.opponent.name}</span>
             <span className="text-[11px] font-bold text-amber-300">{currentStageData.opponent.title}</span>
           </div>
@@ -1422,7 +1415,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               onClick={() => resetBattle(stageRef.current)}
               className="min-h-10 px-4 rounded-2xl bg-black/80 text-zinc-100 font-black text-xs border border-white/25 active:scale-95"
             >
-              {state.lang === 'tr' ? '↻ Tekrar dene' : '↻ Retry'}
+              {ui(state.lang, 'retry')}
             </button>
           </div>
         )}

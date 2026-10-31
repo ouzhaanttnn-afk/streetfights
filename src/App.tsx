@@ -16,7 +16,6 @@ import { RewardedAdModal } from './components/RewardedAdModal';
 import { SettingsModal } from './components/SettingsModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { DailyLoginModal } from './components/DailyLoginModal';
-import { LuckyWheelModal } from './components/LuckyWheelModal';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { SkillReplaceModal } from './components/SkillReplaceModal';
 import { TutorialHint } from './components/TutorialHint';
@@ -162,11 +161,6 @@ export function App() {
         {/* 9. 7-Day Daily Login Reward Modal */}
         {state.isDailyLoginOpen && (
           <DailyLoginModal state={state} onClose={() => gameManager.closeDailyLogin()} />
-        )}
-
-        {/* 10. Lucky Fortune Wheel Modal */}
-        {state.isLuckyWheelOpen && (
-          <LuckyWheelModal state={state} onClose={() => gameManager.closeLuckyWheel()} />
         )}
 
         {/* 11. AFK Offline Training Gold Modal */}

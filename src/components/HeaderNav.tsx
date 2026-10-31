@@ -96,18 +96,6 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
           )}
         </button>
 
-        {/* Spin */}
-        <button
-          onClick={() => gameManager.openLuckyWheel()}
-          className="p-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 active:scale-95 text-white rounded-lg border border-cyan-300/60 transition-all shadow-sm flex items-center justify-center relative"
-          title="Lucky Wheel"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
-          {(gameManager.hasFreeWheelSpin() || state.bonusWheelSpins > 0) && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-black" />
-          )}
-        </button>
-
         {/* Settings */}
         <button
           onClick={onOpenSettings}

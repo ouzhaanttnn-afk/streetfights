@@ -20,6 +20,8 @@ import {
   Hammer 
 } from 'lucide-react';
 
+import { ItemIcon } from '../ItemIcon';
+
 const ThreeItemViewer = lazy(() => import('../ThreeItemViewer').then((module) => ({ default: module.ThreeItemViewer })));
 
 interface GearTabProps {
@@ -140,7 +142,11 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                 </div>
 
                 <div className="my-auto drop-shadow">
-                  <Icon className={`w-8 h-8 ${item && rarity ? rarity.color : 'text-zinc-700'}`} />
+                  {item ? (
+                    <ItemIcon slot={item.slot} rarity={item.rarity} size={48} fallback={<Icon className={`w-8 h-8 ${rarity ? rarity.color : ''}`} />} />
+                  ) : (
+                    <Icon className="w-8 h-8 text-zinc-700" />
+                  )}
                 </div>
 
                 <div className="w-full text-center">
@@ -220,7 +226,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                     <span className="text-amber-400 font-black font-mono">L{item.level}</span>
                   </div>
 
-                  <Icon className={`w-5 h-5 ${rarity.color} drop-shadow`} />
+                  <ItemIcon slot={item.slot} rarity={item.rarity} size={34} fallback={<Icon className={`w-5 h-5 ${rarity.color} drop-shadow`} />} />
 
                   <span className="text-[9px] font-black font-mono text-zinc-200 bg-black/50 px-1 rounded">
                     ⚡{item.powerScore}

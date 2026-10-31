@@ -116,3 +116,9 @@ answers must say so too. In App Store Connect: **App > App Privacy > Get Started
 4. Tracking domains are already in `PrivacyInfo.xcprivacy`. **Publish** the answers.
 5. Then open version 1.0 and press **Add for Review / Submit for Review** (an empty draft submission already exists
    and will be reused).
+
+## 9. 2026-10-31: simulated gambling rejection
+App Review stopped the submission because the age rating said "Simulated Gambling" and the account is an individual
+developer account (only organizations may ship simulated gambling). The lucky wheel was removed from the game in build 10,
+so the honest answer is now **Simulated Gambling: None**. Change it in App Store Connect (App Information > Age Rating),
+remove the old wheel sentence from the review notes, attach build 10 and resubmit.

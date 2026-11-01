@@ -96,10 +96,131 @@ async function inspect() {
   if (subs.status !== 200) console.log('reviewSubmissions ' + subs.status + ' ' + errText(subs));
 }
 
+const NOTES = [
+  'Street Striker is an offline, single-player idle/auto-battle fighting RPG. No account or login is required and there are no in-app purchases. The player fights AI opponents, collects gear and trains stats.',
+  '',
+  '- Optional rewarded video ads (Google AdMob): Shop tab (Free Gems, 2x Damage), revive after a boss defeat, double the offline reward, and an optional bonus card after a boss win. They are never required to progress. App Tracking Transparency permission is requested on first launch.',
+  '- There is no online multiplayer, leaderboard, chat or user-generated content; all opponents are fictional AI characters.',
+  '- Daily rewards use only free in-game currency; nothing can be bought, sold or cashed out. The lucky wheel from the previous build was removed, and the age rating now says Simulated Gambling: None.',
+  '- Optional local reminders (gold vault full, daily reward) can be enabled from an in-game card shown after a few wins or in Settings > Notifications. They are scheduled on the device only.',
+  '- To see everything quickly: launch, close the daily reward, and the fight starts automatically. Tap AUTO (top right of the fight) for manual control; tap the gold SUPER button when the rage bar is full. Fighter / Gym / Arena / Shop tabs are along the bottom; tap the level badge (top left) for the profile.',
+  '- Settings (gear icon, top right): language, sound, haptics, notifications, reduce motion, graphics quality, save backup, reset progress.',
+  '- The game language follows the device language (8 languages supported).',
+].join('\n');
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function uploadScreenshot(setId, file) {
+  const buf = fs.readFileSync(file);
+  const name = file.split('/').pop();
+  const created = await call('POST', '/v1/appScreenshots', {
+    data: { type: 'appScreenshots', attributes: { fileName: name, fileSize: buf.length }, relationships: { appScreenshotSet: { data: { type: 'appScreenshotSets', id: setId } } } },
+  });
+  if (created.status !== 201) throw new Error(`reserve ${name}: ${created.status} ${errText(created)}`);
+  const shot = created.json.data;
+  for (const op of shot.attributes.uploadOperations) {
+    const headers = Object.fromEntries((op.requestHeaders || []).map((h) => [h.name, h.value]));
+    const res = await fetch(op.url, { method: op.method, headers, body: buf.subarray(op.offset, op.offset + op.length) });
+    if (!res.ok) throw new Error(`upload part ${name}: ${res.status}`);
+  }
+  const md5 = crypto.createHash('md5').update(buf).digest('hex');
+  const done = await call('PATCH', `/v1/appScreenshots/${shot.id}`, { data: { type: 'appScreenshots', id: shot.id, attributes: { uploaded: true, sourceFileChecksum: md5 } } });
+  if (done.status !== 200) throw new Error(`commit ${name}: ${done.status} ${errText(done)}`);
+  return shot.id;
+}
+
+async function replaceScreenshots(verId) {
+  const dirs = { 'en-US': 'store/screenshots/en/65', tr: 'store/screenshots/tr/65' };
+  const locs = await call('GET', `/v1/appStoreVersions/${verId}/appStoreVersionLocalizations`);
+  const allIds = [];
+  for (const l of locs.json.data) {
+    const dir = dirs[l.attributes.locale];
+    if (!dir) { line(true, `screenshots ${l.attributes.locale}`, 'no local files, kept as is'); continue; }
+    const sets = await call('GET', `/v1/appStoreVersionLocalizations/${l.id}/appScreenshotSets?include=appScreenshots`);
+    let set = (sets.json.data || []).find((st) => st.attributes.screenshotDisplayType === 'APP_IPHONE_65');
+    if (!set) {
+      const mk = await call('POST', '/v1/appScreenshotSets', { data: { type: 'appScreenshotSets', attributes: { screenshotDisplayType: 'APP_IPHONE_65' }, relationships: { appStoreVersionLocalization: { data: { type: 'appStoreVersionLocalizations', id: l.id } } } } });
+      set = mk.json.data;
+    }
+    for (const old of set.relationships?.appScreenshots?.data || []) await call('DELETE', `/v1/appScreenshots/${old.id}`);
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.png')).sort();
+    const ids = [];
+    for (const f of files) ids.push(await uploadScreenshot(set.id, `${dir}/${f}`));
+    await call('PATCH', `/v1/appScreenshotSets/${set.id}/relationships/appScreenshots`, { data: ids.map((id) => ({ type: 'appScreenshots', id })) });
+    allIds.push(...ids);
+    line(true, `screenshots ${l.attributes.locale}`, `${ids.length} uploaded`);
+  }
+  // wait until Apple has processed them
+  for (let i = 0; i < 40; i++) {
+    const states = [];
+    for (const id of allIds) {
+      const r = await call('GET', `/v1/appScreenshots/${id}?fields[appScreenshots]=assetDeliveryState`);
+      states.push(r.json?.data?.attributes?.assetDeliveryState?.state);
+    }
+    if (states.every((st) => st === 'COMPLETE')) { line(true, 'screenshots processed', `${states.length}/${states.length}`); return true; }
+    if (states.some((st) => st === 'FAILED')) { line(false, 'screenshots processed', states.join(',')); return false; }
+    await sleep(5000);
+  }
+  line(false, 'screenshots processed', 'timeout');
+  return false;
+}
+
+async function prepareAndSubmit(buildVersion) {
+  const { appId, ver } = await appAndVersion();
+  let ok = true;
+
+  const infos = await call('GET', `/v1/apps/${appId}/appInfos`);
+  const info = infos.json.data.find((i) => (i.attributes.state || i.attributes.appStoreState) !== 'READY_FOR_SALE') || infos.json.data[0];
+  const ar = await call('GET', `/v1/appInfos/${info.id}/ageRatingDeclaration`);
+  const arPatch = await call('PATCH', `/v1/ageRatingDeclarations/${ar.json.data.id}`, { data: { type: 'ageRatingDeclarations', id: ar.json.data.id, attributes: { gamblingSimulated: 'NONE' } } });
+  line(arPatch.status === 200, 'age rating: Simulated Gambling = NONE', arPatch.status === 200 ? arPatch.json.data.attributes.gamblingSimulated : `${arPatch.status} ${errText(arPatch)}`);
+  ok &&= arPatch.status === 200;
+
+  const rd = await call('GET', `/v1/appStoreVersions/${ver.id}/appStoreReviewDetail`);
+  const rdPatch = await call('PATCH', `/v1/appStoreReviewDetails/${rd.json.data.id}`, { data: { type: 'appStoreReviewDetails', id: rd.json.data.id, attributes: { notes: NOTES } } });
+  line(rdPatch.status === 200, 'review notes updated', rdPatch.status === 200 ? '' : `${rdPatch.status} ${errText(rdPatch)}`);
+  ok &&= rdPatch.status === 200;
+
+  const b = await call('GET', `/v1/builds?filter[app]=${appId}&filter[version]=${buildVersion}&fields[builds]=version,processingState`);
+  const build = b.json?.data?.[0];
+  if (!build || build.attributes.processingState !== 'VALID') { line(false, `build ${buildVersion}`, build ? build.attributes.processingState : 'not found'); return; }
+  const attach = await call('PATCH', `/v1/appStoreVersions/${ver.id}/relationships/build`, { data: { type: 'builds', id: build.id } });
+  line(attach.status === 204, `attach build ${buildVersion}`, attach.status === 204 ? '' : `${attach.status} ${errText(attach)}`);
+  ok &&= attach.status === 204;
+
+  try {
+    ok &&= await replaceScreenshots(ver.id);
+  } catch (e) {
+    line(false, 'screenshots', String(e.message));
+    ok = false;
+  }
+
+  if (!ok) { console.log('NOT SUBMITTED: fix the failures above first'); return; }
+
+  // Resubmit: reuse the submission that has unresolved issues, otherwise create a new one
+  const subs = await call('GET', `/v1/reviewSubmissions?filter[app]=${appId}&filter[platform]=IOS&limit=10`);
+  let sub = (subs.json.data || []).find((x) => ['UNRESOLVED_ISSUES', 'READY_FOR_REVIEW'].includes(x.attributes.state));
+  if (!sub) {
+    const mk = await call('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: appId } } } } });
+    sub = mk.json?.data;
+    line(mk.status === 201, 'create review submission', mk.status === 201 ? sub.id : `${mk.status} ${errText(mk)}`);
+    if (!sub) return;
+  }
+  const items = await call('GET', `/v1/reviewSubmissions/${sub.id}/items?include=appStoreVersion`);
+  const hasVersion = (items.json?.data || []).some((it) => it.relationships?.appStoreVersion?.data?.id === ver.id);
+  if (!hasVersion) {
+    const add = await call('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: sub.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: ver.id } } } } });
+    line(add.status === 201, 'add version to submission', add.status === 201 ? '' : `${add.status} ${errText(add)}`);
+  }
+  const submit = await call('PATCH', `/v1/reviewSubmissions/${sub.id}`, { data: { type: 'reviewSubmissions', id: sub.id, attributes: { submitted: true } } });
+  line(submit.status === 200, 'SUBMIT FOR REVIEW', submit.status === 200 ? `state=${submit.json.data.attributes.state}` : `${submit.status} ${errText(submit)}`);
+}
+
 const req = JSON.parse(fs.readFileSync('.github/asc/request.json', 'utf8'));
 console.log(`ASC request #${req.id}: ${req.tasks.join(', ')}`);
 for (const t of req.tasks) {
   if (t === 'check') await check();
   else if (t === 'inspect') await inspect();
+  else if (t.startsWith('submit:')) await prepareAndSubmit(t.split(':')[1]);
   else console.log(`unknown task ${t}`);
 }

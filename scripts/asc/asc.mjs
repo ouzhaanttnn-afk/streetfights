@@ -3,6 +3,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 
+// Local run (key never written to disk by this script):
+//   NODE_USE_ENV_PROXY=1 ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_PRIVATE_KEY="$(cat AuthKey.p8)" node scripts/asc/asc.mjs
+// Needs an "App Manager" key for edits/submission; the CI upload key only has read + upload rights.
 const KEY_ID = process.env.ASC_KEY_ID;
 const ISSUER = process.env.ASC_ISSUER_ID;
 const PEM = process.env.ASC_PRIVATE_KEY;
@@ -211,6 +214,13 @@ async function prepareAndSubmit(buildVersion) {
   if (!hasVersion) {
     const add = await call('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: sub.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: ver.id } } } } });
     line(add.status === 201, 'add version to submission', add.status === 201 ? '' : `${add.status} ${errText(add)}`);
+  }
+  // After a rejection the old item must be marked resolved before the submission can be sent again
+  for (const it of items.json?.data || []) {
+    if (it.attributes?.state === 'REJECTED') {
+      const r = await call('PATCH', `/v1/reviewSubmissionItems/${it.id}`, { data: { type: 'reviewSubmissionItems', id: it.id, attributes: { resolved: true } } });
+      line(r.status === 200, 'mark rejected item resolved', r.status === 200 ? r.json.data.attributes.state : `${r.status} ${errText(r)}`);
+    }
   }
   const submit = await call('PATCH', `/v1/reviewSubmissions/${sub.id}`, { data: { type: 'reviewSubmissions', id: sub.id, attributes: { submitted: true } } });
   line(submit.status === 200, 'SUBMIT FOR REVIEW', submit.status === 200 ? `state=${submit.json.data.attributes.state}` : `${submit.status} ${errText(submit)}`);

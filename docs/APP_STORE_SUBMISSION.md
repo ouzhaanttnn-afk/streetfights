@@ -164,3 +164,9 @@ Both need capabilities on the App ID, so the provisioning profile must be regene
 3. App Store Connect > the app > Features (or Services) > Game Center: create leaderboard `highest_stage` (integer,
    high to low) and `bosses_defeated`.
 
+## 14. 2026-11-01: resubmitted (WAITING_FOR_REVIEW)
+Done through the App Store Connect API (`scripts/asc/asc.mjs`) with a temporary App Manager key the owner then revoked:
+age rating Simulated Gambling = None, new review notes, build 15 attached, 7 new 6.5" screenshots each for en-US and tr,
+rejected item marked resolved, submission sent. Version 1.0 state: WAITING_FOR_REVIEW.
+The key stored in the GitHub secrets is read + upload only (enough for `build-ios.yml`, not for edits or submission).
+

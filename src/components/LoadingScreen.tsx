@@ -63,9 +63,13 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ onComplete }) => {
   }, [onComplete]);
 
   return (
-    <div className={`fixed inset-0 z-[100] bg-[#050508] flex flex-col items-center justify-between p-6 select-none transition-opacity duration-400 ${
-      isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-    }`}>
+    <div
+      className={`fixed inset-0 z-[100] bg-[#050508] flex flex-col items-center justify-between p-6 select-none transition-opacity duration-400 ${
+        isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      }`}
+      // keep the brand tag clear of the Dynamic Island / notch and the tips clear of the home indicator
+      style={{ paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 0.5rem))', paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 0px))' }}
+    >
       {/* Background Radial Glow */}
       <div className="absolute inset-0 bg-radial from-amber-500/10 via-transparent to-transparent pointer-events-none" />
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-gradient-to-tr from-amber-500/15 to-purple-600/15 rounded-full blur-3xl pointer-events-none" />

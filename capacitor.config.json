@@ -7,6 +7,8 @@
     "contentInset": "never",
     "scrollEnabled": false,
     "allowsLinkPreview": false,
-    "handleApplicationURL": false
-  }
+    "handleApplicationURL": false,
+    "backgroundColor": "#050508"
+  },
+  "backgroundColor": "#050508"
 }

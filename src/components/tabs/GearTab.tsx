@@ -244,7 +244,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
 
       {/* 3. Selected Item Details Modal with 3D WebGL Turntable */}
       {selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-fadeIn">
+        <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-fadeIn">
           <div className="w-full max-w-sm game-card border-2 border-zinc-600/80 rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center text-white">
             
             <div className="w-full flex justify-between items-start mb-2 text-left">

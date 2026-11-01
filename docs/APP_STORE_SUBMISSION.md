@@ -134,5 +134,5 @@ remove the old wheel sentence from the review notes, attach build 10 and resubmi
 - Red dots on tabs and a one-line "next step" card (rewards to claim, stronger gear in the bag, gym affordable).
 - Shop ad center has 2 offers: Free Gems and 2x Damage.
 To resubmit: App Information > Age Rating > Simulated Gambling **None**, paste the review notes from section 2 (no wheel
-sentence), attach build 12 and submit.
+sentence), attach build 13 and submit (build 13 = build 12 + Dynamic Island / status bar fixes).
 

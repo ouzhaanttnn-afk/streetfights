@@ -70,7 +70,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
   const pStats = state.playerFighter.stats;
 
   return (
-    <div className="modal-shell fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md select-none animate-fadeIn" onClick={onClose}>
+    <div className="modal-shell fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md select-none animate-fadeIn" style={{ paddingBottom: 0 }} onClick={onClose}>
     <div
       data-profile-sheet
       onClick={(e) => e.stopPropagation()}

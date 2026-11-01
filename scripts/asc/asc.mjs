@@ -63,9 +63,43 @@ async function check() {
   line(info.status === 200, 'read app info (age rating lives here)', (info.json?.data || []).map((i) => `${i.id}:${i.attributes.state || i.attributes.appStoreState}`).join(', ') || errText(info));
 }
 
+async function appAndVersion() {
+  const app = await call('GET', `/v1/apps?filter[bundleId]=${BUNDLE}`);
+  const appId = app.json.data[0].id;
+  const vers = await call('GET', `/v1/apps/${appId}/appStoreVersions?filter[platform]=IOS&limit=5`);
+  const ver = (vers.json.data || []).find((v) => v.attributes.appStoreState !== 'READY_FOR_SALE') || vers.json.data[0];
+  return { appId, ver };
+}
+
+// Read-only look at everything a resubmission touches
+async function inspect() {
+  const { appId, ver } = await appAndVersion();
+  console.log(`version ${ver.attributes.versionString} id=${ver.id} state=${ver.attributes.appStoreState}`);
+  const build = await call('GET', `/v1/appStoreVersions/${ver.id}/build`);
+  console.log(`attached build: ${build.json?.data?.attributes?.version || 'none'}`);
+  const infos = await call('GET', `/v1/apps/${appId}/appInfos`);
+  for (const inf of infos.json.data) {
+    const ar = await call('GET', `/v1/appInfos/${inf.id}/ageRatingDeclaration`);
+    console.log(`appInfo ${inf.id} state=${inf.attributes.state || inf.attributes.appStoreState} ageRating=${ar.status}`);
+    if (ar.json?.data) console.log('  ageRating attrs: ' + JSON.stringify(ar.json.data.attributes));
+  }
+  const rd = await call('GET', `/v1/appStoreVersions/${ver.id}/appStoreReviewDetail`);
+  console.log(`reviewDetail ${rd.status} id=${rd.json?.data?.id} notes=${JSON.stringify(rd.json?.data?.attributes?.notes || '')}`);
+  const locs = await call('GET', `/v1/appStoreVersions/${ver.id}/appStoreVersionLocalizations`);
+  for (const l of locs.json.data || []) {
+    const sets = await call('GET', `/v1/appStoreVersionLocalizations/${l.id}/appScreenshotSets?include=appScreenshots`);
+    const desc = (sets.json?.data || []).map((st) => `${st.attributes.screenshotDisplayType}:${(st.relationships?.appScreenshots?.data || []).length}`).join(', ');
+    console.log(`locale ${l.attributes.locale} id=${l.id} sets: ${desc || 'none'}`);
+  }
+  const subs = await call('GET', `/v1/reviewSubmissions?filter[app]=${appId}&limit=10`);
+  for (const sub of subs.json?.data || []) console.log(`reviewSubmission ${sub.id} state=${sub.attributes.state} submitted=${sub.attributes.submittedDate || '-'}`);
+  if (subs.status !== 200) console.log('reviewSubmissions ' + subs.status + ' ' + errText(subs));
+}
+
 const req = JSON.parse(fs.readFileSync('.github/asc/request.json', 'utf8'));
 console.log(`ASC request #${req.id}: ${req.tasks.join(', ')}`);
 for (const t of req.tasks) {
   if (t === 'check') await check();
+  else if (t === 'inspect') await inspect();
   else console.log(`unknown task ${t}`);
 }

@@ -1,0 +1,27 @@
+name: App Store Connect robot
+
+# Runs App Store Connect API tasks with the repository secrets (the key never leaves GitHub).
+# Edit .github/asc/request.json and push, or dispatch manually.
+on:
+  push:
+    paths: ['.github/asc/request.json']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  asc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run App Store Connect tasks
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: node scripts/asc/asc.mjs

@@ -143,7 +143,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
 
                 <div className="my-auto drop-shadow">
                   {item ? (
-                    <ItemIcon slot={item.slot} rarity={item.rarity} size={48} fallback={<Icon className={`w-8 h-8 ${rarity ? rarity.color : ''}`} />} />
+                    <ItemIcon slot={item.slot} rarity={item.rarity} size={64} fallback={<Icon className={`w-8 h-8 ${rarity ? rarity.color : ''}`} />} />
                   ) : (
                     <Icon className="w-8 h-8 text-zinc-700" />
                   )}
@@ -226,7 +226,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                     <span className="text-amber-400 font-black font-mono">L{item.level}</span>
                   </div>
 
-                  <ItemIcon slot={item.slot} rarity={item.rarity} size={34} fallback={<Icon className={`w-5 h-5 ${rarity.color} drop-shadow`} />} />
+                  <ItemIcon slot={item.slot} rarity={item.rarity} size={46} fallback={<Icon className={`w-5 h-5 ${rarity.color} drop-shadow`} />} />
 
                   <span className="text-[9px] font-black font-mono text-zinc-200 bg-black/50 px-1 rounded">
                     ⚡{item.powerScore}

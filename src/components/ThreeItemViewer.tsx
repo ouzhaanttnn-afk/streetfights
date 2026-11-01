@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { EquipmentSlot, Rarity } from '../types/game';
 import { buildItemGroup, RARITY_HEX } from '../game/itemModels';
+import { loadItemModel } from '../game/itemAssets';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 interface ThreeItemViewerProps {
   slot: EquipmentSlot;
@@ -32,7 +34,7 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
     renderer.setSize(size, size);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
+    renderer.toneMappingExposure = 1.0;
     mount.appendChild(renderer.domElement);
 
     // 3. Dynamic Lighting
@@ -49,8 +51,21 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
     scene.add(accentLight);
 
     // 4. Procedural 3D item model (shared with the inventory icon renderer)
-    const itemGroup = buildItemGroup(slot, rarity);
+    // Blender model (GLB) when available, procedural fallback otherwise
+    const itemGroup = new THREE.Group();
     scene.add(itemGroup);
+    let disposed = false;
+    loadItemModel(slot, rarity)
+      .then((model) => {
+        if (!disposed) itemGroup.add(model);
+      })
+      .catch(() => {
+        if (!disposed) itemGroup.add(buildItemGroup(slot, rarity));
+      });
+    // Soft studio reflections so metal trims actually read as metal
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envMap;
 
     // 5. Floating Particle Dust
     const particleCount = 20;
@@ -141,6 +156,9 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
     onVisibilityChange();
 
     return () => {
+      disposed = true;
+      envMap.dispose();
+      pmrem.dispose();
       if (animId !== null) cancelAnimationFrame(animId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       intersectionObserver.disconnect();

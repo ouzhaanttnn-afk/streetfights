@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { EquipmentSlot, Rarity } from '../types/game';
 import { getItemIcon, subscribeItemIcons } from '../game/itemIcons';
+import { itemIconUrl } from '../game/itemAssets';
 
 interface ItemIconProps {
   slot: EquipmentSlot;
@@ -9,13 +10,28 @@ interface ItemIconProps {
   fallback: React.ReactNode;
 }
 
-// Picture of the actual item (rendered once from its 3D model); shows the fallback until it is ready.
+const imgClass = 'pointer-events-none select-none drop-shadow-[0_3px_6px_rgba(0,0,0,0.7)]';
+
+// Pre-rendered Blender icon; if that image is missing, render the procedural model once, then a plain icon.
 export const ItemIcon: React.FC<ItemIconProps> = ({ slot, rarity, size, fallback }) => {
-  const [url, setUrl] = useState<string | null>(() => getItemIcon(slot, rarity));
+  const [pngFailed, setPngFailed] = useState(false);
+  const [generated, setGenerated] = useState<string | null>(null);
+
   useEffect(() => {
-    setUrl(getItemIcon(slot, rarity));
-    return subscribeItemIcons(() => setUrl(getItemIcon(slot, rarity)));
+    setPngFailed(false);
   }, [slot, rarity]);
-  if (!url) return <>{fallback}</>;
-  return <img src={url} width={size} height={size} alt="" draggable={false} className="pointer-events-none select-none drop-shadow-[0_3px_6px_rgba(0,0,0,0.7)]" style={{ width: size, height: size }} />;
+
+  useEffect(() => {
+    if (!pngFailed) return;
+    setGenerated(getItemIcon(slot, rarity));
+    return subscribeItemIcons(() => setGenerated(getItemIcon(slot, rarity)));
+  }, [pngFailed, slot, rarity]);
+
+  if (!pngFailed) {
+    return (
+      <img src={itemIconUrl(slot, rarity)} width={size} height={size} alt="" draggable={false} onError={() => setPngFailed(true)} className={imgClass} style={{ width: size, height: size }} />
+    );
+  }
+  if (!generated) return <>{fallback}</>;
+  return <img src={generated} width={size} height={size} alt="" draggable={false} className={imgClass} style={{ width: size, height: size }} />;
 };

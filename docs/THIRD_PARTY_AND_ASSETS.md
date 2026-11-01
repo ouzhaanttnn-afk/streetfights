@@ -12,7 +12,8 @@ Every visual and sound in the game is produced by code in this repository:
 | Animations | Hand-authored joint-pose keyframes + cross-fade controller | `clips.ts`, `controller.ts`, `pose.ts` |
 | Arenas | Procedural geometry + canvas-generated textures (bricks, asphalt, LED wall, turf, crowd) | `src/game/fighter3d/arenas.ts` |
 | Sound | Web Audio synthesis (oscillators + filtered noise) | `src/core/audio.ts` |
-| Icons | `lucide-react` (ISC) | – |
+| Equipment models + icons | Modelled in Blender 5.2 through its Python API (`bpy`), by our own script; GLB models + Cycles-rendered PNG icons. Outputs are our own assets (Blender's GPL does not apply to files it produces) | `scripts/blender/make_items.py` → `public/models/`, `public/items/` |
+| UI icons | `lucide-react` (ISC) | – |
 
 No file was downloaded from Kenney, Quaternius or any other asset site, so there is no attribution
 obligation today. Text on canvas textures uses system fonts (Impact / Arial Black fallback); no font files are bundled.

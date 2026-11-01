@@ -18,6 +18,7 @@ import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { SkillReplaceModal } from './components/SkillReplaceModal';
 import { TutorialHint } from './components/TutorialHint';
 import { NextStepCard } from './components/NextStepCard';
+import { BossBonusCard, NotifyAskCard } from './components/OfferCards';
 import { ToastStack } from './components/ToastStack';
 import { getStageData } from './core/stageDatabase';
 import { ui } from './i18n/ui';
@@ -119,7 +120,14 @@ export function App() {
 
         {/* Scrollable Center: Only Interactive Tab Views Scroll */}
         <main className="tab-content flex-1 overflow-y-auto overscroll-y-contain overscroll-x-none scroll-smooth min-h-0">
-          <NextStepCard state={state} />
+          {/* At most one prompt above the tab: boss bonus > notification ask > next step */}
+          {state.bossBonus && Date.now() < state.bossBonus.expiresAt ? (
+            <BossBonusCard state={state} />
+          ) : !state.notifAsked && state.totalFightsWon >= 8 ? (
+            <NotifyAskCard state={state} />
+          ) : (
+            <NextStepCard state={state} />
+          )}
           {renderActiveTab()}
         </main>
 

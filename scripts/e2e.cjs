@@ -221,6 +221,33 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('no page errors in compact layout', errs.length === 0, errs.join('|'));
     await b.close();
   }
+  // ---- 11. Retention: notification soft ask, settings toggle, boss bonus ad offer
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, totalFightsWon: 12, autoBattle:false })); }, today());
+    await p.goto(URL); await ready(p); await p.waitForTimeout(2500);
+    ok('notification soft ask shows after some wins', await p.locator('[data-notif-ask]').count() === 1);
+    await p.getByText(/^Şimdi değil$|^Not now$/).click(); await p.waitForTimeout(400);
+    let s = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('"not now" is remembered and no OS prompt is forced', s.notifAsked === true && s.notificationsEnabled === false && await p.locator('[data-notif-ask]').count() === 0);
+    // Boss bonus offer: card -> rewarded ad -> payout once
+    const before = s.coins, gemsBefore = s.gems;
+    await p.evaluate(() => { const st = window.__game.getState(); st.bossBonus = { coins: 500, gems: 7, expiresAt: Date.now() + 45000 }; window.__game.notify(); });
+    await p.waitForTimeout(400);
+    ok('boss bonus card appears after a boss win', await p.locator('[data-boss-bonus]').count() === 1);
+    await p.locator('[data-boss-bonus] button').first().click(); await p.waitForTimeout(400);
+    const adType = await p.evaluate(() => window.__game.getState().activeAdModal?.type);
+    await p.evaluate(() => window.__game.claimRewardedAdReward()); await p.waitForTimeout(300);
+    s = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('boss bonus pays out once through a rewarded ad', adType === 'boss_double' && s.coins === before + 500 && s.gems === gemsBefore + 7 && s.bossBonus === null, `type=${adType} coins=${s.coins - before}`);
+    // Settings has a notifications switch
+    await p.locator('header button[aria-label]').last().click(); await p.waitForTimeout(400);
+    ok('settings has a notifications switch', await p.locator('[data-notif-toggle]').count() === 1);
+    ok('no page errors in retention flow', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
   // ---- 10. Dynamic Island: header splits left/right of the island, nothing under it; notch phones keep the classic header
   for (const [w, h, top, island] of [[393, 852, 59, true], [402, 874, 62, true], [390, 844, 47, false]]) {
     const b = await chromium.launch({ args: GL });

@@ -13,7 +13,8 @@ import {
   X, 
   Copy,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Bell
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -153,6 +154,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
                 aria-label="Haptics"
                 className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
                   state.hapticsEnabled ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
+                }`}
+              >
+                <div className="w-5 h-5 rounded-full bg-white shadow-md" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
+                <Bell className="w-4 h-4 text-sky-400" />
+                <span>{ui(state.lang, 'notifications')}</span>
+              </div>
+              <button
+                onClick={() => gameManager.toggleNotifications()}
+                aria-label="Notifications"
+                data-notif-toggle
+                className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
+                  state.notificationsEnabled ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
                 }`}
               >
                 <div className="w-5 h-5 rounded-full bg-white shadow-md" />

@@ -1,6 +1,7 @@
 import { EquipmentItem, EquipmentSlot, Fighter, FighterStats, GymTraining, Rarity, Skill, Stage, TabType } from '../types/game';
 import { ACTIVE_SLOTS, calculateTotalStats, generateEquipment, upgradeLegacyItem } from './lootGenerator';
 import { pushToast } from './toast';
+import { cancelReminders, OFFLINE_CAP_MINUTES, requestNotificationPermission, scheduleReminders } from './notifications';
 import { ui } from '../i18n/ui';
 import { getStageData } from './stageDatabase';
 import { getRandomSkill, SKILL_DATABASE } from './skillDatabase';
@@ -65,7 +66,7 @@ function cloneSkill(skill: Skill): Skill {
 }
 
 export interface AdOffer {
-  type: 'free_gems' | 'double_damage' | 'double_coins' | 'mystery_chest' | 'revive' | 'offline_double' | 'wheel_spin';
+  type: 'free_gems' | 'double_damage' | 'double_coins' | 'mystery_chest' | 'revive' | 'offline_double' | 'wheel_spin' | 'boss_double';
   title: string;
   rewardDesc: string;
 }
@@ -138,6 +139,11 @@ export interface GameStateData {
   lastWheelSpinDate: string;
   bonusWheelSpins: number;
   hapticsEnabled: boolean;
+  // Local reminders (vault full, daily reward). notifAsked: the in-game soft ask was answered
+  notificationsEnabled: boolean;
+  notifAsked: boolean;
+  // Optional rewarded ad after a boss win: get the boss payout again
+  bossBonus: { coins: number; gems: number; expiresAt: number } | null;
   autoAdvance: boolean;
   lossStreak: number;
   battleNonce: number;
@@ -327,6 +333,9 @@ function createDefaultState(): GameStateData {
     quality: 'medium',
     reducedMotion: typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     hapticsEnabled: true,
+    notificationsEnabled: false,
+    notifAsked: false,
+    bossBonus: null,
     autoAdvance: true,
     lossStreak: 0,
     battleNonce: 0,
@@ -356,6 +365,7 @@ class GameManager {
   // Runs on launch and every time the app returns from the background
   public refreshSession() {
     adMobManager.preload();
+    void cancelReminders(); // the player is back
     this.checkOfflineEarnings();
     this.checkDailyLogin();
     this.ensureDailyQuests();
@@ -364,6 +374,41 @@ class GameManager {
 
   public onAppHidden() {
     this.saveState();
+    if (this.state.notificationsEnabled) void scheduleReminders(this.state.lang);
+  }
+
+  // In-game soft ask first; the iOS permission prompt only appears after the player says yes
+  public async answerNotificationAsk(yes: boolean) {
+    this.state.notifAsked = true;
+    this.state.notificationsEnabled = yes ? await requestNotificationPermission() : false;
+    this.notify();
+  }
+
+  public async toggleNotifications() {
+    if (this.state.notificationsEnabled) {
+      this.state.notificationsEnabled = false;
+      void cancelReminders();
+    } else {
+      this.state.notifAsked = true;
+      this.state.notificationsEnabled = await requestNotificationPermission();
+      if (!this.state.notificationsEnabled) pushToast(ui(this.state.lang, 'notif_denied'), 'info', 4000);
+    }
+    this.notify();
+  }
+
+  public claimBossBonusOffer() {
+    const b = this.state.bossBonus;
+    if (!b || Date.now() > b.expiresAt) {
+      this.state.bossBonus = null;
+      this.notify();
+      return;
+    }
+    this.openRewardedAd({ type: 'boss_double', title: ui(this.state.lang, 'boss_bonus'), rewardDesc: `+${b.coins.toLocaleString()} 🪙  +${b.gems} 💎` });
+  }
+
+  public dismissBossBonus() {
+    this.state.bossBonus = null;
+    this.notify();
   }
 
   // Called periodically: expires timed buffs without waiting for the next fight
@@ -429,7 +474,7 @@ class GameManager {
 
     // If away for more than 5 minutes
     if (elapsedMinutes >= 5) {
-      const cappedMins = Math.min(480, elapsedMinutes); // 8 hours max
+      const cappedMins = Math.min(OFFLINE_CAP_MINUTES, elapsedMinutes); // 8 hours max
       const gymLevelSum = this.state.gymTrainings.reduce((sum, g) => sum + g.level, 0);
       const bestStage = (this.state.highestWorld - 1) * 10 + this.state.highestSubStage;
       const coinsPerMin = Math.max(2, Math.round(5 + gymLevelSum * 0.5 + bestStage * 1.5));
@@ -469,6 +514,7 @@ class GameManager {
           isDailyLoginOpen: false,
           isLuckyWheelOpen: false,
           isProfileOpen: false,
+          bossBonus: null,
           // Old saves may point at tabs that were merged away
           activeTab: parsed.activeTab === 'skills' || parsed.activeTab === 'profile' ? 'gear' : parsed.activeTab || 'gear',
           fighterView: parsed.activeTab === 'skills' ? 'skills' : parsed.fighterView || 'gear',
@@ -604,6 +650,13 @@ class GameManager {
       this.state.offlineGoldAccumulated = 0;
       this.state.isOfflineRewardOpen = false;
       soundFx.playVictoryFanfare();
+    } else if (type === 'boss_double') {
+      if (this.state.bossBonus) {
+        this.state.coins += this.state.bossBonus.coins;
+        this.state.gems += this.state.bossBonus.gems;
+      }
+      this.state.bossBonus = null;
+      soundFx.playVictoryFanfare();
     } else if (type === 'mystery_chest') {
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
       const rarities: Rarity[] = ['rare', 'epic', 'legendary', 'mythic'];
@@ -686,7 +739,11 @@ class GameManager {
     this.state.gems += stage.gemReward;
     this.state.trophies += stage.isBoss ? 25 : 5;
     this.state.totalFightsWon += 1;
-    if (stage.isBoss) this.state.bossDefeatedCount += 1;
+    if (stage.isBoss) {
+      this.state.bossDefeatedCount += 1;
+      // Optional: watch an ad to get the boss payout once more (offer expires on its own)
+      this.state.bossBonus = { coins: Math.round(stage.coinReward * coinMult), gems: stage.gemReward, expiresAt: Date.now() + 45000 };
+    }
     this.state.lossStreak = 0;
     this.state.battleNonce += 1;
     this.recordQuest('win_fights', 1, true);

@@ -145,3 +145,22 @@ sentence), attach build 14 and submit.
   Home-button iPhones and iPads keep the status bar and the classic header. The battle speed button moved next to
   AUTO in the fight view. Checked in the browser with emulated safe areas (393/402 pt wide island phones, 390 pt notch).
 
+## 12. Build 15 (first update after approval)
+- Local reminders (`@capacitor/local-notifications`, on-device only, no server, no data collected): "vault full" when
+  offline gold hits its 8-hour cap and "daily reward ready" the next evening, never between 22:00 and 09:00. The iOS
+  permission prompt only appears after the player taps "Yes" on an in-game card (shown once after 8 wins); there is a
+  switch in Settings. All reminders are cancelled as soon as the app is opened.
+- After a boss win an optional card offers a rewarded ad to receive the boss reward once more (expires after 45 s).
+- App Privacy answers do not change (local notifications collect nothing).
+- Review note to add: "Optional local reminders can be enabled from an in-game card or Settings > Notifications."
+
+## 13. Next: Game Center and iCloud save (needs two portal steps from you)
+Both need capabilities on the App ID, so the provisioning profile must be regenerated before I can ship them:
+1. developer.apple.com > Certificates, IDs & Profiles > Identifiers > `com.streetstriker.rpg`: tick **Game Center** and
+   **iCloud** (choose "Include CloudKit support" = off; key-value storage is enough). Save.
+2. Profiles > "Street Striker App Store" > Edit > Save (regenerates it with the new capabilities) > Download, then
+   update the `APPLE_PROVISIONING_PROFILE` GitHub secret (base64 of the file) and replace
+   `ios/App/Street_Striker_App_Store.mobileprovision`.
+3. App Store Connect > the app > Features (or Services) > Game Center: create leaderboard `highest_stage` (integer,
+   high to low) and `bosses_defeated`.
+

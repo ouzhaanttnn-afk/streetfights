@@ -12,6 +12,9 @@ const fs = require('fs');
 // Late-game-looking wallet without the "next step" hint/badges cluttering the store shots
 const GYM = [['gym_punching_bag','atk',3,'Flame'],['gym_bench_press','hp',25,'Heart'],['gym_agility_ladder','spd',2,'Wind'],['gym_reflex_ball','critRate',0.8,'Crosshair'],['gym_jump_rope','dodgeRate',0.7,'Footprints']]
   .map(([id, targetStat, statGain, iconName]) => ({ id, name: id, description: '', targetStat, statGain, level: 12, cost: 999999, iconName }));
+// Colourful late-game gear for the shots (real items: icon + 3D model come from slot + rarity)
+const gear = (slot, rarity, atk, hp) => ({ id: `shot_${slot}`, name: `${rarity.toUpperCase()} ${slot}`, slot, rarity, level: 30, stats: { hp, atk, def: 20, spd: 4, critRate: 6, critDmg: 0, comboRate: 5, dodgeRate: 3, lifesteal: 0, stamina: 0 }, powerScore: Math.round(hp * 0.4 + atk * 3.5 + 56 + 10 + 48 + 35 + 21), sellPrice: 400, iconName: 'Flame' });
+const GEAR = { head: gear('head', 'legendary', 30, 420), gloves: gear('gloves', 'mythic', 90, 120), mouth: null, robe: gear('robe', 'epic', 20, 520), shorts: gear('shorts', 'rare', 15, 300), boots: gear('boots', 'legendary', 25, 260), belt: gear('belt', 'epic', 35, 340), weapon: null, partner: null };
 // Achievements already claimed so the "rewards to claim" hint does not sit in every shot
 const ACH = [...require('fs').readFileSync('src/core/achievements.ts', 'utf8').matchAll(/id: '([a-z_0-9]+)'/g)].map((m) => m[1]);
 // hp per shot keeps the power comparison honest (rival vs. you) while fights still last long enough to photograph
@@ -32,9 +35,9 @@ const shots = [
       const ctx = await b.newContext({ viewport: { width: vp.w, height: vp.h }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
       const p = await ctx.newPage();
       const base = { ...strong, hp: s.hp || strong.hp, maxHp: s.hp || strong.maxHp };
-      await p.addInitScript(([save, d, base, lang, gym, ach]) => {
-        localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang, lastDailyLoginDate: d, dailyLoginStreak: 1, claimedDailyDays: [1], tutorialStep: 99, coins: 48250, gems: 340, playerLevel: 18 + save.currentWorld * 4, gymTrainings: gym, claimedAchievements: ach, notifAsked: true, highestWorld: save.currentWorld, highestSubStage: save.currentSubStage, playerFighter: { baseStats: base }, ...save }));
-      }, [s.save, today, base, lang, GYM, ACH]);
+      await p.addInitScript(([save, d, base, lang, gym, ach, gear]) => {
+        localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang, lastDailyLoginDate: d, dailyLoginStreak: 1, claimedDailyDays: [1], tutorialStep: 99, coins: 48250, gems: 340, playerLevel: 18 + save.currentWorld * 4, gymTrainings: gym, claimedAchievements: ach, notifAsked: true, highestWorld: save.currentWorld, highestSubStage: save.currentSubStage, playerFighter: { baseStats: base, equipped: gear }, ...save }));
+      }, [s.save, today, base, lang, GYM, ACH, GEAR]);
       await p.goto(process.env.URL || 'http://localhost:5199');
       await p.waitForTimeout(s.wait);
       if (s.tab !== undefined) { await p.locator(`nav [data-tab=${s.tab}]`).click(); await p.waitForTimeout(700); }

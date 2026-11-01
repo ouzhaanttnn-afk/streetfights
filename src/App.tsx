@@ -131,10 +131,7 @@ export function App() {
         <TutorialHint state={state} blocked={isBattlePaused} />
 
         {levelUpTo !== null && (
-          <div
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-40 animate-fadeIn"
-            style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 8px) + 48px)' }}
-          >
+          <div className="level-up-banner pointer-events-none absolute left-1/2 -translate-x-1/2 z-40 animate-fadeIn">
             <div className="px-5 py-2 rounded-2xl game-btn-gold text-black text-center shadow-2xl border border-amber-200">
               <div className="text-[13px] font-black tracking-wider">⬆ {ui(state.lang, 'level_up')}</div>
               <div className="text-[11px] font-black">Lv. {levelUpTo}</div>

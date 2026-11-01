@@ -41,7 +41,7 @@ I could not verify which runner labels currently ship the required Xcode (GitHub
 > • Daily rewards use only free in-game currency; nothing can be bought, sold or cashed out.
 > • To see everything quickly: launch → claim the daily reward → fight starts automatically. Tap AUTO (top right) for manual
 > control; tap the gold SUPER button when the rage bar is full. Fighter / Gym / Arena / Shop tabs are along the bottom;
-> tap the fighter name (top left) for the profile.
+> tap the level badge (top left) for the profile.
 > • Settings (gear icon): language, sound, haptics, reduce motion, graphics quality, save backup, reset progress.
 
 ## 3. Privacy "nutrition label" (must match the manifest and your policy)
@@ -134,5 +134,14 @@ remove the old wheel sentence from the review notes, attach build 10 and resubmi
 - Red dots on tabs and a one-line "next step" card (rewards to claim, stronger gear in the bag, gym affordable).
 - Shop ad center has 2 offers: Free Gems and 2x Damage.
 To resubmit: App Information > Age Rating > Simulated Gambling **None**, paste the review notes from section 2 (no wheel
-sentence), attach build 13 and submit (build 13 = build 12 + Dynamic Island / status bar fixes).
+sentence), attach build 14 and submit.
+
+## 11. Build 13-14: Dynamic Island
+- Build 13: dark interface style + light status bar, safe-area fixes for the loading screen, level-up banner, tutorial
+  card, gear detail and profile sheet.
+- Build 14: on Dynamic Island iPhones (top safe area >= 51pt) the native shell (`GameViewController` in
+  `ios/App/App/SceneDelegate.swift`) hides the status bar and the web header moves into the band beside the island:
+  level ring (XP) + coins on the left, gems + daily gift + settings on the right, nothing under the island. Notch and
+  Home-button iPhones and iPads keep the status bar and the classic header. The battle speed button moved next to
+  AUTO in the fight view. Checked in the browser with emulated safe areas (393/402 pt wide island phones, 390 pt notch).
 

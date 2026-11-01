@@ -8,7 +8,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        window?.rootViewController = GameViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
@@ -22,3 +22,28 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
     }
 }
+
+/// On Dynamic Island iPhones the game hides the status bar so its top HUD can sit left and right of the island
+/// (the web layout does the same check with env(safe-area-inset-top)). Notch and Home-button iPhones and iPads
+/// keep the clock and battery visible.
+class GameViewController: CAPBridgeViewController {
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        hideStatusBarBesideIsland()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        hideStatusBarBesideIsland()
+    }
+
+    private func hideStatusBarBesideIsland() {
+        let topInset = view.window?.safeAreaInsets.top ?? view.safeAreaInsets.top
+        let hasIsland = traitCollection.userInterfaceIdiom == .phone && topInset >= 51
+        // one way only (visible -> hidden), so a changed inset can never make it flicker
+        if hasIsland && isStatusBarVisible {
+            setStatusBarVisible(false)
+        }
+    }
+}
+

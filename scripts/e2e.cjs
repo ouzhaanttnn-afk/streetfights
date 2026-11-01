@@ -221,6 +221,22 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('no page errors in compact layout', errs.length === 0, errs.join('|'));
     await b.close();
   }
+  // ---- 10. Dynamic Island: header splits left/right of the island, nothing under it; notch phones keep the classic header
+  for (const [w, h, top, island] of [[393, 852, 59, true], [402, 874, 62, true], [390, 844, 47, false]]) {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    const cdp = await ctx.newCDPSession(p);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top, bottom: 34, left: 0, right: 0 } });
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, coins: 1234567, gems: 98765 })); }, today());
+    await p.goto(URL); await ready(p); await p.waitForTimeout(2500);
+    const isl = { x: (w - 126) / 2, y: 11, w: 126, h: 37 };
+    const overlap = await p.evaluate((isl) => [...document.querySelectorAll('header button, header div.rounded-lg')].map(e => e.getBoundingClientRect()).filter(r => r.width && !(r.right <= isl.x || r.left >= isl.x + isl.w || r.bottom <= isl.y || r.top >= isl.y + isl.h)).length, isl);
+    const split = await p.locator('[data-island-header]').count() === 1;
+    ok(`island ${w}x${h} inset ${top}: ${island ? 'header beside the island' : 'classic header below the notch'}`, split === island && overlap === 0, `split=${split} overlap=${overlap}`);
+    ok(`island ${w}x${h}: speed button moved into the fight view`, await p.locator('[data-speed]').count() === 1 && errs.length === 0, errs.join('|'));
+    await b.close();
+  }
   console.log(results.join('\n'));
   if (results.some((r) => r.startsWith('FAIL'))) process.exitCode = 1;
 })();

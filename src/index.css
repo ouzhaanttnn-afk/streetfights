@@ -39,6 +39,14 @@
   }
 }
 
+/* Level-up banner sits just under the header (which is shorter beside a Dynamic Island) */
+.level-up-banner {
+  top: calc(max(env(safe-area-inset-top, 0px), 8px) + 48px);
+}
+.has-island .level-up-banner {
+  top: 62px;
+}
+
 .modal-shell {
   padding-top: max(1rem, env(safe-area-inset-top, 0px));
   padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));

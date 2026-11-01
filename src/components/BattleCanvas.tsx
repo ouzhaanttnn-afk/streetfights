@@ -1350,14 +1350,27 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           className="w-full h-full block object-contain z-10"
         />
 
-        <button
-          type="button"
-          onClick={() => gameManager.toggleAutoBattle()}
-          className="absolute top-2 right-2 z-30 min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
-          aria-label={state.autoBattle ? 'Manuel dövüşe geç' : 'Otomatik dövüşe geç'}
-        >
-          {ui(state.lang, state.autoBattle ? 'auto_btn' : 'manual_btn')}
-        </button>
+        {/* Fight controls: battle speed + auto/manual */}
+        <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5">
+          <button
+            type="button"
+            data-speed
+            onClick={() => gameManager.cycleBattleSpeed()}
+            className="min-h-8 px-2.5 rounded-full bg-black/75 border border-amber-400/40 text-[10px] font-black font-mono text-amber-300 shadow-lg backdrop-blur-md active:scale-95 flex items-center gap-0.5"
+            aria-label="Battle speed"
+          >
+            <Zap className="w-3 h-3" />
+            {state.battleSpeed}X
+          </button>
+          <button
+            type="button"
+            onClick={() => gameManager.toggleAutoBattle()}
+            className="min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
+            aria-label={state.autoBattle ? 'Manuel dövüşe geç' : 'Otomatik dövüşe geç'}
+          >
+            {ui(state.lang, state.autoBattle ? 'auto_btn' : 'manual_btn')}
+          </button>
+        </div>
 
         {isGuarding && !state.autoBattle && (
           <div className="pointer-events-none absolute inset-0 z-20 border-2 border-cyan-300/70 bg-cyan-300/5 shadow-[inset_0_0_35px_rgba(34,211,238,0.22)]" />

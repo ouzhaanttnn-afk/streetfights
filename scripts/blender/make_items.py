@@ -22,6 +22,9 @@ ICON_DIR = os.path.join(ROOT, "public", "items")
 SLOTS = ["head", "gloves", "mouth", "robe", "shorts", "boots", "belt", "weapon", "partner"]
 RARITIES = ["common", "uncommon", "rare", "epic", "legendary", "mythic"]
 MAX_TRIS = 9000
+# Surface feel of the main (rarity-coloured) material per item: cute shapes, authentic materials
+STYLE = {"gloves": "leather", "head": "leather", "boots": "leather", "belt": "leather", "weapon": "leather",
+         "robe": "fabric", "shorts": "fabric", "mouth": "rubber", "partner": "plastic"}
 
 # Rarity palette, kept in sync with src/game/itemModels.ts
 PRIMARY = {
@@ -71,12 +74,40 @@ def set_input(node, names, value):
             return
 
 
-def apply_rarity(rarity):
-    p = bsdf(material("Primary"))
+def add_grain(mat, scale, strength):
+    """Fine procedural bump (leather grain / fabric weave). Only affects the Cycles icons, not the GLB."""
+    nt = mat.node_tree
+    if any(n.type == "BUMP" for n in nt.nodes):
+        return
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = scale
+    noise.inputs["Detail"].default_value = 6.0
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = strength
+    nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], bsdf(mat).inputs["Normal"])
+
+
+def apply_rarity(rarity, style="leather"):
+    pm = material("Primary")
+    p = bsdf(pm)
     set_input(p, "Base Color", hex_rgb(PRIMARY[rarity]))
-    set_input(p, "Roughness", 0.36)
     set_input(p, "Metallic", 0.0)
-    set_input(p, ["Coat Weight", "Clearcoat"], 0.55)
+    if style == "leather":  # soft satin leather
+        set_input(p, "Roughness", 0.5)
+        set_input(p, ["Coat Weight", "Clearcoat"], 0.2)
+        add_grain(pm, 90, 0.12)
+    elif style == "fabric":  # matte cloth with a velvety sheen
+        set_input(p, "Roughness", 0.85)
+        set_input(p, ["Coat Weight", "Clearcoat"], 0.0)
+        set_input(p, ["Sheen Weight", "Sheen"], 0.7)
+        add_grain(pm, 260, 0.07)
+    elif style == "rubber":
+        set_input(p, "Roughness", 0.3)
+        set_input(p, ["Coat Weight", "Clearcoat"], 0.35)
+    else:  # plastic
+        set_input(p, "Roughness", 0.32)
+        set_input(p, ["Coat Weight", "Clearcoat"], 0.25)
 
     t = bsdf(material("Trim"))
     th, tm, tr = TRIM[rarity]
@@ -179,6 +210,38 @@ def text(body, size, loc, mat, rot=(math.pi / 2, 0, 0), extrude=0.02):
     return o
 
 
+def dash(a, b, mat="Light", radius=0.011):
+    a, b = Vector(a), Vector(b)
+    mid = (a + b) / 2
+    d = b - a
+    bpy.ops.mesh.primitive_cylinder_add(vertices=6, radius=radius, depth=d.length, location=mid)
+    o = last()
+    o.rotation_mode = "QUATERNION"
+    o.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(d.normalized())
+    finish(o, mat)
+
+
+def stitch_ring(center, rx, ry, n, plane="xy", mat="Light", arc=(0.0, 360.0)):
+    """Dashed stitch line around an ellipse (or part of it); plane picks the two axes the ellipse lies in."""
+    cx, cy, cz = center
+    start, span = math.radians(arc[0]), math.radians(arc[1] - arc[0])
+    for i in range(n):
+        a0 = start + (i / n) * span
+        a1 = a0 + (0.55 / n) * span
+        pts = []
+        for a in (a0, a1):
+            u, v = rx * math.cos(a), ry * math.sin(a)
+            pts.append({"xy": (cx + u, cy + v, cz), "xz": (cx + u, cy, cz + v), "yz": (cx, cy + u, cz + v)}[plane])
+        dash(pts[0], pts[1], mat)
+
+
+def stitch_line(a, b, n, mat="Light"):
+    a, b = Vector(a), Vector(b)
+    for i in range(n):
+        t0, t1 = i / n, (i + 0.55) / n
+        dash(a.lerp(b, t0), a.lerp(b, t1), mat)
+
+
 def join_all(name):
     bpy.ops.object.select_all(action="SELECT")
     objs = list(bpy.context.selected_objects)
@@ -202,63 +265,70 @@ def join_all(name):
 
 # ---------------------------------------------------------------- models (front faces -Y, up is +Z)
 def build_gloves():
-    # Boxing glove proportions: tall rounded mitt, knuckle roll on top-front, separate thumb lobe, wide cuff.
-    # -Y is the back of the hand (logo side), the thumb sits on +X.
-    cube((0.86, 0.72, 0.98), (0, 0, 0.36), "Primary", bevel=0.32, segments=6, subsurf=2)  # mitt
-    sphere((0.4, 0.3, 0.28), (0, -0.2, 0.7), "Primary", subsurf=1)  # knuckle roll
-    sphere((0.17, 0.19, 0.44), (0.5, -0.1, 0.26), "Primary", rot=(0.15, -0.28, 0), subsurf=1)  # thumb
-    c = cylinder(0.37, 0.6, (0, 0.02, -0.42), "Primary", bevel=0.06, segments=3)  # cuff
+    # Chubby boxing glove: puffy mitt, knuckle roll, fat thumb, laced cuff, stitched seams
+    cube((0.94, 0.78, 1.0), (0, 0, 0.36), "Primary", bevel=0.36, segments=6, subsurf=2)  # mitt
+    sphere((0.42, 0.32, 0.3), (0, -0.2, 0.72), "Primary", subsurf=1)  # knuckle roll
+    sphere((0.2, 0.22, 0.44), (0.53, -0.1, 0.24), "Primary", rot=(0.15, -0.3, 0), subsurf=1)  # thumb
+    c = cylinder(0.38, 0.52, (0, 0.02, -0.38), "Primary", bevel=0.06, segments=3)  # cuff
     c.scale = (1, 0.88, 1)
-    for z, h in ((-0.13, 0.1), (-0.7, 0.07)):  # wrist band + cuff rim
-        r = cylinder(0.395, h, (0, 0.02, z), "Trim", bevel=0.025, segments=2)
+    for z, h in ((-0.12, 0.1), (-0.63, 0.07)):  # wrist band + cuff rim
+        r = cylinder(0.405, h, (0, 0.02, z), "Trim", bevel=0.025, segments=2)
         r.scale = (1, 0.88, 1)
-    cube((0.56, 0.06, 0.2), (0, -0.34, -0.42), "Dark", bevel=0.04)  # velcro strap
+    stitch_ring((0, 0.02, -0.05), 0.4, 0.355, 26)  # seam above the wrist band
+    cube((0.56, 0.06, 0.18), (0, -0.35, -0.38), "Dark", bevel=0.04)  # velcro strap
     for i in range(4):  # laces on the palm side
-        cylinder(0.018, 0.22, (0, 0.35, -0.28 - i * 0.1), "Light", rot=(0, math.pi / 2, 0), vertices=8)
-    cylinder(0.18, 0.04, (0, -0.37, 0.36), "Accent", rot=(math.pi / 2, 0, 0))  # logo
-    torus(0.19, 0.022, (0, -0.37, 0.36), "Trim", rot=(math.pi / 2, 0, 0))
+        cylinder(0.02, 0.22, (0, 0.35, -0.24 - i * 0.1), "Light", rot=(0, math.pi / 2, 0), vertices=8)
+    cylinder(0.19, 0.04, (0, -0.4, 0.36), "Accent", rot=(math.pi / 2, 0, 0))  # logo patch
+    torus(0.2, 0.022, (0, -0.4, 0.36), "Trim", rot=(math.pi / 2, 0, 0))
+    stitch_ring((0, -0.41, 0.36), 0.25, 0.25, 22, plane="xz")  # stitched around the patch
 
 
 def build_boots():
-    cube((0.46, 1.08, 0.12), (0, -0.06, 0.06), "Dark", bevel=0.05, subsurf=1)  # rubber sole
-    cube((0.42, 0.92, 0.36), (0, -0.04, 0.31), "Primary", bevel=0.16, segments=4, subsurf=2)  # foot
-    cylinder(0.23, 0.8, (0, 0.22, 0.78), "Primary", subsurf=1)  # high-top shaft
-    torus(0.23, 0.045, (0, 0.22, 1.18), "Trim")  # collar
-    sphere((0.22, 0.2, 0.15), (0, -0.48, 0.27), "Trim")  # toe cap
-    for i in range(7):  # laces up the front
-        t = i / 6
-        y = -0.32 + t * 0.32
-        z = 0.48 + t * 0.62
-        cylinder(0.022, 0.26, (0, y - 0.03, z), "Light", rot=(0, math.pi / 2, 0), vertices=10)
-    for s in (-1, 1):
-        cube((0.02, 0.07, 0.62), (s * 0.235, 0.22, 0.82), "Accent")  # side stripes
-    cube((0.3, 0.05, 0.42), (0, -0.05, 0.74), "Primary", rot=(-0.45, 0, 0), bevel=0.02)  # tongue
+    cube((0.5, 1.08, 0.14), (0, -0.06, 0.07), "Dark", bevel=0.06, subsurf=1)  # rubber sole
+    cube((0.48, 0.94, 0.42), (0, -0.04, 0.33), "Primary", bevel=0.2, segments=5, subsurf=2)  # chubby foot
+    cylinder(0.26, 0.7, (0, 0.2, 0.78), "Primary", subsurf=1)  # high-top shaft
+    torus(0.26, 0.05, (0, 0.2, 1.13), "Trim")  # padded collar
+    sphere((0.25, 0.22, 0.17), (0, -0.48, 0.28), "Trim")  # toe cap
+    stitch_ring((0, -0.06, 0.17), 0.25, 0.54, 34)  # sole stitching
+    for i in range(6):  # laces up the front
+        t = i / 5
+        cylinder(0.024, 0.28, (0, -0.33 + t * 0.3, 0.5 + t * 0.56), "Light", rot=(0, math.pi / 2, 0), vertices=10)
+    for s_ in (-1, 1):
+        cube((0.02, 0.08, 0.56), (s_ * 0.262, 0.2, 0.8), "Accent")  # side stripes
+    cube((0.3, 0.05, 0.4), (0, -0.07, 0.74), "Primary", rot=(-0.45, 0, 0), bevel=0.02)  # tongue
+
+
+def half_arch(major, minor, center, plane, mat):
+    """Upper half of a torus: padded strap arching over the top of the head."""
+    rot = (math.pi / 2, 0, 0) if plane == "xz" else (math.pi / 2, 0, math.pi / 2)
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=40, minor_segments=12,
+                                     location=center, rotation=rot)
+    o = last()
+    bpy.ops.object.transform_apply(rotation=True)
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z < -0.02], context="VERTS")
+    bm.to_mesh(o.data)
+    bm.free()
+    return finish(o, mat)
 
 
 def build_head():
-    # Sparring headgear: padded shell with an open face window, cheek/chin protection and a top seam.
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=0.55, location=(0, 0, 0))
-    shell = last()
-    shell.scale = (0.95, 1.05, 1.08)
-    bpy.ops.object.transform_apply(scale=True)
-    bm = bmesh.new()
-    bm.from_mesh(shell.data)
-    cut = [v for v in bm.verts if v.co.z < -0.5 or (v.co.y < -0.12 and abs(v.co.x) < 0.27 and -0.4 < v.co.z < 0.2)]
-    bmesh.ops.delete(bm, geom=cut, context="VERTS")
-    bm.to_mesh(shell.data)
-    bm.free()
-    finish(shell, "Primary")
-    m = shell.modifiers.new("pad", "SOLIDIFY")
-    m.thickness = 0.13
-    m.offset = 1
-    shell.modifiers.new("smooth", "SUBSURF").levels = 1
-    torus(0.31, 0.055, (0, -0.47, -0.1), "Trim", rot=(math.pi / 2, 0, 0), scale=(0.95, 1, 1.05))  # face rim
-    cube((0.46, 0.2, 0.15), (0, -0.4, -0.5), "Primary", bevel=0.07, segments=4, subsurf=1)  # chin bar
-    torus(0.56, 0.018, (0, 0.04, 0.12), "Trim", rot=(0, math.pi / 2, 0), scale=(1, 1.06, 1.08))  # top seam
+    # Amateur boxing headgear: fat padded head band, open crown with crossing straps, cheek/ear pads, piping.
+    torus(0.5, 0.14, (0, 0, 0.16), "Primary", scale=(0.92, 1.05, 1.15), subsurf=1)  # padded band
+    torus(0.593, 0.02, (0, 0, 0.04), "Trim", scale=(0.92, 1.05, 1))  # piping, lower edge
+    torus(0.593, 0.02, (0, 0, 0.28), "Trim", scale=(0.92, 1.05, 1))  # piping, upper edge
+    half_arch(0.47, 0.07, (0, 0, 0.2), "xz", "Primary")  # strap ear-to-ear
+    half_arch(0.5, 0.07, (0, 0, 0.2), "yz", "Primary")  # strap front-to-back
+    sphere((0.1, 0.1, 0.06), (0, 0, 0.69), "Trim")  # crown button where the straps cross
     for s_ in (-1, 1):
-        cylinder(0.13, 0.04, (s_ * 0.56, 0.05, 0.0), "Accent", rot=(0, math.pi / 2, 0))  # ear vents
-        torus(0.13, 0.018, (s_ * 0.575, 0.05, 0.0), "Trim", rot=(0, math.pi / 2, 0))
-    cube((0.34, 0.06, 0.12), (0, 0.6, -0.28), "Dark", bevel=0.03)  # back strap
+        sphere((0.15, 0.3, 0.34), (s_ * 0.5, -0.04, -0.06), "Primary", subsurf=1)  # cheek/ear pads
+        torus(0.085, 0.025, (s_ * 0.645, 0.0, -0.02), "Trim", rot=(0, math.pi / 2, 0))  # ear hole ring
+        cylinder(0.08, 0.03, (s_ * 0.635, 0.0, -0.02), "Dark", rot=(0, math.pi / 2, 0))
+    cube((0.3, 0.06, 0.16), (0, -0.66, 0.16), "Accent", bevel=0.04)  # forehead logo patch
+    stitch_line((-0.12, -0.7, 0.16), (0.12, -0.7, 0.16), 5)
+    stitch_ring((0, 0, 0.2), 0.475, 0.475, 16, plane="xz", arc=(25, 155))  # stitches along the top strap
+    torus(0.46, 0.022, (0, -0.12, -0.34), "Dark", rot=(0.35, 0, 0), scale=(1, 0.55, 1))  # chin strap
 
 
 def build_mouth():
@@ -299,6 +369,7 @@ def build_robe():
         cube((0.05, 0.02, 1.0), (s * 0.4, -0.105, -0.12), "Trim")  # side stripes
         cube((0.32, 0.02, 0.05), (s * 0.8, -0.105, 0.13), "Trim", rot=(0, s * 0.62, 0))  # sleeve bands
     text("10", 0.62, (0, -0.11, -0.08), "Accent")  # shirt number
+    stitch_line((-0.44, -0.112, -0.56), (0.44, -0.112, -0.56), 14)  # bottom hem
 
 
 SHORTS = [(-0.62, 0.42), (0.62, 0.42), (0.68, -0.08), (0.64, -0.52), (0.08, -0.52), (0.0, -0.2), (-0.08, -0.52),
@@ -312,6 +383,8 @@ def build_shorts():
         cube((0.05, 0.02, 0.62), (s * 0.6, -0.135, -0.18), "Trim", rot=(0, s * -0.07, 0))  # side stripes
         cube((0.56, 0.02, 0.05), (s * 0.36, -0.135, -0.47), "Trim")  # leg hems
     cylinder(0.09, 0.03, (0, -0.16, 0.34), "Accent", rot=(math.pi / 2, 0, 0))
+    for s_ in (-1, 1):
+        stitch_line((s_ * 0.12, -0.137, -0.42), (s_ * 0.6, -0.137, -0.42), 8)  # leg hem stitches
 
 
 def build_belt():
@@ -365,7 +438,7 @@ BUILDERS = {
 
 
 # ---------------------------------------------------------------- rendering
-ICON_ANGLE = {"gloves": 30, "head": 30, "belt": 0, "weapon": 0, "partner": -10, "mouth": -10, "boots": -18,
+ICON_ANGLE = {"gloves": 30, "head": 25, "belt": 0, "weapon": 0, "partner": -10, "mouth": -10, "boots": -18,
               "robe": -15, "shorts": -15}
 
 
@@ -391,7 +464,7 @@ def setup_render(scene, px, radius=1.0):
     world = bpy.data.worlds.new("w")
     world.use_nodes = True
     bg = world.node_tree.nodes.get("Background")
-    bg.inputs[0].default_value = (0.09, 0.09, 0.11, 1)
+    bg.inputs[0].default_value = (0.14, 0.13, 0.13, 1)
     bg.inputs[1].default_value = 1.0
     scene.world = world
 
@@ -404,8 +477,8 @@ def setup_render(scene, px, radius=1.0):
         direction = Vector((0, 0, 0)) - Vector(loc)
         lamp.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
-    area((3.0, -3.2, 3.6), 420, 3.0)
-    area((-3.4, -2.2, 1.6), 160, 3.0, (0.85, 0.9, 1.0))
+    area((3.0, -3.2, 3.6), 400, 4.5, (1.0, 0.96, 0.9))
+    area((-3.4, -2.2, 1.6), 230, 4.0, (0.85, 0.9, 1.0))
     area((0.5, 3.2, 3.0), 300, 2.0, (1.0, 0.92, 0.8))
 
     bpy.ops.object.camera_add()
@@ -416,6 +489,34 @@ def setup_render(scene, px, radius=1.0):
     cam.location = view * dist
     cam.rotation_euler = (-view).to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam
+
+
+def sticker_outline(path, px=4, color=(0.07, 0.07, 0.09)):
+    """Dark rounded outline around the icon silhouette: reads like a cute sticker on the dark UI."""
+    import numpy as np
+    img = bpy.data.images.load(path)
+    w, h = img.size
+    a = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    alpha = a[..., 3]
+    grown = alpha.copy()
+    for dy in range(-px, px + 1):
+        for dx in range(-px, px + 1):
+            if dx * dx + dy * dy <= px * px:
+                grown = np.maximum(grown, np.roll(np.roll(alpha, dy, 0), dx, 1))
+    ring = np.clip(grown, 0, 1) * (1 - alpha)
+    out = np.empty_like(a)
+    for c in range(3):
+        out[..., c] = a[..., c] * alpha + color[c] * ring
+    out[..., 3] = np.clip(alpha + ring, 0, 1)
+    # un-premultiply for straight-alpha PNG
+    nz = out[..., 3] > 1e-4
+    for c in range(3):
+        out[..., c][nz] = out[..., c][nz] / out[..., 3][nz]
+    img.pixels[:] = out.ravel()
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+    bpy.data.images.remove(img)
 
 
 def main():
@@ -433,7 +534,7 @@ def main():
         scene = reset()
         for name in ("Primary", "Trim", "Accent", "Dark", "Light"):
             material(name)
-        apply_rarity("rare")
+        apply_rarity("rare", STYLE[slot])
         BUILDERS[slot]()
         obj = join_all(slot)
         if icons:
@@ -442,11 +543,13 @@ def main():
             radius = max(0.55, 0.5 * Vector(obj.dimensions).length)
             setup_render(scene, 192, radius)
             for rarity in RARITIES:
-                apply_rarity(rarity)
-                scene.render.filepath = os.path.join(ICON_DIR, f"{slot}_{rarity}.png")
+                apply_rarity(rarity, STYLE[slot])
+                path = os.path.join(ICON_DIR, f"{slot}_{rarity}.png")
+                scene.render.filepath = path
                 bpy.ops.render.render(write_still=True)
+                sticker_outline(path)
             obj.rotation_euler = (0, 0, 0)
-            apply_rarity("rare")
+            apply_rarity("rare", STYLE[slot])
             print(f"[{slot}] icons rendered", flush=True)
 
         # Keep the runtime model light for phones

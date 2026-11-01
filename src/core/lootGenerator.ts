@@ -193,6 +193,35 @@ export const SLOT_INFO: Record<EquipmentSlot, {
   },
 };
 
+// Slots that can drop and be equipped. Mouth, ball and coach were removed to keep the gear screen readable.
+export const ACTIVE_SLOTS: EquipmentSlot[] = ['head', 'gloves', 'robe', 'shorts', 'boots', 'belt'];
+// Six slots carry the stat budget nine used to; keeps the progression curve (tuned with scripts/run-balance-sim.mjs)
+export const SLOT_COMPENSATION = 1.3;
+
+export function computePowerScore(s: StatModifiers): number {
+  return Math.round(
+    (s.hp || 0) * 0.4 +
+    (s.atk || 0) * 3.5 +
+    (s.def || 0) * 2.8 +
+    (s.spd || 0) * 2.5 +
+    (s.critRate || 0) * 8 +
+    (s.critDmg || 0) * 80 +
+    (s.comboRate || 0) * 7 +
+    (s.dodgeRate || 0) * 7 +
+    (s.lifesteal || 0) * 12 +
+    (s.stamina || 0) * 0.5
+  );
+}
+
+// Items generated before the 6-slot layout get the same flat-stat boost new drops have, so old saves keep their power
+export function upgradeLegacyItem(item: EquipmentItem): EquipmentItem {
+  const stats = { ...item.stats };
+  (['hp', 'atk', 'def', 'spd', 'stamina'] as const).forEach((k) => {
+    if (stats[k]) stats[k] = Math.round(stats[k]! * SLOT_COMPENSATION);
+  });
+  return { ...item, stats, powerScore: computePowerScore(stats) };
+}
+
 export function rollRarity(stageLevel: number = 1): Rarity {
   // Higher stages slightly boost rare drop chances
   const bonus = Math.min(stageLevel * 0.5, 25);
@@ -211,15 +240,14 @@ export function generateEquipment(
   forcedRarity?: Rarity,
   itemLevel: number = 1
 ): EquipmentItem {
-  const slots = Object.keys(SLOT_INFO) as EquipmentSlot[];
-  const slot = forcedSlot || slots[Math.floor(Math.random() * slots.length)];
+  const slot = forcedSlot || ACTIVE_SLOTS[Math.floor(Math.random() * ACTIVE_SLOTS.length)];
   const rarity = forcedRarity || rollRarity(itemLevel);
   const info = SLOT_INFO[slot];
   const rarityConf = RARITY_CONFIG[rarity];
 
   const template = info.templates[Math.floor(Math.random() * info.templates.length)];
   const lvlScale = 1 + (itemLevel - 1) * 0.25;
-  const mult = rarityConf.statMultiplier * lvlScale;
+  const mult = rarityConf.statMultiplier * lvlScale * SLOT_COMPENSATION;
 
   // Base raw stat pools
   const stats: Required<StatModifiers> = {
@@ -295,19 +323,7 @@ export function generateEquipment(
     stats.dodgeRate = Math.min(stats.dodgeRate + 5, 50);
   }
 
-  // Calculate Power Score
-  const powerScore = Math.round(
-    stats.hp * 0.4 +
-    stats.atk * 3.5 +
-    stats.def * 2.8 +
-    stats.spd * 2.5 +
-    stats.critRate * 8 +
-    stats.critDmg * 80 +
-    stats.comboRate * 7 +
-    stats.dodgeRate * 7 +
-    stats.lifesteal * 12 +
-    stats.stamina * 0.5
-  );
+  const powerScore = computePowerScore(stats);
 
   const baseSell = 15 + itemLevel * 10;
   const sellPrice = Math.round(baseSell * rarityConf.sellMultiplier);

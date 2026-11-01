@@ -1,5 +1,7 @@
 import { EquipmentItem, EquipmentSlot, Fighter, FighterStats, GymTraining, Rarity, Skill, Stage, TabType } from '../types/game';
-import { calculateTotalStats, generateEquipment } from './lootGenerator';
+import { ACTIVE_SLOTS, calculateTotalStats, generateEquipment, upgradeLegacyItem } from './lootGenerator';
+import { pushToast } from './toast';
+import { ui } from '../i18n/ui';
 import { getStageData } from './stageDatabase';
 import { getRandomSkill, SKILL_DATABASE } from './skillDatabase';
 import { COSMETICS_LIST, CosmeticItem } from './cosmeticsData';
@@ -11,7 +13,7 @@ import { battleRig, QualityLevel } from '../game/battleRig';
 import { ACHIEVEMENTS } from './achievements';
 
 const STORAGE_KEY = 'street_striker_rpg_save_v2';
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4; // v4: 6 equipment slots
 const BUFF_DURATION_MS = 10 * 60 * 1000;
 const LOSSES_BEFORE_RETREAT = 3;
 const BOSS_LOSSES_BEFORE_RETREAT = 2;
@@ -88,6 +90,10 @@ export interface GameStateData {
   pendingSkillOffer: Skill | null;
   pendingSkillReplacement: Skill | null;
   activeTab: TabType;
+  // Sub-pages of the merged tabs: Fighter = gear + skills, Arena = stages + quests/achievements
+  fighterView: 'gear' | 'skills';
+  arenaView: 'stages' | 'quests';
+  isProfileOpen: boolean;
   autoBattle: boolean;
   battleSpeed: 1 | 2 | 4;
   soundEnabled: boolean;
@@ -216,7 +222,7 @@ function createInitialPlayer(): Fighter {
     shorts: generateEquipment('shorts', 'common', 1),
     boots: generateEquipment('boots', 'common', 1),
     belt: null,
-    weapon: generateEquipment('weapon', 'common', 1),
+    weapon: null,
     partner: null,
   };
 
@@ -286,6 +292,9 @@ function createDefaultState(): GameStateData {
     pendingSkillOffer: null,
     pendingSkillReplacement: null,
     activeTab: 'gear',
+    fighterView: 'gear',
+    arenaView: 'stages',
+    isProfileOpen: false,
     autoBattle: true,
     battleSpeed: 1,
     soundEnabled: true,
@@ -336,6 +345,7 @@ class GameManager {
     haptics.enabled = this.state.hapticsEnabled;
     battleRig.quality = this.state.quality;
     battleRig.reducedMotion = this.state.reducedMotion;
+    this.migrateRemovedSlots();
     this.applyCosmeticsToPlayer();
     this.recalculatePlayerStats();
     this.refreshSession();
@@ -438,6 +448,12 @@ class GameManager {
       if (saved) {
         const parsed = JSON.parse(saved);
         const fighter = parsed.playerFighter || defaults.playerFighter;
+        if ((parsed.saveVersion || 0) < 4) {
+          // Saves from the 9-slot layout: lift existing gear to the new per-slot stat budget (removed slots are cashed out later)
+          const up = (i: EquipmentItem | null) => (i && ACTIVE_SLOTS.includes(i.slot) ? upgradeLegacyItem(i) : i);
+          if (fighter.equipped) Object.keys(fighter.equipped).forEach((k) => (fighter.equipped[k] = up(fighter.equipped[k])));
+          if (Array.isArray(parsed.inventory)) parsed.inventory = parsed.inventory.map(up);
+        }
         return {
           ...defaults,
           ...parsed,
@@ -452,6 +468,10 @@ class GameManager {
           pendingSkillReplacement: null,
           isDailyLoginOpen: false,
           isLuckyWheelOpen: false,
+          isProfileOpen: false,
+          // Old saves may point at tabs that were merged away
+          activeTab: parsed.activeTab === 'skills' || parsed.activeTab === 'profile' ? 'gear' : parsed.activeTab || 'gear',
+          fighterView: parsed.activeTab === 'skills' ? 'skills' : parsed.fighterView || 'gear',
           isOfflineRewardOpen: false,
           offlineGoldAccumulated: 0,
           offlineMinutesAccumulated: 0,
@@ -703,15 +723,7 @@ class GameManager {
     const dropChance = stage.isBoss ? 1.0 : 0.85;
 
     if (Math.random() <= dropChance && !this.state.pendingLootDrop) {
-      const drop = generateEquipment(undefined, undefined, stageLvl);
-      
-      // Check auto-sell filter
-      if (this.shouldAutoSell(drop.rarity)) {
-        this.state.coins += drop.sellPrice;
-      } else {
-        this.state.pendingLootDrop = drop;
-        soundFx.playLootDrop();
-      }
+      this.handleLootDrop(generateEquipment(undefined, undefined, stageLvl));
     }
 
     // Roll Roguelite Skill every 3 stages or after boss
@@ -785,6 +797,62 @@ class GameManager {
     haptics.enabled = this.state.hapticsEnabled;
     haptics.trigger('medium');
     this.notify();
+  }
+
+  // Most drops are handled without interrupting the fight: better gear is equipped automatically, the rest goes to
+  // the bag (or is sold). Only epic and better drops open the big reveal card.
+  private handleLootDrop(drop: EquipmentItem) {
+    const rank: Record<Rarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5, mythic: 6 };
+    const lang = this.state.lang;
+    const slotName = ui(lang, 'slot_' + drop.slot);
+    if (rank[drop.rarity] >= rank.epic) {
+      this.state.pendingLootDrop = drop;
+      soundFx.playLootDrop();
+      return;
+    }
+    const current = this.state.playerFighter.equipped[drop.slot];
+    if (!current || drop.powerScore > current.powerScore) {
+      this.state.playerFighter.equipped[drop.slot] = drop;
+      if (current) this.stashOrSell(current);
+      soundFx.playEquip();
+      pushToast(ui(lang, 'toast_equip', { slot: slotName, n: drop.powerScore - (current?.powerScore || 0) }), 'good');
+      return;
+    }
+    if (this.shouldAutoSell(drop.rarity) || this.state.inventory.length >= this.state.maxInventorySlots) {
+      this.state.coins += drop.sellPrice;
+      pushToast(ui(lang, 'toast_sold', { slot: slotName, n: drop.sellPrice }), 'gold');
+    } else {
+      this.state.inventory.push(drop);
+      pushToast(ui(lang, 'toast_bag', { slot: slotName }), 'info');
+    }
+  }
+
+  private stashOrSell(item: EquipmentItem) {
+    if (this.state.inventory.length < this.state.maxInventorySlots) this.state.inventory.push(item);
+    else this.state.coins += item.sellPrice;
+  }
+
+  // Saves from before the 6-slot layout: turn gear in removed slots into coins
+  private migrateRemovedSlots() {
+    let coins = 0;
+    const eq = this.state.playerFighter.equipped;
+    (Object.keys(eq) as EquipmentSlot[]).forEach((slot) => {
+      if (!ACTIVE_SLOTS.includes(slot) && eq[slot]) {
+        coins += eq[slot]!.sellPrice;
+        eq[slot] = null;
+      }
+    });
+    const keep = this.state.inventory.filter((i) => ACTIVE_SLOTS.includes(i.slot));
+    this.state.inventory.filter((i) => !ACTIVE_SLOTS.includes(i.slot)).forEach((i) => (coins += i.sellPrice));
+    this.state.inventory = keep;
+    if (this.state.pendingLootDrop && !ACTIVE_SLOTS.includes(this.state.pendingLootDrop.slot)) {
+      coins += this.state.pendingLootDrop.sellPrice;
+      this.state.pendingLootDrop = null;
+    }
+    if (coins > 0) {
+      this.state.coins += coins;
+      setTimeout(() => pushToast(ui(this.state.lang, 'toast_migrated', { n: coins }), 'gold', 4500), 1500);
+    }
   }
 
   private shouldAutoSell(rarity: Rarity): boolean {
@@ -1103,8 +1171,25 @@ class GameManager {
     this.notify();
   }
 
-  public setActiveTab(tab: TabType) {
+  public setActiveTab(tab: TabType, view?: 'gear' | 'skills' | 'stages' | 'quests') {
+    // 'skills' and 'profile' are no longer bottom tabs: route them to their new homes
+    if (tab === 'profile') {
+      this.state.isProfileOpen = true;
+      this.notify();
+      return;
+    }
+    if (tab === 'skills') {
+      tab = 'gear';
+      view = 'skills';
+    }
     this.state.activeTab = tab;
+    if (tab === 'gear' && (view === 'gear' || view === 'skills')) this.state.fighterView = view;
+    if (tab === 'arena' && (view === 'stages' || view === 'quests')) this.state.arenaView = view;
+    this.notify();
+  }
+
+  public setProfileOpen(open: boolean) {
+    this.state.isProfileOpen = open;
     this.notify();
   }
 
@@ -1190,3 +1275,8 @@ class GameManager {
 }
 
 export const gameManager = new GameManager();
+
+// Browser tests drive the game logic directly in dev builds only
+if (import.meta.env.DEV) {
+  (window as unknown as { __game: GameManager }).__game = gameManager;
+}

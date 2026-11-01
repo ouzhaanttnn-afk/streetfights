@@ -81,70 +81,42 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
             <Tv className="w-4 h-4 text-amber-400 drop-shadow" />
             {t('adCenter', state.lang)}
           </h3>
-          {isDoubleDmgActive && (
-            <span className="text-[10px] font-black text-rose-300 bg-rose-950/80 px-2.5 py-0.5 rounded-full border border-rose-500/40 flex items-center gap-1 animate-pulse shadow-sm">
-              <Zap className="w-3 h-3 text-rose-400" /> 2x DMG ({dmgMinutesLeft}m)
-            </span>
-          )}
         </div>
 
+        {/* Two clear offers only: free gems or a damage boost */}
         <div className="grid grid-cols-2 gap-2.5">
-          {/* Ad 1: Free Gems */}
           <button
+            data-ad="free_gems"
             onClick={() => gameManager.openRewardedAd({
               type: 'free_gems',
               title: t('adFreeGems', state.lang),
-              rewardDesc: '+50 Gems & +1,000 Coins',
+              rewardDesc: ui(state.lang, 'ad_gems_desc'),
             })}
-            className="p-3 rounded-2xl bg-gradient-to-b from-cyan-950/60 via-black to-neutral-950 border border-cyan-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-cyan-400 group"
+            className="p-3.5 rounded-2xl bg-gradient-to-b from-cyan-950/70 via-black to-neutral-950 border border-cyan-500/40 flex flex-col items-center text-center gap-1.5 transition-all active:scale-95 shadow-lg"
           >
-            <Gem className="w-6 h-6 text-cyan-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adFreeGems', state.lang)}</span>
-            <span className="text-[9px] font-mono font-bold text-cyan-300 mt-1.5 bg-cyan-950/90 px-2.5 py-0.5 rounded-lg border border-cyan-500/40">+50 💎</span>
-          </button>
-
-          {/* Ad 2: 2x Damage Buff */}
-          <button
-            onClick={() => gameManager.openRewardedAd({
-              type: 'double_damage',
-              title: t('adDoubleDmg', state.lang),
-              rewardDesc: '2x Striking Attack Power for 10 min',
-            })}
-            className="p-3 rounded-2xl bg-gradient-to-b from-rose-950/60 via-black to-neutral-950 border border-rose-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-rose-400 group"
-          >
-            <Zap className="w-6 h-6 text-rose-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adDoubleDmg', state.lang)}</span>
-            <span className="text-[9px] font-mono font-bold text-rose-300 mt-1.5 bg-rose-950/90 px-2.5 py-0.5 rounded-lg border border-rose-500/40">⚡ 2x ATK</span>
-          </button>
-
-          {/* Ad 4: 2x Coins Buff */}
-          <button
-            onClick={() => gameManager.openRewardedAd({
-              type: 'double_coins',
-              title: ui(state.lang, 'coins2x'),
-              rewardDesc: '2x Coin rewards for 10 min',
-            })}
-            className="p-3 rounded-2xl bg-gradient-to-b from-yellow-950/60 via-black to-neutral-950 border border-yellow-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-yellow-400 group"
-          >
-            <Coins className="w-6 h-6 text-yellow-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{ui(state.lang, 'coins2x')}</span>
-            <span className="text-[9px] font-mono font-bold text-yellow-300 mt-1.5 bg-yellow-950/90 px-2.5 py-0.5 rounded-lg border border-yellow-500/40">
-              {Date.now() < state.doubleCoinsUntil ? `${Math.ceil((state.doubleCoinsUntil - Date.now()) / 60000)}m` : '🪙 2x'}
+            <Gem className="w-8 h-8 text-cyan-400 drop-shadow" />
+            <span className="text-[12px] font-black text-zinc-100">{t('adFreeGems', state.lang)}</span>
+            <span className="text-[10px] font-bold text-cyan-200">{ui(state.lang, 'ad_gems_desc')}</span>
+            <span className="mt-1 w-full min-h-9 flex items-center justify-center gap-1 rounded-xl bg-cyan-500 text-black text-[11px] font-black">
+              <Tv className="w-3.5 h-3.5" /> {ui(state.lang, 'ad_watch')}
             </span>
           </button>
 
-          {/* Ad 3: Mystery Chest */}
           <button
+            data-ad="double_damage"
             onClick={() => gameManager.openRewardedAd({
-              type: 'mystery_chest',
-              title: t('adMysteryChest', state.lang),
-              rewardDesc: 'Guaranteed Rare / Epic / Legendary Item Drop',
+              type: 'double_damage',
+              title: ui(state.lang, 'ad_dmg_title'),
+              rewardDesc: ui(state.lang, 'ad_dmg_desc'),
             })}
-            className="p-3 rounded-2xl bg-gradient-to-b from-amber-950/60 via-black to-neutral-950 border border-amber-500/40 flex flex-col items-center justify-between text-center transition-all active:scale-95 shadow-lg hover:border-amber-400 group"
+            className="p-3.5 rounded-2xl bg-gradient-to-b from-rose-950/70 via-black to-neutral-950 border border-rose-500/40 flex flex-col items-center text-center gap-1.5 transition-all active:scale-95 shadow-lg"
           >
-            <Sparkles className="w-6 h-6 text-amber-400 mb-1.5 drop-shadow group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black text-zinc-200 truncate w-full">{t('adMysteryChest', state.lang)}</span>
-            <span className="text-[9px] font-mono font-bold text-amber-300 mt-1.5 bg-amber-950/90 px-2.5 py-0.5 rounded-lg border border-amber-500/40">🎁 DROP</span>
+            <Zap className="w-8 h-8 text-rose-400 drop-shadow" />
+            <span className="text-[12px] font-black text-zinc-100">{ui(state.lang, 'ad_dmg_title')}</span>
+            <span className="text-[10px] font-bold text-rose-200">{ui(state.lang, 'ad_dmg_desc')}</span>
+            <span className={`mt-1 w-full min-h-9 flex items-center justify-center gap-1 rounded-xl text-[11px] font-black ${isDoubleDmgActive ? 'bg-rose-950 text-rose-200 border border-rose-500/50' : 'bg-rose-500 text-black'}`}>
+              {isDoubleDmgActive ? ui(state.lang, 'ad_active', { n: dmgMinutesLeft }) : (<><Tv className="w-3.5 h-3.5" /> {ui(state.lang, 'ad_watch')}</>)}
+            </span>
           </button>
         </div>
       </div>

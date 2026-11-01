@@ -53,7 +53,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
         <button
           onClick={() => gameManager.rerollSkill()}
           disabled={state.coins < 25}
-          className={`px-4 py-2.5 rounded-2xl font-black text-xs flex items-center gap-1.5 border transition-all ${
+          className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-2xl font-black text-xs flex items-center gap-1.5 border transition-all ${
             state.coins >= 25 
               ? 'game-btn-gold text-black border-amber-300 shadow-xl active:scale-95 shine-effect' 
               : 'bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed'

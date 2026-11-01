@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { getStageData, getWorldName, WORLD_COUNT } from '../../core/stageDatabase';
 import { DailyQuestsCard } from '../DailyQuestsCard';
+import { AchievementsCard } from '../AchievementsCard';
+import { Segmented } from '../Segmented';
+import { claimableRewards } from '../../core/guidance';
 import { ui } from '../../i18n/ui';
 import { t } from '../../i18n/translations';
 import { 
@@ -20,13 +23,8 @@ interface ArenaTabProps {
 export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
   const [selectedWorld, setSelectedWorld] = useState<number>(state.currentWorld);
 
-  const worldDescs = [
-    'Street fighters & reckless brawlers',
-    'Underground cage duels & subway bandits',
-    'Cyberpunk fighters & acrobatic strikers',
-    'National champions & heavyweight sluggers',
-    'Apex legends & world gods',
-  ];
+  const worldDescs = [1, 2, 3, 4, 5].map((n) => ui(state.lang, 'world_desc_' + n));
+  const view = state.arenaView || 'stages';
   // Worlds beyond the fifth loop endlessly with tougher opponents
   const worldCount = Math.max(WORLD_COUNT, state.highestWorld, state.currentWorld);
   const worlds = Array.from({ length: worldCount }, (_, i) => ({
@@ -39,8 +37,22 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
 
   return (
     <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-16">
-      
-      <DailyQuestsCard state={state} />
+      <Segmented
+        value={view}
+        onChange={(v) => gameManager.setActiveTab('arena', v)}
+        options={[
+          { id: 'stages', label: ui(state.lang, 'view_stages') },
+          { id: 'quests', label: ui(state.lang, 'view_quests'), badge: claimableRewards(state) > 0 },
+        ]}
+      />
+
+      {view === 'quests' ? (
+        <>
+          <DailyQuestsCard state={state} />
+          <AchievementsCard state={state} />
+        </>
+      ) : (
+      <>
 
       {/* Stage Progression Mode */}
       <button
@@ -155,7 +167,8 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
                 <button
                   onClick={() => {
                     gameManager.selectStage(selectedWorld, subNum);
-                    gameManager.setActiveTab('gear');
+                    // the fight is pinned above the tabs: just bring it into view
+                    document.querySelector('.tab-content')?.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   className={`px-4 py-2.5 rounded-2xl font-black text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-md ${
                     isCurrent
@@ -175,6 +188,8 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
           );
         })}
       </div>
+      </>
+      )}
     </div>
   );
 };

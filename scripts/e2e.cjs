@@ -7,7 +7,7 @@ const ok = (n, c, extra='') => { results.push(`${c ? 'PASS' : 'FAIL'}  ${n} ${ex
 const today = () => new Date().toLocaleDateString('en-CA');
 const URL = process.env.URL || 'http://localhost:5199';
 // Wait until the app has booted and written its save (more reliable than fixed sleeps on a loaded machine)
-const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion === 3; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
+const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion === 4; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
 
 (async () => {
   // ---- 1. Legacy save compatibility (shape written by the ORIGINAL game, before my changes)
@@ -25,7 +25,7 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     const s = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
     ok('legacy save: level/world/inventory kept', s.playerLevel === 9 && s.currentWorld === 2 && s.inventory.length === 1 && s.totalFightsWon >= 33 && s.bossDefeatedCount === 2, `lvl=${s.playerLevel} inv=${s.inventory.length} fights=${s.totalFightsWon}`);
     ok('legacy save: coins not reset (>=12345)', s.coins >= 12345, `coins=${s.coins}`);
-    ok('legacy save: new fields filled', s.saveVersion === 3 && s.dailyQuests?.length === 4 && s.quality === 'medium');
+    ok('legacy save: new fields filled', s.saveVersion === 4 && s.dailyQuests?.length === 4 && s.quality === 'medium');
     ok('legacy save: daily login opens for old save', await p.getByText(/7-DAY LOGIN REWARDS|7 GÜNLÜK GİRİŞ ÖDÜLÜ/).count() > 0);
     ok('legacy save: no page errors', errs.length === 0, errs.join('|'));
     await b.close();
@@ -58,11 +58,6 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('victory -> reward screen (loot or stage advanced)', loot || (await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).totalFightsWon)) >= 1);
     const save = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
     ok('victory persisted (fights won, quest progress)', save.totalFightsWon >= 1 && save.dailyQuests.find(q => q.id==='win_fights').progress >= 1, `fights=${save.totalFightsWon}`);
-    // equip from loot modal if present
-    if (loot) {
-      const equip = p.getByRole('button', { name: /KUŞAN|EQUIP/i }).first();
-      if (await equip.count()) { await equip.click({ force: true }); await p.waitForTimeout(500); ok('equip from loot modal', await p.getByText(/YENİ EKİPMAN|NEW GEAR/i).count() === 0); }
-    }
     ok('no page errors in combat flow', errs.length === 0, errs.join('|'));
     await b.close();
   }
@@ -140,8 +135,14 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     await p.getByText(/^Atla$|^Skip$/).click({ force: true }); await p.waitForTimeout(300);
     const step = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).tutorialStep);
     ok('tutorial can be skipped and is remembered', step === 99, `step=${step}`);
-    await p.locator('nav button').nth(5).click(); await p.waitForTimeout(600);
-    ok('achievements card is on the profile tab', await p.getByText(/Başarımlar|Achievements/).count() > 0);
+    ok('bottom nav has 4 tabs', await p.locator('nav button').count() === 4, `n=${await p.locator('nav button').count()}`);
+    await p.locator('nav [data-tab=arena]').click(); await p.waitForTimeout(400);
+    await p.locator('[data-view=quests]').click(); await p.waitForTimeout(500);
+    ok('achievements card is in Arena > Quests', await p.getByText(/Başarımlar|Achievements/).count() > 0);
+    await p.locator('[data-open-profile]').click(); await p.waitForTimeout(500);
+    ok('profile sheet opens from the header name', await p.locator('[data-profile-sheet]').count() === 1);
+    await p.getByRole('button', { name: 'Close' }).click(); await p.waitForTimeout(300);
+    ok('profile sheet closes', await p.locator('[data-profile-sheet]').count() === 0);
     ok('no hidden dev panel text in production-like UI', await p.getByText('SECRET TEST PANEL').count() === 0);
     ok('no page errors on first run', errs.length === 0, errs.join('|'));
     await b.close();
@@ -164,9 +165,60 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'ja', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1] })); }, today());
     await p.goto(URL); await ready(p); await p.waitForTimeout(3500);
     ok('Japanese: tutorial text is translated', await p.getByText('戦闘は自動です').count() > 0);
-    await p.locator('nav button').nth(4).click(); await p.waitForTimeout(500);
+    await p.locator('nav [data-tab=arena]').click(); await p.waitForTimeout(400);
+    await p.locator('[data-view=quests]').click(); await p.waitForTimeout(500);
     ok('Japanese: daily quests title is translated', await p.getByText('デイリークエスト').count() > 0);
     ok('Japanese: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  // ---- 9. Compact layout: 6 gear slots, auto-equip toasts, guidance, 2 ad offers, save migration
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    const item = (slot, rarity, atk, sell) => ({ id:'it_'+slot+atk, name:'Test '+slot, slot, rarity, level:3, stats:{hp:0,atk,def:0,spd:0,critRate:0,critDmg:0,comboRate:0,dodgeRate:0,lifesteal:0,stamina:0}, powerScore:Math.round(atk*3.5), sellPrice:sell, iconName:'Flame' });
+    // A save from the 9-slot layout: mouth / weapon / partner gear must be cashed out
+    const old = { saveVersion:3, lastDailyLoginDate:today(), dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, coins:500, autoBattle:false,
+      inventory:[item('weapon','rare',30,70), item('gloves','rare',100,40)],
+      playerFighter:{ equipped:{ head:null, gloves:item('gloves','common',10,10), mouth:item('mouth','rare',20,50), robe:null, shorts:null, boots:null, belt:null, weapon:item('weapon','common',8,20), partner:null } } };
+    await p.addInitScript((o) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify(o)); }, old);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(3000);
+    let s = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
+    ok('migration: removed slots cashed out', !s.playerFighter.equipped.mouth && !s.playerFighter.equipped.weapon && s.inventory.length === 1 && s.coins >= 500 + 70 + 50 + 20, `coins=${s.coins} inv=${s.inventory.length}`);
+    ok('migration: kept gear lifted to the 6-slot budget', s.playerFighter.equipped.gloves.stats.atk === 13, `atk=${s.playerFighter.equipped.gloves.stats.atk}`);
+    ok('gear grid shows 6 slots', await p.locator('.grid-cols-3 > button').count() === 6, `n=${await p.locator('.grid-cols-3 > button').count()}`);
+    ok('better item in bag is tagged and the Fighter tab has a dot', await p.locator('[data-better]').count() === 1 && await p.locator('nav [data-tab=gear] [data-badge]').count() === 1);
+    // Non-epic drops never open a modal: better -> equipped with a toast, worse -> bag
+    await p.evaluate((it) => window.__game.handleLootDrop(it), item('boots','uncommon',40,30));
+    await p.waitForTimeout(300);
+    const toast = await p.locator('[data-toast]').count();
+    s = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('better common/rare drop is auto-equipped with a toast', s.playerFighter.equipped.boots?.powerScore === 140 && toast > 0 && !s.pendingLootDrop, `toast=${toast}`);
+    await p.evaluate((it) => window.__game.handleLootDrop(it), item('boots','common',5,9));
+    s = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('worse drop goes to the bag, no modal', s.inventory.some(i => i.powerScore === 18) && !s.pendingLootDrop);
+    // Epic+ drops still get the big reveal card
+    await p.evaluate(() => window.__game.cheatDropRandomGear('epic')); await p.waitForTimeout(1200);
+    const hadCard = await p.getByText(/YENİ EKİPMAN|NEW GEAR/i).count() > 0;
+    await p.getByRole('button', { name: /KUŞAN|EQUIP/i }).first().click({ force: true }).catch(() => {}); await p.waitForTimeout(500);
+    ok('epic drop opens the loot card and equips from it', hadCard && await p.getByText(/YENİ EKİPMAN|NEW GEAR/i).count() === 0);
+    // Next-step card from another tab jumps to the right place
+    await p.locator('nav [data-tab=gym]').click(); await p.waitForTimeout(400);
+    const nextKey = await p.locator('[data-next-step]').getAttribute('data-next-step').catch(() => null);
+    await p.locator('[data-next-step]').click().catch(() => {}); await p.waitForTimeout(400);
+    const tab = await p.evaluate(() => window.__game.getState().activeTab);
+    ok('next-step card shows on other tabs and jumps there', !!nextKey && tab !== 'gym', `key=${nextKey} tab=${tab}`);
+    // Stat bar: one row, expands on tap
+    const chipsBefore = await p.locator('.stat-bar .grid > div').count();
+    await p.locator('.stat-bar > button').click(); await p.waitForTimeout(300);
+    ok('stat bar is a single row that expands to 8 stats', chipsBefore === 0 && await p.locator('.stat-bar .grid > div').count() === 8);
+    // Shop: two clear ad offers
+    await p.locator('nav [data-tab=shop]').click(); await p.waitForTimeout(500);
+    ok('shop shows exactly 2 ad offers', await p.locator('[data-ad]').count() === 2);
+    // Coins piling up -> gym dot
+    await p.evaluate(() => window.__game.cheatAddCoins(50000)); await p.waitForTimeout(300);
+    ok('gym tab gets a dot when training is affordable', await p.locator('nav [data-tab=gym] [data-badge]').count() === 1);
+    ok('no page errors in compact layout', errs.length === 0, errs.join('|'));
     await b.close();
   }
   console.log(results.join('\n'));

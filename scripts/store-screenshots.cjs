@@ -15,8 +15,8 @@ const shots = [
   { name: '03_neon_club', save: { currentWorld: 3, currentSubStage: 2 }, wait: 3200 },
   { name: '04_ring_boss', save: { currentWorld: 4, currentSubStage: 10 }, wait: 4200 },
   { name: '05_stadium', save: { currentWorld: 5, currentSubStage: 2 }, wait: 3600 },
-  { name: '06_skills_tab', save: { currentWorld: 3, currentSubStage: 2 }, tab: 1, wait: 3000 },
-  { name: '07_arena_quests', save: { currentWorld: 2, currentSubStage: 3 }, tab: 4, wait: 3000 },
+  { name: '06_skills_tab', save: { currentWorld: 3, currentSubStage: 2 }, tab: 'gear', view: 'skills', wait: 3000 },
+  { name: '07_arena_quests', save: { currentWorld: 2, currentSubStage: 3 }, tab: 'arena', view: 'quests', wait: 3000 },
 ];
 (async () => {
   const b = await chromium.launch({ args: GL });
@@ -30,7 +30,8 @@ const shots = [
       }, [s.save, today, strong, lang]);
       await p.goto(process.env.URL || 'http://localhost:5199');
       await p.waitForTimeout(s.wait);
-      if (s.tab !== undefined) { await p.locator('nav button').nth(s.tab).click(); await p.waitForTimeout(700); }
+      if (s.tab !== undefined) { await p.locator(`nav [data-tab=${s.tab}]`).click(); await p.waitForTimeout(700); }
+      if (s.view !== undefined) { await p.locator(`[data-view=${s.view}]`).click(); await p.waitForTimeout(700); }
       await p.screenshot({ path: `store/screenshots/${lang}/${size}/${s.name}.png` });
       await ctx.close();
     }

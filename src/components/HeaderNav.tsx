@@ -1,25 +1,25 @@
 import React from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
+import { ui } from '../i18n/ui';
 import { 
   Coins, 
   Gem, 
   Zap, 
   Settings, 
   Sparkles,
-  Gift
+  Gift,
+  ChevronRight
 } from 'lucide-react';
 
 interface HeaderNavProps {
   state: GameStateData;
   onOpenSettings: () => void;
-  onOpenLeaderboard: () => void;
 }
 
 export const HeaderNav: React.FC<HeaderNavProps> = ({ 
   state, 
   onOpenSettings,
-  onOpenLeaderboard 
 }) => {
   const xpPct = Math.min(100, Math.round((state.playerXp / state.playerMaxXp) * 100));
 
@@ -34,7 +34,12 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
       style={{ paddingTop: topPadding }}
     >
       {/* LEFT: Level badge + XP */}
-      <div className="top-nav-left flex items-center gap-1.5 min-w-0 shrink-0">
+      <button
+        data-open-profile
+        onClick={() => gameManager.setProfileOpen(true)}
+        aria-label={ui(state.lang, 'profile_hint')}
+        className="top-nav-left flex items-center gap-1.5 min-w-0 shrink-0 text-left active:scale-95 transition-transform"
+      >
         <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 text-black font-black text-[11px] shadow-sm shadow-amber-500/30 border border-amber-300/60 shrink-0">
           <span>{state.playerLevel}</span>
         </div>
@@ -54,7 +59,8 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
             />
           </div>
         </div>
-      </div>
+        <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
+      </button>
 
       {/* RIGHT: Currencies + Quick Actions */}
       <div className="top-nav-actions flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap-reverse justify-end">

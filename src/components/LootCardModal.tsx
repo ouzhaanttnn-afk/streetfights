@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { EquipmentItem } from '../types/game';
-import { RARITY_CONFIG, SLOT_INFO } from '../core/lootGenerator';
+import { RARITY_CONFIG } from '../core/lootGenerator';
+import { ui } from '../i18n/ui';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
 import { 
@@ -20,7 +21,6 @@ interface LootCardModalProps {
 
 export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => {
   const rarity = RARITY_CONFIG[item.rarity];
-  const slotInfo = SLOT_INFO[item.slot];
   const currentEquipped = state.playerFighter.equipped[item.slot];
 
   const currentPower = currentEquipped ? currentEquipped.powerScore : 0;
@@ -60,7 +60,7 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
         {/* Glow Header */}
         <div className="relative z-10 flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-black tracking-widest uppercase mb-1 shadow-sm">
           <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>{t('newDrop', state.lang)} • {item.slot.toUpperCase()}</span>
+          <span>{t('newDrop', state.lang)} • {ui(state.lang, 'slot_' + item.slot)}</span>
         </div>
 
         {/* 3D WebGL Turntable Interactive Item Model */}
@@ -78,7 +78,7 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
           {item.name}
         </h2>
         <div className={`text-[11px] font-black uppercase tracking-wider ${rarity.color} mb-3`}>
-          {rarity.name} • Lv.{item.level} {slotInfo.label}
+          {rarity.name} • Lv.{item.level} {ui(state.lang, 'slot_' + item.slot)}
         </div>
 
         {/* Power Score Comparison Badge */}

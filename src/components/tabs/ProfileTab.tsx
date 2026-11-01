@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { GameStateData, gameManager } from "../../core/gameState";
 import { PREMIUM_AVATARS, FIGHTER_TITLES } from "../../core/avatarsData";
 import { t } from "../../i18n/translations";
-import { AchievementsCard } from "../AchievementsCard";
+import { ui } from "../../i18n/ui";
 import { 
   User, 
   Edit3, 
@@ -22,9 +22,11 @@ import {
 
 interface ProfileTabProps {
   state: GameStateData;
+  onClose: () => void;
 }
 
-export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
+// Profile sheet (opened by tapping the name in the header): name, avatar, title and career stats
+export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(state.playerFighter.name);
   const [devTapCount, setDevTapCount] = useState(0);
@@ -68,7 +70,19 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
   const pStats = state.playerFighter.stats;
 
   return (
-    <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-4 pb-16 select-none">
+    <div className="modal-shell fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md select-none animate-fadeIn" onClick={onClose}>
+    <div
+      data-profile-sheet
+      onClick={(e) => e.stopPropagation()}
+      className="relative w-full max-w-[430px] max-h-[88dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-[#06070a] border border-white/15 p-3 pt-12 space-y-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+    >
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute top-3 right-3 w-9 h-9 rounded-xl bg-neutral-900 border border-white/10 text-zinc-300 flex items-center justify-center active:scale-95"
+      >
+        <X className="w-4 h-4" />
+      </button>
       {/* 1. Main Fighter Passport / Profile Card */}
       <div className="relative rounded-3xl game-card-gold p-5 border-2 border-amber-400/40 shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center gap-4">
@@ -134,7 +148,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
                 ★ Lv.{state.playerLevel}
               </span>
               <span className="text-[11px] font-mono font-black text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
-                ⚡ {pStats.powerScore.toLocaleString()} POW
+                ⚡ {pStats.powerScore.toLocaleString()} {ui(state.lang, "power_word")}
               </span>
             </div>
           </div>
@@ -151,7 +165,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
             </h3>
           </div>
           <span className="text-[10px] text-zinc-400 font-bold bg-black/40 px-2 py-0.5 rounded-lg border border-white/5">
-            {PREMIUM_AVATARS.length} AVATARS
+            {PREMIUM_AVATARS.length}
           </span>
         </div>
 
@@ -223,14 +237,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
                       {titleName}
                     </div>
                     <div className="text-[9px] text-zinc-400 font-mono">
-                      {isUnlocked ? "UNLOCKED" : `REQ LVL ${title.unlockLevel}`}
+                      {isUnlocked ? ui(state.lang, "unlocked") : `🔒 Lv.${title.unlockLevel}`}
                     </div>
                   </div>
                 </div>
 
                 {isSelected && (
                   <div className="px-2 py-0.5 rounded-lg bg-amber-400 text-black text-[9px] font-black uppercase">
-                    ACTIVE
+                    {ui(state.lang, "active_word")}
                   </div>
                 )}
               </button>
@@ -291,8 +305,6 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
         </div>
       </div>
 
-      <AchievementsCard state={state} />
-
       {/* 5. Secret Developer Debug Trigger for Testing */}
       <div className="text-center pt-2">
         <button
@@ -344,6 +356,6 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state }) => {
         )}
       </div>
     </div>
+    </div>
   );
 };
-

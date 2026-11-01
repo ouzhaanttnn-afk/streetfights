@@ -8,6 +8,7 @@ import { impactTime } from '../game/fighter3d/clips';
 import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
+import { difficultyOf } from '../core/guidance';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
 
@@ -1312,7 +1313,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             {(() => {
               // How the fight should go, from the power ratio: tells the player when to upgrade first
               const ratio = state.playerFighter.stats.powerScore / Math.max(1, currentStageData.opponent.stats.powerScore);
-              const d = ratio >= 1.4 ? ['diff_easy', 'text-emerald-300 border-emerald-500/50'] : ratio >= 0.95 ? ['diff_even', 'text-amber-300 border-amber-500/50'] : ratio >= 0.7 ? ['diff_hard', 'text-orange-300 border-orange-500/60'] : ['diff_deadly', 'text-rose-300 border-rose-500/70'];
+              const d = difficultyOf(ratio);
               return (
                 <span className={`shrink-0 px-1.5 rounded bg-black/60 border text-[8px] font-black tracking-wider ${d[1]}`}>
                   {ui(state.lang, d[0])}

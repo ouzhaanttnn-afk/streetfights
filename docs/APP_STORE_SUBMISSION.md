@@ -37,10 +37,11 @@ I could not verify which runner labels currently ship the required Xcode (GitHub
 >
 > • Optional rewarded video ads (Google AdMob) are offered in the Shop tab, on boss defeat (revive) and on the offline
 > reward screen. They are never required to progress. We ask for App Tracking Transparency permission on first launch.
-> • The "Legend Rivals" screen shows fictional characters, not online players. There is no online multiplayer or user content.
-> • The prize wheel and daily rewards use only free in-game currency; nothing can be bought, sold or cashed out.
+> • There is no online multiplayer, leaderboard or user-generated content; all opponents are fictional AI characters.
+> • Daily rewards use only free in-game currency; nothing can be bought, sold or cashed out.
 > • To see everything quickly: launch → claim the daily reward → fight starts automatically. Tap AUTO (top right) for manual
-> control; tap the gold SUPER button when the rage bar is full. Shop/Gym/Arena/Profile tabs are along the bottom.
+> control; tap the gold SUPER button when the rage bar is full. Fighter / Gym / Arena / Shop tabs are along the bottom;
+> tap the fighter name (top left) for the profile.
 > • Settings (gear icon): language, sound, haptics, reduce motion, graphics quality, save backup, reset progress.
 
 ## 3. Privacy "nutrition label" (must match the manifest and your policy)
@@ -122,3 +123,16 @@ App Review stopped the submission because the age rating said "Simulated Gamblin
 developer account (only organizations may ship simulated gambling). The lucky wheel was removed from the game in build 10,
 so the honest answer is now **Simulated Gambling: None**. Change it in App Store Connect (App Information > Age Rating),
 remove the old wheel sentence from the review notes, attach build 10 and resubmit.
+
+## 10. 2026-11-01: build 12, compact and clearer layout
+- Bottom bar has 4 tabs: Fighter (Gear | Skills), Gym, Arena (Stages | Quests and achievements), Shop. The profile opens
+  from the name in the header. The fictional leaderboard screen was removed.
+- Normal drops no longer interrupt the fight: better gear is equipped automatically with a small toast, the rest goes to
+  the bag (or is sold when the bag is full). Only epic and better drops open the reveal card.
+- 6 equipment slots instead of 9 (mouth, ball and coach removed; existing saves are converted, see `docs/BALANCE.md`).
+- Stats under the fight collapse to one row (your power vs. the rival's + difficulty); tap for all stats.
+- Red dots on tabs and a one-line "next step" card (rewards to claim, stronger gear in the bag, gym affordable).
+- Shop ad center has 2 offers: Free Gems and 2x Damage.
+To resubmit: App Information > Age Rating > Simulated Gambling **None**, paste the review notes from section 2 (no wheel
+sentence), attach build 12 and submit.
+

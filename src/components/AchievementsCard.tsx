@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { ACHIEVEMENTS } from '../core/achievements';
 import { ui } from '../i18n/ui';
@@ -10,6 +10,8 @@ export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) 
   // claimable first, then in progress, then finished
   rows.sort((x, y) => Number(x.done) - Number(y.done) || Number(y.value >= y.a.target) - Number(x.value >= x.a.target));
   const ready = rows.filter((r) => !r.done && r.value >= r.a.target).length;
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? rows : rows.slice(0, Math.max(4, ready));
 
   return (
     <div className="game-card rounded-3xl p-4 border border-amber-500/25 space-y-2.5">
@@ -20,7 +22,7 @@ export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) 
         </h3>
         <span className="text-[10px] font-mono text-zinc-400">{claimed.length}/{ACHIEVEMENTS.length}{ready > 0 ? ` • ${ready}!` : ''}</span>
       </div>
-      {rows.map(({ a, value, done }) => {
+      {visible.map(({ a, value, done }) => {
         const can = !done && value >= a.target;
         const pct = Math.min(100, Math.round((value / a.target) * 100));
         return (
@@ -50,6 +52,11 @@ export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) 
           </div>
         );
       })}
+      {rows.length > visible.length || showAll ? (
+        <button onClick={() => setShowAll((v) => !v)} className="w-full min-h-9 rounded-xl text-[10px] font-black text-zinc-400 bg-black/30 border border-white/5 active:scale-[0.98]">
+          {showAll ? ui(state.lang, 'show_less') : `${ui(state.lang, 'show_all')} (${rows.length})`}
+        </button>
+      ) : null}
     </div>
   );
 };

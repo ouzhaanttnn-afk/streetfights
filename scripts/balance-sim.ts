@@ -33,7 +33,7 @@ export function simulate(opts: SimOptions) {
   const equipped: Record<EquipmentSlot, EquipmentItem | null> = {
     head: generateEquipment('head', 'common', 1), gloves: generateEquipment('gloves', 'common', 1), mouth: null,
     robe: generateEquipment('robe', 'common', 1), shorts: generateEquipment('shorts', 'common', 1), boots: generateEquipment('boots', 'common', 1),
-    belt: null, weapon: generateEquipment('weapon', 'common', 1), partner: null,
+    belt: null, weapon: null, partner: null,
   };
   const skills: Skill[] = [JSON.parse(JSON.stringify(SKILL_DATABASE[0]))];
 

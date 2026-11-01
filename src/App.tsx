@@ -4,8 +4,7 @@ import { HeaderNav } from './components/HeaderNav';
 import { BattleCanvas } from './components/BattleCanvas';
 import { StatBar } from './components/StatBar';
 import { BottomNav } from './components/BottomNav';
-import { GearTab } from './components/tabs/GearTab';
-import { SkillsTab } from './components/tabs/SkillsTab';
+import { FighterTab } from './components/tabs/FighterTab';
 import { GymTab } from './components/tabs/GymTab';
 import { ShopTab } from './components/tabs/ShopTab';
 import { ArenaTab } from './components/tabs/ArenaTab';
@@ -14,18 +13,19 @@ import { LootCardModal } from './components/LootCardModal';
 import { SkillSelectModal } from './components/SkillSelectModal';
 import { RewardedAdModal } from './components/RewardedAdModal';
 import { SettingsModal } from './components/SettingsModal';
-import { LeaderboardModal } from './components/LeaderboardModal';
 import { DailyLoginModal } from './components/DailyLoginModal';
 import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { SkillReplaceModal } from './components/SkillReplaceModal';
 import { TutorialHint } from './components/TutorialHint';
+import { NextStepCard } from './components/NextStepCard';
+import { ToastStack } from './components/ToastStack';
+import { getStageData } from './core/stageDatabase';
 import { ui } from './i18n/ui';
 import { Stage } from './types/game';
 
 export function App() {
   const [state, setState] = useState<GameStateData>(gameManager.getState());
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
   const [reviveToken, setReviveToken] = useState(0);
   // Level-up banner: progression should feel like an event, not a silent number change
   const [levelUpTo, setLevelUpTo] = useState<number | null>(null);
@@ -76,25 +76,19 @@ export function App() {
   const isBattlePaused = Boolean(
     state.pendingLootDrop || state.pendingSkillOffer || state.pendingSkillReplacement ||
     state.isDailyLoginOpen || state.isLuckyWheelOpen || state.isOfflineRewardOpen ||
-    state.activeAdModal || isSettingsOpen || isLeaderboardOpen
+    state.activeAdModal || isSettingsOpen || state.isProfileOpen
   );
 
   const renderActiveTab = () => {
     switch (state.activeTab) {
-      case 'gear':
-        return <GearTab state={state} />;
-      case 'skills':
-        return <SkillsTab state={state} />;
       case 'gym':
         return <GymTab state={state} />;
       case 'shop':
         return <ShopTab state={state} />;
       case 'arena':
         return <ArenaTab state={state} />;
-      case 'profile':
-        return <ProfileTab state={state} />;
       default:
-        return <GearTab state={state} />;
+        return <FighterTab state={state} />;
     }
   };
 
@@ -110,23 +104,29 @@ export function App() {
           <HeaderNav 
             state={state} 
             onOpenSettings={() => setIsSettingsOpen(true)} 
-            onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
           />
 
           {/* 2. Top Half: 2.5D Combat Canvas Viewport */}
           <BattleCanvas state={state} onVictory={handleStageVictory} reviveToken={reviveToken} paused={isBattlePaused} />
 
           {/* 3. Mid Section: Real-time Stats Strip */}
-          <StatBar stats={state.playerFighter.stats} lang={state.lang} />
+          <StatBar
+            stats={state.playerFighter.stats}
+            lang={state.lang}
+            opponentPower={getStageData(state.currentWorld, state.currentSubStage).opponent.stats.powerScore}
+          />
         </div>
 
         {/* Scrollable Center: Only Interactive Tab Views Scroll */}
         <main className="tab-content flex-1 overflow-y-auto overscroll-y-contain overscroll-x-none scroll-smooth min-h-0">
+          <NextStepCard state={state} />
           {renderActiveTab()}
         </main>
 
         {/* Pinned Bottom Navigation Bar */}
-        <BottomNav activeTab={state.activeTab} lang={state.lang} />
+        <BottomNav state={state} />
+
+        <ToastStack />
 
         <TutorialHint state={state} blocked={isBattlePaused} />
 
@@ -183,10 +183,8 @@ export function App() {
           <SettingsModal state={state} onClose={() => setIsSettingsOpen(false)} />
         )}
 
-        {/* 14. Global Cloud Leaderboard / Top Tier List */}
-        {isLeaderboardOpen && (
-          <LeaderboardModal state={state} onClose={() => setIsLeaderboardOpen(false)} />
-        )}
+        {/* 14. Profile sheet (tap the name in the header) */}
+        {state.isProfileOpen && <ProfileTab state={state} onClose={() => gameManager.setProfileOpen(false)} />}
       </div>
     </div>
   );

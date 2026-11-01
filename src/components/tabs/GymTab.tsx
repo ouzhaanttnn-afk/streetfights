@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { t } from '../../i18n/translations';
+import { ui } from '../../i18n/ui';
+
+const STAT_KEY: Record<string, string> = { atk: 'stat_atk', hp: 'stat_hp', def: 'stat_def', spd: 'stat_spd', critRate: 'stat_crit', comboRate: 'stat_cmb', dodgeRate: 'stat_dge', lifesteal: 'stat_vamp' };
 import { 
   Dumbbell, 
   Flame, 
@@ -82,18 +85,18 @@ export const GymTab: React.FC<GymTabProps> = ({ state }) => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="text-sm font-black text-zinc-100 tracking-tight">
-                      {training.name}
+                      {ui(state.lang, training.id) !== training.id ? ui(state.lang, training.id) : training.name}
                     </h4>
                     <span className="text-[10px] font-black font-mono text-amber-300 bg-black/60 px-2.5 py-0.5 rounded-lg border border-white/10 shadow-inner">
                       Lv.{training.level}
                     </span>
                   </div>
                   <p className="text-[10px] text-zinc-400 mt-0.5">
-                    {training.description}
+                    {ui(state.lang, training.id + '_d') !== training.id + '_d' ? ui(state.lang, training.id + '_d') : training.description}
                   </p>
                   <div className="text-[10px] font-black text-emerald-400 flex items-center gap-1 mt-1 font-mono">
                     <ArrowUp className="w-3.5 h-3.5" />
-                    <span>+{training.statGain} {training.targetStat.toUpperCase()} {t('perDrill', state.lang)}</span>
+                    <span>+{training.statGain} {t(STAT_KEY[training.targetStat] || 'stat_atk', state.lang)} {t('perDrill', state.lang)}</span>
                   </div>
                 </div>
               </div>

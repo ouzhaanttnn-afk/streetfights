@@ -26,8 +26,10 @@
 - Development branch: `claude/stoic-clarke-qjgg6b`. Do not open pull requests unless asked.
 
 ## Status (2026-11-04)
-- 2026-11-04: build 17 went to Invalid Binary right after submission (`NSPrivacyTracking` true with no tracking domains);
-  build 18 fixes the privacy manifest and must be attached to version 1.0 and resubmitted (needs an App Manager key or the owner).
+- 2026-11-04 15:29 UTC: version 1.0 with build 18 is WAITING_FOR_REVIEW. Build 17 had gone to Invalid Binary right after
+  submission (`NSPrivacyTracking` true with no tracking domains); build 18 fixes the privacy manifest only.
+- Owner still has to make `https://streetfights.vercel.app/app-ads.txt` live (merge to `main`, which Vercel deploys;
+  `main` is far behind, ask before pushing there). AdMob payments, GDPR message and test device are done.
 - Earlier: build 15 was pulled from review. Build 16 = playtest fixes, build 17 = phase 2 (balance rework,
   content in 8 languages, new rewarded placements, 3D faces/arenas); see `docs/PLAYTEST_2026-11-04.md`.
 - Data strings (skills, items, opponents, cosmetics, avatars, titles, worlds) are translated in `src/i18n/content.ts`;

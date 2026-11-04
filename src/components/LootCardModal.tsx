@@ -3,6 +3,7 @@ import { EquipmentItem } from '../types/game';
 import { RARITY_CONFIG } from '../core/lootGenerator';
 import { RARITY_HEX } from '../game/itemModels';
 import { ui } from '../i18n/ui';
+import { itemName, rarityName } from '../i18n/content-helpers';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
 import { 
@@ -76,10 +77,10 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
 
         {/* Item Name & Rarity */}
         <h2 className="text-xl font-black tracking-tight text-white mb-0.5">
-          {item.name.replace(/^(UNCOMMON|RARE|EPIC|LEGENDARY|MYTHIC) /, '')}
+          {itemName(item, state.lang)}
         </h2>
         <div className={`text-[11px] font-black uppercase tracking-wider ${rarity.color} mb-3`}>
-          {rarity.name} • Lv.{item.level} {ui(state.lang, 'slot_' + item.slot)}
+          {rarityName(item.rarity, rarity.name, state.lang)} • Lv.{item.level} {ui(state.lang, 'slot_' + item.slot)}
         </div>
 
         {/* Power Score Comparison Badge */}

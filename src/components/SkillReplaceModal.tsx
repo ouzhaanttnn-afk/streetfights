@@ -3,6 +3,7 @@ import { Skill } from "../types/game";
 import { GameStateData, gameManager } from "../core/gameState";
 import { t } from "../i18n/translations";
 import { ui } from "../i18n/ui";
+import { skillName } from "../i18n/content-helpers";
 import { 
   Zap, 
   ArrowRight, 
@@ -63,7 +64,7 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
             </span>
             <div className="text-xs font-black text-white flex items-center gap-1.5 mt-0.5">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>{newSkill.name} (Lv.{newSkill.level})</span>
+              <span>{skillName(newSkill.id, newSkill.name, state.lang)} (Lv.{newSkill.level})</span>
             </div>
             <div className="text-[10px] text-zinc-300 font-medium mt-0.5">
               {newSkill.bonusText}

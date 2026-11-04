@@ -9,6 +9,7 @@ import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { difficultyOf } from '../core/guidance';
+import { opponentName, opponentTitle, skillName, stageLabel } from '../i18n/content-helpers';
 import { DAMAGE_MULT, damageMult, fightOdds, opponentInterval, playerInterval } from '../core/combat';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
@@ -326,13 +327,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       if (!proc || Math.random() * 100 >= proc.chance) return;
       if (proc.type === 'double_strike' || proc.type === 'bicycle_kick') {
         finalDmg = Math.round(finalDmg * proc.multiplier);
-        skillProcText = skill.name;
+        skillProcText = skillName(skill.id, skill.name, state.lang);
       } else if (proc.type === 'execute' && opponentHpRef.current < stageRef.current.opponent.stats.maxHp * 0.35) {
         finalDmg = Math.round(finalDmg * proc.multiplier);
-        skillProcText = skill.name;
+        skillProcText = skillName(skill.id, skill.name, state.lang);
       } else if (proc.type === 'vampire') {
         vampireProc = true;
-        skillProcText = skill.name;
+        skillProcText = skillName(skill.id, skill.name, state.lang);
       }
       // iron_chin, shadow_dodge and counter_strike are defensive: handled when the opponent attacks
     });
@@ -487,7 +488,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       // Clutch evasion generates +15 rage
       playerRageRef.current = Math.min(100, playerRageRef.current + 15);
       setPlayerRageDisplay(playerRageRef.current);
-      addFloatingText(shadow ? `★ ${shadow.name}!` : t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
+      addFloatingText(shadow ? `★ ${skillName(shadow.id, shadow.name, state.lang)}!` : t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
       // Counter skill: strike back right after a dodge
       const counter = procOf('counter_strike');
       if (counter) {
@@ -502,7 +503,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           const oh = headOf('opp');
           spawnHitParticles(oc.x, oc.y, '#fb923c', particleCount(8));
           soundFx.playPunch();
-          addFloatingText(`★ ${counter.name} -${dmg}`, oh.x, oh.y, '#fb923c', 'skill');
+          addFloatingText(`★ ${skillName(counter.id, counter.name, state.lang)} -${dmg}`, oh.x, oh.y, '#fb923c', 'skill');
           if (opponentHpRef.current <= 0) {
             battleRig.command('opp', 'knockdown');
             handleVictory();
@@ -528,7 +529,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     const ironChin = procOf('iron_chin');
     if (ironChin) {
       finalDmg = Math.max(1, Math.round(finalDmg * (ironChin.specialProc?.multiplier || 0.5)));
-      addFloatingText(`★ ${ironChin.name}!`, playerHead.x - 20, playerHead.y - 14, '#c084fc', 'skill');
+      addFloatingText(`★ ${skillName(ironChin.id, ironChin.name, state.lang)}!`, playerHead.x - 20, playerHead.y - 14, '#c084fc', 'skill');
     }
 
     const guarded = guardTimerRef.current > 0;
@@ -1387,7 +1388,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         {/* Center Stage VS Badge */}
         <div className="flex shrink-0 flex-col items-center px-1">
           <span className="font-black text-[12px] bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent drop-shadow font-mono tracking-tight">
-            {currentStageData.displayStage}
+            {stageLabel(currentStageData.world, currentStageData.subStage, state.lang)}
           </span>
           <div className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-lg ${
             currentStageData.isBoss 
@@ -1401,7 +1402,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         {/* Opponent Header Info */}
         <div className="flex-1 min-w-0 pl-1.5 text-right">
           <div className="flex items-center justify-between font-black text-zinc-100 truncate flex-row-reverse">
-            <span className="truncate tracking-wide text-xs">{currentStageData.opponent.name}</span>
+            <span className="truncate tracking-wide text-xs">{opponentName(currentStageData.opponent.name, state.lang)}</span>
             <span className="text-[10px] text-rose-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-rose-500/30 mr-1">★ Lv.{currentStageData.opponent.level}</span>
           </div>
 
@@ -1507,8 +1508,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         {bossIntro && (
           <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-b from-black/70 via-rose-950/55 to-black/70 animate-fadeIn">
             <span className="text-[11px] font-black tracking-[0.35em] text-rose-300">{ui(state.lang, 'boss_fight')}</span>
-            <span className="mt-1 text-2xl font-black italic text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">{currentStageData.opponent.name}</span>
-            <span className="text-[11px] font-bold text-amber-300">{currentStageData.opponent.title}</span>
+            <span className="mt-1 text-2xl font-black italic text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">{opponentName(currentStageData.opponent.name, state.lang)}</span>
+            <span className="text-[11px] font-bold text-amber-300">{opponentTitle(currentStageData.opponent.name, currentStageData.opponent.title, state.lang)}</span>
           </div>
         )}
 

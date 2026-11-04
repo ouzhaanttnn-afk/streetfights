@@ -3,6 +3,7 @@ import { EquipmentItem, EquipmentSlot } from '../../types/game';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { ACTIVE_SLOTS, RARITY_CONFIG } from '../../core/lootGenerator';
 import { ui } from '../../i18n/ui';
+import { itemName, rarityName } from '../../i18n/content-helpers';
 import { t } from '../../i18n/translations';
 import { 
   Crown, 
@@ -264,9 +265,9 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
             
             <div className="w-full flex justify-between items-start mb-2 text-left">
               <div>
-                <h3 className="text-base font-black text-white">{selectedItem.name}</h3>
+                <h3 className="text-base font-black text-white">{itemName(selectedItem, state.lang)}</h3>
                 <div className={`text-xs font-black uppercase tracking-wider ${RARITY_CONFIG[selectedItem.rarity].color}`}>
-                  {RARITY_CONFIG[selectedItem.rarity].name} • Lv.{selectedItem.level} {slotName(selectedItem.slot)}
+                  {rarityName(selectedItem.rarity, RARITY_CONFIG[selectedItem.rarity].name, state.lang)} • Lv.{selectedItem.level} {slotName(selectedItem.slot)}
                 </div>
               </div>
               <button

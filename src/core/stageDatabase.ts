@@ -28,7 +28,7 @@ const WORLDS: WorldConfig[] = [
     opponents: [
       { name: 'Iron Jaw Leo', title: 'Cage Dog', dialogue: 'The cage has no mercy!', skinTone: '#e0ac69', hairColor: '#18181b', hairStyle: 'short', bodyColor: '#374151', gloveColor: '#dc2626', shoeColor: '#111827' },
       { name: 'Ghost Rider Dan', title: 'Subway Bandit', dialogue: 'Fast hands, empty pockets!', skinTone: '#fcd34d', hairColor: '#e11d48', hairStyle: 'dreads', bodyColor: '#4b5563', gloveColor: '#3b82f6', shoeColor: '#1f2937' },
-      { name: 'Kip "Volley"', title: 'Street Striker', dialogue: 'Watch this spinning kick!', skinTone: '#8d5524', hairColor: '#eab308', hairStyle: 'spiky', bodyColor: '#15803d', gloveColor: '#eab308', shoeColor: '#14532d' },
+      { name: 'Kip "Haymaker"', title: 'Street Striker', dialogue: 'Watch this spinning kick!', skinTone: '#8d5524', hairColor: '#eab308', hairStyle: 'spiky', bodyColor: '#15803d', gloveColor: '#eab308', shoeColor: '#14532d' },
       { name: 'Hammer Vlad', title: 'Underground Enforcer', dialogue: 'Break your bones!', skinTone: '#f8fafc', hairColor: '#64748b', hairStyle: 'bald', bodyColor: '#1e1b4b', gloveColor: '#9333ea', shoeColor: '#0f172a' },
     ],
     boss: { name: 'Razor "The Beast"', title: 'Cage Champion', dialogue: 'You will leave this cage on a stretcher!', skinTone: '#a26230', hairColor: '#991b1b', hairStyle: 'dreads', bodyColor: '#7f1d1d', gloveColor: '#f43f5e', shoeColor: '#881337' },

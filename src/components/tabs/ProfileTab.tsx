@@ -3,6 +3,7 @@ import { GameStateData, gameManager } from "../../core/gameState";
 import { PREMIUM_AVATARS, FIGHTER_TITLES } from "../../core/avatarsData";
 import { t } from "../../i18n/translations";
 import { ui } from "../../i18n/ui";
+import { avatarName, titleName } from "../../i18n/content-helpers";
 import { 
   User, 
   Edit3, 
@@ -53,8 +54,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
 
   const handleSelectTitle = (title: typeof FIGHTER_TITLES[0]) => {
     if (state.playerLevel >= title.unlockLevel) {
-      const titleName = state.lang === "tr" ? title.nameTr : title.nameEn;
-      gameManager.setFighterTitle(title.id, titleName);
+      gameManager.setFighterTitle(title.id, titleName(title.id, title.nameEn, state.lang));
     }
   };
 
@@ -139,7 +139,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
             {/* Fighter Title Badge */}
             <div className="flex items-center gap-1 text-[11px] font-black text-amber-300 mb-2">
               <span>{currentTitle.badge}</span>
-              <span className="truncate">{state.playerFighter.title || (state.lang === "tr" ? currentTitle.nameTr : currentTitle.nameEn)}</span>
+              <span className="truncate">{titleName(currentTitle.id, state.playerFighter.title || currentTitle.nameEn, state.lang)}</span>
             </div>
 
             {/* Level & Power Rating */}
@@ -188,8 +188,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
                 }`}
               >
                 <span className="text-2xl drop-shadow">{avatar.avatarChar}</span>
-                <span lang="en" className="text-[10px] font-black text-white uppercase truncate max-w-[58px] mt-1 drop-shadow-md">
-                  {avatar.name.split(" ")[0]}
+                <span className="text-[10px] font-black text-white uppercase truncate max-w-[64px] mt-1 drop-shadow-md">
+                  {avatarName(avatar.id, avatar.name, state.lang).split(" ")[0]}
                 </span>
                 {isSelected && (
                   <div className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-amber-400 text-black shadow">
@@ -215,7 +215,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
           {FIGHTER_TITLES.map((title) => {
             const isUnlocked = state.playerLevel >= title.unlockLevel;
             const isSelected = state.playerFighter.titleId === title.id;
-            const titleName = state.lang === "tr" ? title.nameTr : title.nameEn;
+            const localTitle = titleName(title.id, title.nameEn, state.lang);
 
             return (
               <button
@@ -234,7 +234,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
                   <span className="text-base">{title.badge}</span>
                   <div>
                     <div className={`text-xs font-black ${isUnlocked ? title.color : "text-zinc-500"}`}>
-                      {titleName}
+                      {localTitle}
                     </div>
                     <div className="text-[10px] text-zinc-400 font-mono">
                       {isUnlocked ? ui(state.lang, "unlocked") : `🔒 Lv.${title.unlockLevel}`}

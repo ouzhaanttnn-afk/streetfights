@@ -6,6 +6,7 @@ import { AchievementsCard } from '../AchievementsCard';
 import { Segmented } from '../Segmented';
 import { claimableRewards } from '../../core/guidance';
 import { ui } from '../../i18n/ui';
+import { opponentName, worldName } from '../../i18n/content-helpers';
 import { t } from '../../i18n/translations';
 import { 
   Trophy, 
@@ -29,7 +30,7 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
   const worldCount = Math.max(WORLD_COUNT, state.highestWorld, state.currentWorld);
   const worlds = Array.from({ length: worldCount }, (_, i) => ({
     num: i + 1,
-    name: getWorldName(i + 1).replace(/\s*\(.*\)/, ''),
+    name: worldName(i + 1, getWorldName(i + 1).replace(/\s*\(.*\)/, ''), state.lang),
     desc: worldDescs[i % WORLD_COUNT],
   }));
 
@@ -151,7 +152,7 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="text-xs font-black text-zinc-100 tracking-tight">
-                      {stageData.opponent.name}
+                      {opponentName(stageData.opponent.name, state.lang)}
                     </h4>
                     {stageData.isBoss && (
                       <span className="px-2 py-0.5 bg-rose-600 text-white font-black text-[10px] rounded-md uppercase shadow-sm">

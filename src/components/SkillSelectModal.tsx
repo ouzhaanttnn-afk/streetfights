@@ -4,6 +4,7 @@ import { RARITY_CONFIG } from '../core/lootGenerator';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
+import { rarityName, skillBonus, skillCategory, skillDescription, skillName, skillQuote } from '../i18n/content-helpers';
 import { 
   Sparkles, 
   RefreshCw, 
@@ -56,31 +57,31 @@ export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state
 
         {/* Skill Name */}
         <h2 className="text-xl font-black tracking-tight text-white mb-1">
-          {skill.name}
+          {skillName(skill.id, skill.name, state.lang)}
         </h2>
 
         {/* Quote */}
         {skill.quote && (
           <p className="text-xs text-zinc-400 italic mb-2 font-serif">
-            {skill.quote}
+            {skillQuote(skill, state.lang)}
           </p>
         )}
 
         {/* Rarity & Category */}
         <div className="flex items-center gap-2 mb-3">
           <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${rarity.color} bg-black/60 border border-white/10`}>
-            {rarity.name}
+            {rarityName(skill.rarity, rarity.name, state.lang)}
           </span>
           <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-zinc-300 bg-black/60 border border-white/10">
-            {skill.category}
+            {skillCategory(skill.category, state.lang)}
           </span>
         </div>
 
         {/* Skill Effect Box */}
         <div className="w-full bg-black/60 rounded-2xl p-4 border border-white/10 mb-4 text-center shadow-inner">
-          <div className="text-xs text-zinc-300 font-medium leading-tight">{skill.description}</div>
+          <div className="text-xs text-zinc-300 font-medium leading-tight">{skillDescription(skill, state.lang)}</div>
           <div className="text-sm font-black text-amber-300 font-mono mt-2 flex items-center justify-center gap-1.5 bg-black/40 py-1 rounded-xl border border-amber-500/20">
-            ⚡ {skill.bonusText}
+            ⚡ {skillBonus(skill, state.lang)}
           </div>
         </div>
 

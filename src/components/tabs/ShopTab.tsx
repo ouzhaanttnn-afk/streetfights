@@ -3,6 +3,7 @@ import { GameStateData, gameManager } from '../../core/gameState';
 import { COSMETICS_LIST, CosmeticCategory, CosmeticItem } from '../../core/cosmeticsData';
 import { t } from '../../i18n/translations';
 import { ui } from '../../i18n/ui';
+import { cosmeticDescription, cosmeticName } from '../../i18n/content-helpers';
 import { 
   ShoppingBag, 
   Sparkles, 
@@ -185,10 +186,10 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
 
                   <div className="min-w-0">
                     <h4 className="text-xs font-black text-zinc-100 tracking-tight truncate">
-                      {item.name}
+                      {cosmeticName(item.id, item.name, state.lang)}
                     </h4>
                     <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
-                      {item.description}
+                      {cosmeticDescription(item.id, item.description, state.lang)}
                     </p>
                   </div>
                 </div>

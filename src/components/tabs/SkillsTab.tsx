@@ -2,6 +2,7 @@ import React from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { RARITY_CONFIG, skillSynergies } from '../../core/lootGenerator';
 import { ui } from '../../i18n/ui';
+import { skillBonus, skillDescription, skillName, skillQuote, rarityName } from '../../i18n/content-helpers';
 import { t } from '../../i18n/translations';
 import { 
   Zap, 
@@ -97,7 +98,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-black text-white truncate tracking-tight">
-                      {skill.name}
+                      {skillName(skill.id, skill.name, state.lang)}
                     </h4>
                     <span className="text-[10px] font-black font-mono text-amber-300 bg-black/70 px-2.5 py-0.5 rounded-xl border border-white/10 shadow-inner">
                       Lv.{skill.level}/{skill.maxLevel}
@@ -106,20 +107,20 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
 
                   {skill.quote && (
                     <div className="text-[10px] text-zinc-400 italic truncate font-serif mt-0.5">
-                      {skill.quote}
+                      {skillQuote(skill, state.lang)}
                     </div>
                   )}
 
                   <p className="text-[11px] text-zinc-300 mt-1 font-medium leading-tight">
-                    {skill.description}
+                    {skillDescription(skill, state.lang)}
                   </p>
 
                   <div className="mt-2.5 flex items-center gap-2">
                     <span className={`text-[10px] font-black uppercase tracking-wider ${rarity.color} bg-black/60 px-2 py-0.5 rounded-lg border border-white/10`}>
-                      {rarity.name}
+                      {rarityName(skill.rarity, rarity.name, state.lang)}
                     </span>
                     <span className="text-[10px] font-mono font-black text-amber-300 bg-black/70 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
-                      ⚡ {skill.bonusText}
+                      ⚡ {skillBonus(skill, state.lang)}
                     </span>
                   </div>
                 </div>

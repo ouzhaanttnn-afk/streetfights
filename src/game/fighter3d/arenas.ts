@@ -179,9 +179,9 @@ function buildAlley(q: QualityLevel): Arena {
         g.fillRect(x + 2, y + 2, 60, 17);
       }
     }
-    // smiley tag, low on the left of the back wall (clear of the HUD pills)
-    g.fillStyle = '#facc15'; g.beginPath(); g.arc(70, 188, 20, 0, 7); g.fill();
-    g.fillStyle = '#111'; g.fillRect(62, 180, 5, 5); g.fillRect(74, 180, 5, 5); g.fillRect(61, 194, 20, 4);
+    // smiley tag above the dumpster, below the HUD pills
+    g.fillStyle = '#facc15'; g.beginPath(); g.arc(372, 150, 20, 0, 7); g.fill();
+    g.fillStyle = '#111'; g.fillRect(364, 142, 5, 5); g.fillRect(376, 142, 5, 5); g.fillRect(363, 156, 20, 4);
   });
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(13, 4.6), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95 }));
   wall.position.set(0, 2.3, -2.4);
@@ -461,7 +461,10 @@ function buildRing(q: QualityLevel): Arena {
   });
   const banner = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.95), new THREE.MeshBasicMaterial({
     map: canvasTex(256, 64, (g) => {
-      g.fillStyle = '#7f1d1d'; g.fillRect(0, 0, 256, 64);
+      // Very dark red: the red 2D damage numbers pop above the player's head right in front of it
+      const bg = g.createLinearGradient(0, 0, 0, 64);
+      bg.addColorStop(0, '#3b0a0a'); bg.addColorStop(1, '#170606');
+      g.fillStyle = bg; g.fillRect(0, 0, 256, 64);
       g.strokeStyle = '#fbbf24'; g.lineWidth = 4; g.strokeRect(4, 4, 248, 56);
       g.textAlign = 'center'; g.textBaseline = 'middle';
       fitText(g, 'WORLD TITLE', 220, 36);

@@ -75,7 +75,7 @@ interface Mood {
   eyes: 'open' | 'happy' | 'hurt';
   mouth: 'line' | 'grit' | 'o' | 'smile';
 }
-const CALM: Mood = { tilt: 0.14, lift: 0, open: 1, eyes: 'open', mouth: 'line' };
+const CALM: Mood = { tilt: 0.1, lift: 0, open: 1, eyes: 'open', mouth: 'line' };
 const FOCUS: Mood = { tilt: 0.3, lift: -0.02, open: 0.85, eyes: 'open', mouth: 'line' };
 const ANGRY: Mood = { tilt: 0.55, lift: -0.05, open: 0.7, eyes: 'open', mouth: 'grit' };
 const HURT: Mood = { tilt: -0.45, lift: 0.06, open: 1, eyes: 'hurt', mouth: 'o' };
@@ -441,7 +441,13 @@ export class FighterRig {
     const face = new THREE.Group();
     face.position.y = 0.2; // skull centre
     this.head.add(face);
-    const parts: FaceParts = { eyes: [], arcs: [], brows: [], mouth: null as unknown as THREE.Mesh, mouthO: null, smile: null, guard: mouthguard !== null };
+    const guard = mouthguard !== null;
+    const mouth = guard
+      ? new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.034, 0.012), new THREE.MeshBasicMaterial({ color: mouthguard }))
+      : new THREE.Mesh(MOUTH_GEO, FACE_INK);
+    onSkull(mouth, 0, -0.36);
+    face.add(mouth);
+    const parts: FaceParts = { eyes: [], arcs: [], brows: [], mouth, mouthO: null, smile: null, guard };
     [-1, 1].forEach((s) => {
       const eye = new THREE.Mesh(EYE_GEO, FACE_INK);
       onSkull(eye, s * EYE_YAW, EYE_PITCH);
@@ -464,10 +470,8 @@ export class FighterRig {
       face.add(brow);
       parts.brows.push(brow);
     });
-    if (mouthguard !== null) {
-      parts.mouth = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.034, 0.012), new THREE.MeshBasicMaterial({ color: mouthguard }));
-    } else {
-      parts.mouth = new THREE.Mesh(MOUTH_GEO, FACE_INK);
+    // A mouthguard replaces the mouth; otherwise an "o" when hurt and a smile on victory
+    if (!guard) {
       parts.mouthO = new THREE.Mesh(MOUTH_O_GEO, FACE_MOUTH);
       onSkull(parts.mouthO, 0, -0.4);
       parts.mouthO.scale.y = 1.25;
@@ -478,8 +482,6 @@ export class FighterRig {
       parts.smile.visible = false;
       face.add(parts.mouthO, parts.smile);
     }
-    onSkull(parts.mouth, 0, -0.36);
-    face.add(parts.mouth);
     this.face = parts;
     this.faceNow = { tilt: CALM.tilt, lift: 0, open: 1 };
   }
@@ -869,7 +871,7 @@ export class FighterRig {
     put(4, this.elbowB, 0, -0.33, 0);
     put(5, this.shinA, 0, -SHIN, 0.07);
     put(6, this.shinB, 0, -SHIN, 0.07);
-    for (let i = 0; i < pr.length; i++) pr[i].r = PROBE_R[i] * s * (pr[i].limb && i < 5 ? this.gloveReach : 1);
+    for (let i = 0; i < pr.length; i++) pr[i].r = PROBE_R[i] * s * (i === 3 || i === 4 ? this.gloveReach : 1);
   }
 
   private keepApart(other: FighterRig) {

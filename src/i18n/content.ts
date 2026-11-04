@@ -449,7 +449,7 @@ export const OPPONENT_TEXT: Record<string, { title: L8; dialogue: L8 }> = {
     title: ['Metro Haydudu', 'Subway Bandit', 'Bandido del Metro', 'U-Bahn-Bandit', 'Bandit du Métro', 'Bandido do Metrô', 'Bandito della Metro', '地下鉄の盗賊'],
     dialogue: ['Hızlı eller, boş cepler!', 'Fast hands, empty pockets!', '¡Manos rápidas, bolsillos vacíos!', 'Schnelle Hände, leere Taschen!', 'Mains rapides, poches vides !', 'Mãos rápidas, bolsos vazios!', 'Mani veloci, tasche vuote!', '手の速さなら誰にも負けねえ！'],
   },
-  // Was "Watch this spinning kick!" (the nickname "Volley" is a name and is kept as is)
+  // Was Kip "Volley" / "Watch this spinning kick!" (football leftovers)
   'Kip "Haymaker"': {
     title: ['Sokak Vurucusu', 'Street Striker', 'Golpeador Callejero', 'Straßenschläger', 'Cogneur de Rue', 'Lutador de Rua', 'Picchiatore di Strada', 'ストリートストライカー'],
     dialogue: ['Bu aparkatı görmeyeceksin bile!', 'You won’t see this uppercut coming!', '¡No verás venir este uppercut!', 'Diesen Uppercut siehst du nicht kommen!', 'Tu ne verras pas venir cet uppercut !', 'Você nem vai ver esse uppercut!', 'Questo montante non lo vedrai arrivare!', 'このアッパー、見切れるか！'],

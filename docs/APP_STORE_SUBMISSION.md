@@ -24,7 +24,7 @@ I could not verify which runner labels currently ship the required Xcode (GitHub
 ## 1. What changed for review-readiness (this session)
 | Area | Change |
 |---|---|
-| Privacy manifest | Added `ios/App/App/PrivacyInfo.xcprivacy` (tracking = true for AdMob, tracking domains, collected data types, required-reason APIs) and wired it into the Resources phase |
+| Privacy manifest | Added `ios/App/App/PrivacyInfo.xcprivacy` (app code does not track, so `NSPrivacyTracking` = false and no tracking domains, as in Google's own AdMob SDK manifest; collected data types with the device ID marked as tracking; required-reason APIs). Never set `NSPrivacyTracking` true with an empty domain list: Apple marks the binary invalid and wired it into the Resources phase |
 | Ads | Real AdMob rewarded unit in production builds (test unit in dev), SKAdNetwork id, `GADApplicationIdentifier`, ATT usage text, ATT requested before SDK init, ad preloading, no reward unless the video is completed |
 | Honesty of UI | Leaderboard relabelled "Legend Rivals (fictional characters)" and the invented "#2450 world rank" removed; "Cloud save" label corrected to local copy/paste backup; "Apple Ready" / "Pro v2.5" strings replaced by the real version |
 | Hidden tools | Developer cheat panel only exists in dev builds |
@@ -114,7 +114,7 @@ answers must say so too. In App Store Connect: **App > App Privacy > Get Started
 3. Also declare what the Google Mobile Ads SDK collects per Google's own "Apple app privacy details" page for AdMob
    (typically Coarse Location, and Diagnostics: Crash Data / Performance Data / Other Diagnostic Data; not used for tracking).
    Check that page: I could not reach it from my environment, so treat this list as a starting point, not as verified.
-4. Tracking domains are already in `PrivacyInfo.xcprivacy`. **Publish** the answers.
+4. `PrivacyInfo.xcprivacy` already declares the device ID as used for tracking (the AdMob SDK ships its own manifest). **Publish** the answers.
 5. Then open version 1.0 and press **Add for Review / Submit for Review** (an empty draft submission already exists
    and will be reused).
 

@@ -12,13 +12,13 @@
 - Apple rejected build 8 for simulated gambling: no wheels, loot boxes or paid random rewards.
 
 ## How to verify
-- Dev server: `npm run dev -- --port 5199`; e2e: `NODE_PATH=$(npm root -g) node scripts/e2e.cjs` (65 checks, all must pass).
+- Dev server: `npm run dev -- --port 5199`; e2e: `NODE_PATH=$(npm root -g) node scripts/e2e.cjs` (67 checks, all must pass).
 - Balance: `node scripts/run-balance-sim.mjs` (see `docs/BALANCE.md`).
 - Store screenshots: `scripts/store-screenshots.cjs` -> `store/screenshots/<lang>/<65|69>`.
 
 ## Shipping
 - Bump `CURRENT_PROJECT_VERSION` in `ios/App/App.xcodeproj/project.pbxproj`, push, dispatch `.github/workflows/build-ios.yml`
-  with `upload_to_testflight: true`, confirm "UPLOAD SUCCEEDED" in the job log. Last uploaded build: 16 (version 1.0).
+  with `upload_to_testflight: true`, confirm "UPLOAD SUCCEEDED" in the job log. Last uploaded build: 17 (version 1.0).
 - App Store Connect API: `scripts/asc/asc.mjs` (tasks `check`, `inspect`, `submit:<build>`), also runnable from
   `.github/workflows/asc.yml` by editing `.github/asc/request.json`. The key in the GitHub secrets can only read and
   upload builds; edits and submissions need an App Manager key. Never ask the owner to paste keys into the chat;
@@ -26,8 +26,11 @@
 - Development branch: `claude/stoic-clarke-qjgg6b`. Do not open pull requests unless asked.
 
 ## Status (2026-11-04)
-- Version 1.0 with build 15 is WAITING_FOR_REVIEW. Build 16 has the fixes from the 5-agent playtest
-  (`docs/PLAYTEST_2026-11-04.md`, which also lists the open phase-2 work: balance, content localisation, small phones).
+- Version 1.0 with build 15 is WAITING_FOR_REVIEW. Build 16 = playtest fixes, build 17 = phase 2 (balance rework,
+  content in 8 languages, new rewarded placements, 3D faces/arenas); see `docs/PLAYTEST_2026-11-04.md`.
+- Data strings (skills, items, opponents, cosmetics, avatars, titles, worlds) are translated in `src/i18n/content.ts`;
+  components use `src/i18n/content-helpers.ts`. New data entries need a content.ts entry in all 8 languages.
+- Progression rules shared by the game and the balance sim: `src/core/progression.ts`, `src/core/combat.ts`.
 - Combat numbers shared by the fight loop and the difficulty label live in `src/core/combat.ts`.
 - No paid random rewards: coins must never be sold for real money, and "another skill" stays a capped, non-dice action.
 

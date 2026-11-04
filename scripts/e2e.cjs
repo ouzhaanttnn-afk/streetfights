@@ -118,7 +118,7 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     const fights = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2') || '{}').totalFightsWon || 0);
     ok('no-WebGL: game still runs fights (2D fallback)', fights >= 1, `fights=${fights}`);
     ok('no-WebGL: no uncaught errors', errs.length === 0, errs.join('|'));
-    await p.screenshot({ path: 'nowebgl.png', clip:{x:0,y:60,width:390,height:260} });
+    await p.screenshot({ path: require('path').join(require('os').tmpdir(), 'nowebgl.png'), clip:{x:0,y:60,width:390,height:260} });
     await b.close();
   }
 

@@ -29,3 +29,4 @@ graphify-out/
 
 # generated store screenshots (regenerate with scripts/store-screenshots.cjs)
 store/screenshots/*/
+nowebgl.png

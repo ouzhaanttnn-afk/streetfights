@@ -145,8 +145,16 @@ async function replaceScreenshots(verId) {
       const mk = await call('POST', '/v1/appScreenshotSets', { data: { type: 'appScreenshotSets', attributes: { screenshotDisplayType: 'APP_IPHONE_65' }, relationships: { appStoreVersionLocalization: { data: { type: 'appStoreVersionLocalizations', id: l.id } } } } });
       set = mk.json.data;
     }
-    for (const old of set.relationships?.appScreenshots?.data || []) await call('DELETE', `/v1/appScreenshots/${old.id}`);
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.png')).sort();
+    // Same files already live (same order and checksums): keep them, re-uploading costs ~15 min of processing
+    const liveIds = (set.relationships?.appScreenshots?.data || []).map((x) => x.id);
+    const byId = Object.fromEntries((sets.json.included || []).map((x) => [x.id, x.attributes]));
+    const localSums = files.map((f) => crypto.createHash('md5').update(fs.readFileSync(`${dir}/${f}`)).digest('hex'));
+    if (liveIds.length === files.length && liveIds.every((id, i) => byId[id]?.sourceFileChecksum === localSums[i])) {
+      line(true, `screenshots ${l.attributes.locale}`, `${files.length} unchanged, kept`);
+      continue;
+    }
+    for (const old of liveIds) await call('DELETE', `/v1/appScreenshots/${old}`);
     const ids = [];
     for (const f of files) ids.push(await uploadScreenshot(set.id, `${dir}/${f}`));
     await call('PATCH', `/v1/appScreenshotSets/${set.id}/relationships/appScreenshots`, { data: ids.map((id) => ({ type: 'appScreenshots', id })) });

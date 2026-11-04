@@ -2,6 +2,8 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { ui } from './i18n/ui';
+import type { Language } from './i18n/translations';
 
 interface Props {
   children: ReactNode;
@@ -23,28 +25,30 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("TradeUp 3D Error:", error, errorInfo);
+    console.error('Street Striker error:', error, errorInfo);
   }
 
   public render() {
     if (this.state.hasError) {
+      // Uses the saved language if there is one; never deletes the save (a reload is enough in almost every case)
+      let lang: Language = 'en';
+      try {
+        lang = (JSON.parse(localStorage.getItem('street_striker_rpg_save_v2') || '{}').lang as Language) || 'en';
+      } catch {
+        // unreadable save: keep English
+      }
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-950 text-white p-6 text-center">
           <div className="w-16 h-16 rounded-2xl bg-rose-950 border border-rose-800 flex items-center justify-center text-rose-400 mb-4 text-2xl">
             ⚠️
           </div>
-          <h2 className="text-xl font-bold text-white">Bir Yükleme Hatası Oluştu</h2>
-          <p className="text-xs text-neutral-400 max-w-md mt-2 font-mono">
-            {this.state.error?.message || "Bilinmeyen bir hata"}
-          </p>
+          <h2 className="text-xl font-bold text-white">{ui(lang, 'crash_title')}</h2>
+          <p className="text-sm text-neutral-300 max-w-md mt-2">{ui(lang, 'crash_body')}</p>
           <button
-            onClick={() => {
-              localStorage.clear();
-              window.location.reload();
-            }}
-            className="mt-6 px-6 py-2.5 rounded-xl bg-amber-500 text-neutral-950 font-bold text-sm cursor-pointer hover:bg-amber-400"
+            onClick={() => window.location.reload()}
+            className="mt-6 min-h-11 px-6 rounded-xl bg-amber-500 text-neutral-950 font-bold text-sm cursor-pointer hover:bg-amber-400"
           >
-            Önbelleği Temizle & Yeniden Başlat
+            {ui(lang, 'crash_reload')}
           </button>
         </div>
       );

@@ -106,7 +106,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ state, onOpenSettings }) =
         <LevelRing level={state.playerLevel} pct={xpPct} size={30} />
         <div className="flex flex-col justify-center min-w-0 leading-none">
           <span className="text-[10px] font-black text-zinc-100 truncate max-w-[90px]">{state.playerFighter.name}</span>
-          <span className="text-[8px] font-mono font-bold text-amber-400 mt-0.5">XP {xpPct}%</span>
+          <span className="text-[10px] font-mono font-bold text-amber-400 mt-0.5">XP {xpPct}%</span>
         </div>
         <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
       </button>

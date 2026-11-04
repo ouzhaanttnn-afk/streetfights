@@ -32,7 +32,7 @@ export function canTrain(state: GameStateData): boolean {
 export function tabBadges(state: GameStateData): Partial<Record<TabType, boolean>> {
   return {
     gear: betterGearInBag(state) > 0,
-    gym: canTrain(state),
+    gym: state.coins >= cheapestGymCost(state) * 3,
     arena: claimableRewards(state) > 0,
   };
 }
@@ -47,10 +47,10 @@ export function nextStep(state: GameStateData): NextStep | null {
   return null;
 }
 
-// How the current fight should go, from the power ratio (same thresholds as the battle HUD chip)
-export function difficultyOf(ratio: number): [string, string] {
-  if (ratio >= 1.4) return ['diff_easy', 'text-emerald-300 border-emerald-500/50'];
-  if (ratio >= 0.95) return ['diff_even', 'text-amber-300 border-amber-500/50'];
-  if (ratio >= 0.7) return ['diff_hard', 'text-orange-300 border-orange-500/60'];
+// How the current fight should go, from the expected time-to-kill on both sides
+export function difficultyOf(odds: number): [string, string] {
+  if (odds >= 1.8) return ['diff_easy', 'text-emerald-300 border-emerald-500/50'];
+  if (odds >= 1.1) return ['diff_even', 'text-amber-300 border-amber-500/50'];
+  if (odds >= 0.75) return ['diff_hard', 'text-orange-300 border-orange-500/60'];
   return ['diff_deadly', 'text-rose-300 border-rose-500/70'];
 }

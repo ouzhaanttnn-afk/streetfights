@@ -9,6 +9,7 @@ import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { difficultyOf } from '../core/guidance';
+import { DAMAGE_MULT, fightOdds, opponentInterval, playerInterval } from '../core/combat';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
 
@@ -39,6 +40,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const [currentStageData, setCurrentStageData] = useState<Stage>(stageRef.current);
   const [matchStatus, setMatchStatus] = useState<'fighting' | 'victory' | 'defeat'>('fighting');
   const [showReviveAd, setShowReviveAd] = useState<boolean>(false);
+  // Idle game: in auto mode a boss defeat retries by itself after a short countdown
+  const [retryIn, setRetryIn] = useState<number | null>(null);
   const [comboStreak, setComboStreak] = useState<number>(0);
   const [bossIntro, setBossIntro] = useState<boolean>(false);
   const introTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,7 +83,44 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     stageRef.current = current;
     setCurrentStageData(current);
     resetBattle(current);
-  }, [state.currentWorld, state.currentSubStage, state.battleNonce, state.playerFighter.stats.maxHp]);
+  }, [state.currentWorld, state.currentSubStage, state.battleNonce]);
+
+  const retryRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!showReviveAd || !state.autoBattle) {
+      retryRef.current = null;
+      setRetryIn(null);
+      return;
+    }
+    if (paused) return; // hold the countdown while a modal (e.g. the revive ad) is open
+    if (retryRef.current === null) retryRef.current = 5;
+    setRetryIn(retryRef.current);
+    const timer = setInterval(() => {
+      if (retryRef.current === null) return;
+      retryRef.current -= 1;
+      if (retryRef.current <= 0) {
+        retryRef.current = null;
+        setRetryIn(null);
+        clearInterval(timer);
+        resetBattle(stageRef.current);
+      } else {
+        setRetryIn(retryRef.current);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showReviveAd, state.autoBattle, paused]);
+
+  // Max HP can change mid-fight (gym, gear, skills): keep the same HP percentage instead of restarting the fight
+  const prevMaxHpRef = useRef(state.playerFighter.stats.maxHp);
+  useEffect(() => {
+    const prev = prevMaxHpRef.current;
+    const next = state.playerFighter.stats.maxHp;
+    prevMaxHpRef.current = next;
+    if (prev > 0 && next !== prev && !isMatchOverRef.current) {
+      playerHpRef.current = Math.max(1, Math.min(next, Math.round((playerHpRef.current / prev) * next)));
+      setPlayerHpDisplay(playerHpRef.current);
+    }
+  }, [state.playerFighter.stats.maxHp]);
 
   useEffect(() => {
     if (reviveToken === 0 || !isMatchOverRef.current || !stageRef.current.isBoss) return;
@@ -270,13 +310,21 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     // Skill procs
     let skillProcText = '';
+    let vampireProc = false;
     state.playerFighter.equippedSkills.forEach((skill) => {
-      if (skill.specialProc) {
-        if (Math.random() * 100 < skill.specialProc.chance) {
-          finalDmg = Math.round(finalDmg * skill.specialProc.multiplier);
-          skillProcText = skill.name;
-        }
+      const proc = skill.specialProc;
+      if (!proc || Math.random() * 100 >= proc.chance) return;
+      if (proc.type === 'double_strike' || proc.type === 'bicycle_kick') {
+        finalDmg = Math.round(finalDmg * proc.multiplier);
+        skillProcText = skill.name;
+      } else if (proc.type === 'execute' && opponentHpRef.current < stageRef.current.opponent.stats.maxHp * 0.35) {
+        finalDmg = Math.round(finalDmg * proc.multiplier);
+        skillProcText = skill.name;
+      } else if (proc.type === 'vampire') {
+        vampireProc = true;
+        skillProcText = skill.name;
       }
+      // iron_chin, shadow_dodge and counter_strike are defensive: handled when the opponent attacks
     });
 
     // Combo Rate grants a real follow-up strike, with a small streak bonus.
@@ -312,8 +360,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     playerRageRef.current = Math.min(100, playerRageRef.current + 20);
     setPlayerRageDisplay(playerRageRef.current);
 
-    if (pStats.lifesteal > 0) {
-      const healAmount = Math.max(1, Math.round(finalDmg * (pStats.lifesteal / 100)));
+    if (pStats.lifesteal > 0 || vampireProc) {
+      const healAmount = Math.max(1, Math.round(finalDmg * ((pStats.lifesteal + (vampireProc ? 30 : 0)) / 100)));
       playerHpRef.current = Math.min(pStats.maxHp, playerHpRef.current + healAmount);
       setPlayerHpDisplay(playerHpRef.current);
       const ph = headOf('player');
@@ -328,7 +376,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       screenShakeRef.current = battleRig.reducedMotion ? 3 : 12;
       hitStopTimerRef.current = 70; // 70ms Hit-Stop Freeze
       spawnHitParticles(oppChest.x, oppChest.y, '#fbbf24', particleCount(24));
-      addCallout('SUPER VOLE!', oppChest.x - 25, oppHead.y - 15, '#fde047');
+      addCallout(ui(state.lang, 'c_super'), oppChest.x - 25, oppHead.y - 15, '#fde047');
       addFloatingText(`${t('superCrit', state.lang)} ${finalDmg}`, oppHead.x, oppHead.y, '#fbbf24', 'crit');
       battleRig.kickCamera(1);
     } else if (isCrit) {
@@ -379,13 +427,6 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     }
   };
 
-  // Fighting styles tune tempo and weight of attacks; average damage per second stays close to equal.
-  const INTERVAL_MULT: Record<OpponentProfile, number> = {
-    aggressive: 0.8, defensive: 1.2, counter: 1.2, fast: 0.7, heavy: 1.5, boss: 0.95,
-  };
-  const DAMAGE_MULT: Record<OpponentProfile, number> = {
-    aggressive: 0.85, defensive: 1.0, counter: 1.0, fast: 0.7, heavy: 1.45, boss: 1.0,
-  };
 
   const performOpponentAttack = () => {
     if (isMatchOverRef.current) return;
@@ -424,14 +465,42 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     const playerChest = chestOf('player');
     const playerHead = headOf('player');
 
+    const procOf = (type: string) => {
+      const sk = state.playerFighter.equippedSkills.find((x) => x.specialProc?.type === type);
+      return sk && Math.random() * 100 < (sk.specialProc?.chance || 0) ? sk : null;
+    };
+    const shadow = procOf('shadow_dodge');
     const dodgeRoll = Math.random() * 100;
-    if (dodgeRoll < pStats.dodgeRate) {
+    if (shadow || dodgeRoll < pStats.dodgeRate) {
       soundFx.playDodge();
       battleRig.command('player', 'dodge');
       // Clutch evasion generates +15 rage
       playerRageRef.current = Math.min(100, playerRageRef.current + 15);
       setPlayerRageDisplay(playerRageRef.current);
-      addFloatingText(t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
+      addFloatingText(shadow ? `★ ${shadow.name}!` : t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
+      // Counter skill: strike back right after a dodge
+      const counter = procOf('counter_strike');
+      if (counter) {
+        schedule(160, () => {
+          if (isMatchOverRef.current) return;
+          const opp = stageRef.current.opponent.stats;
+          const dmg = Math.max(1, Math.round(pStats.atk * (counter.specialProc?.multiplier || 1.5) * (100 / (100 + opp.def * 0.45))));
+          battleRig.command('player', 'jab');
+          opponentHpRef.current = Math.max(0, opponentHpRef.current - dmg);
+          setOpponentHpDisplay(opponentHpRef.current);
+          const oc = chestOf('opp');
+          const oh = headOf('opp');
+          spawnHitParticles(oc.x, oc.y, '#fb923c', particleCount(8));
+          soundFx.playPunch();
+          addFloatingText(`★ ${counter.name} -${dmg}`, oh.x, oh.y, '#fb923c', 'skill');
+          if (opponentHpRef.current <= 0) {
+            battleRig.command('opp', 'knockdown');
+            handleVictory();
+          } else {
+            battleRig.command('opp', 'hit');
+          }
+        });
+      }
       return;
     }
 
@@ -443,6 +512,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     if (isCrit) {
       finalDmg = Math.round(finalDmg * (oppStats.critDmg || 1.5));
+    }
+
+    // Iron Chin: sometimes shrug off half of a hit
+    const ironChin = procOf('iron_chin');
+    if (ironChin) {
+      finalDmg = Math.max(1, Math.round(finalDmg * (ironChin.specialProc?.multiplier || 0.5)));
+      addFloatingText(`★ ${ironChin.name}!`, playerHead.x - 20, playerHead.y - 14, '#c084fc', 'skill');
     }
 
     const guarded = guardTimerRef.current > 0;
@@ -486,7 +562,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       screenShakeRef.current = battleRig.reducedMotion ? 2 : 7;
       hitStopTimerRef.current = 40;
       spawnHitParticles(playerChest.x, playerChest.y, '#f97316', particleCount(12));
-      addCallout('OUCH!', playerChest.x, playerHead.y - 15, '#ef4444');
+      addCallout(ui(state.lang, 'c_ouch'), playerChest.x, playerHead.y - 15, '#ef4444');
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, playerHead.x, playerHead.y + 4, '#ef4444', 'crit');
       battleRig.flash('player', 1);
       battleRig.kickCamera(0.35);
@@ -517,7 +593,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     setMatchStatus('victory');
     battleRig.command('player', 'victory');
     soundFx.playVictoryFanfare();
-    addCallout('PERFECT KO!', 160, 75, '#fbbf24');
+    addCallout(ui(state.lang, 'c_ko'), 160, 75, '#fbbf24');
 
     // Show what the win paid out
     const won = stageRef.current;
@@ -528,6 +604,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     if (stageRef.current.isBoss) {
       confetti({
+        disableForReducedMotion: true,
         particleCount: 100,
         spread: 80,
         origin: { y: 0.4 },
@@ -609,6 +686,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const fxScale = Math.min(3, Math.max(1, (canvas.clientWidth / 360) * (window.devicePixelRatio || 1)));
+    if (canvas.width !== Math.round(360 * fxScale)) {
+      canvas.width = Math.round(360 * fxScale);
+      canvas.height = Math.round(215 * fxScale);
+    }
 
     let lastTime = performance.now();
     let canvasInView = true;
@@ -660,11 +742,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           setManualAttackReady(true);
         }
 
-        const pSpd = Math.max(10, state.playerFighter.stats.spd);
-        const oppSpd = Math.max(10, stageRef.current.opponent.stats.spd);
-
-        const pInterval = Math.max(450, 1500 - pSpd * 18);
-        const oppInterval = Math.max(500, 1600 - oppSpd * 16) * INTERVAL_MULT[stageRef.current.opponent.profile];
+        const pInterval = playerInterval(state.playerFighter.stats.spd);
+        const oppInterval = opponentInterval(stageRef.current.opponent.stats.spd, stageRef.current.opponent.profile);
 
         if (state.autoBattle && playerCooldownRef.current <= 0) {
           playerCooldownRef.current = pInterval;
@@ -705,7 +784,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         screenShakeRef.current = Math.max(0, screenShakeRef.current - dt * 0.03);
       }
 
-      if (canvasInView) drawScene(ctx, currentTime, isHitStopActive);
+      if (canvasInView) {
+        ctx.setTransform(fxScale, 0, 0, fxScale, 0, 0);
+        drawScene(ctx, currentTime, isHitStopActive);
+      }
 
       animFrameRef.current = requestAnimationFrame(loop);
     };
@@ -917,11 +999,16 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = ft.type === 'crit' || ft.type === 'skill' ? '900 13px system-ui' : '800 11px system-ui';
-      ctx.fillStyle = ft.color;
+      const big = ft.type === 'crit';
+      const pop = big && progress < 0.15 ? 1 + (0.15 - progress) * 2.5 : 1;
+      const size = (big ? 17 : ft.type === 'skill' ? 13 : 14) * pop;
+      ctx.font = `900 ${size.toFixed(1)}px "Plus Jakarta Sans", system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-      ctx.shadowBlur = 5;
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = big ? 4 : 3;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+      ctx.strokeText(ft.text, ft.x, ft.y - offsetY);
+      ctx.fillStyle = ft.color;
       ctx.fillText(ft.text, ft.x, ft.y - offsetY);
       ctx.restore();
     }
@@ -1259,7 +1346,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               className="h-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-300 rounded-lg transition-all duration-150 ease-out shadow-sm shadow-emerald-400/50"
               style={{ width: `${playerHpPct}%` }}
             />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
               {playerHpDisplay} / {pStats.maxHp}
             </span>
           </div>
@@ -1282,7 +1369,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           <span className="font-black text-[12px] bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent drop-shadow font-mono tracking-tight">
             {currentStageData.displayStage}
           </span>
-          <div className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-lg ${
+          <div className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-lg ${
             currentStageData.isBoss 
               ? 'game-btn-crimson text-white animate-pulse border border-rose-400' 
               : 'bg-neutral-900 text-zinc-300 border border-white/15'
@@ -1304,26 +1391,24 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               className="h-full bg-gradient-to-r from-rose-600 via-rose-500 to-red-400 rounded-lg transition-all duration-150 ease-out float-right shadow-sm shadow-rose-500/50"
               style={{ width: `${oppHpPct}%` }}
             />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
               {opponentHpDisplay} / {oppStats.maxHp}
             </span>
           </div>
 
           <div className="flex items-center justify-end gap-1.5 mt-1 min-w-0">
             {(() => {
-              // How the fight should go, from the power ratio: tells the player when to upgrade first
-              const ratio = state.playerFighter.stats.powerScore / Math.max(1, currentStageData.opponent.stats.powerScore);
-              const d = difficultyOf(ratio);
+              // How the fight should go (expected time-to-kill on both sides): tells the player when to upgrade first
+              const d = difficultyOf(fightOdds(state.playerFighter.stats, currentStageData.opponent.stats, currentStageData.opponent.profile));
               return (
-                <span className={`shrink-0 px-1.5 rounded bg-black/60 border text-[8px] font-black tracking-wider ${d[1]}`}>
+                <span className={`shrink-0 px-1.5 rounded bg-black/60 border text-[10px] font-black tracking-wider ${d[1]}`}>
                   {ui(state.lang, d[0])}
                 </span>
               );
             })()}
-            <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[8px] font-black tracking-wider text-zinc-300 uppercase">
+            <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[10px] font-black tracking-wider text-zinc-300 uppercase">
               {ui(state.lang, 'p_' + currentStageData.opponent.profile)}
             </span>
-            <span className="text-[9px] text-zinc-400 truncate italic font-medium">"{currentStageData.opponent.dialogue}"</span>
           </div>
         </div>
       </div>
@@ -1357,7 +1442,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             data-speed
             onClick={() => gameManager.cycleBattleSpeed()}
             className="min-h-8 px-2.5 rounded-full bg-black/75 border border-amber-400/40 text-[10px] font-black font-mono text-amber-300 shadow-lg backdrop-blur-md active:scale-95 flex items-center gap-0.5"
-            aria-label="Battle speed"
+            aria-label={ui(state.lang, 'aria_speed')}
           >
             <Zap className="w-3 h-3" />
             {state.battleSpeed}X
@@ -1366,7 +1451,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             type="button"
             onClick={() => gameManager.toggleAutoBattle()}
             className="min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
-            aria-label={state.autoBattle ? 'Manuel dövüşe geç' : 'Otomatik dövüşe geç'}
+            aria-label={ui(state.lang, state.autoBattle ? 'aria_to_manual' : 'aria_to_auto')}
           >
             {ui(state.lang, state.autoBattle ? 'auto_btn' : 'manual_btn')}
           </button>
@@ -1408,14 +1493,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
         {/* Combo Streak Multiplier Badge */}
         {comboStreak > 1 && (
-          <div className="absolute top-2.5 left-3 px-2.5 py-1 rounded-xl bg-black/75 border border-amber-400 text-[11px] font-black font-mono text-amber-300 animate-bounce shadow-xl flex items-center gap-1.5 z-20 backdrop-blur-sm">
-            <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            <span>x{comboStreak} COMBO!</span>
+          <div className="absolute top-2.5 left-3 px-2.5 py-1 rounded-xl bg-black/75 border border-amber-400 text-[11px] font-black text-amber-300 shadow-xl flex items-center gap-1.5 z-20 backdrop-blur-sm">
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            <span className="tabular-nums">x{comboStreak} {ui(state.lang, 'c_combo')}</span>
           </div>
         )}
 
         {/* Super Move Trigger Button */}
-        {playerRageDisplay >= 100 && (
+        {playerRageDisplay >= 100 && matchStatus === 'fighting' && !showReviveAd && (
           <button
             onClick={handleManualRage}
             className={`absolute left-2 bottom-2 px-3.5 min-h-11 game-btn-gold text-black font-black text-xs rounded-xl shadow-2xl active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-30 border border-amber-300/80`}
@@ -1426,20 +1511,32 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         )}
 
         {/* Revive with Ad in Boss Fights */}
+        {/* Boss defeat: why it happened, what to do, and an optional ad revive. Auto mode retries by itself. */}
         {showReviveAd && (
-          <div className="absolute bottom-3 right-3 z-30 flex flex-col items-end gap-2">
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/60 px-6 text-center">
+            <span className="text-2xl font-black italic text-rose-500 drop-shadow-2xl">{t('knockout', state.lang)}</span>
+            <span className="text-[11px] font-bold text-zinc-100">{ui(state.lang, 'defeat_hint')}</span>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                data-retry
+                onClick={() => resetBattle(stageRef.current)}
+                className="min-h-11 px-4 rounded-2xl game-btn-gold text-black font-black text-xs active:scale-95"
+              >
+                {ui(state.lang, 'retry')}{retryIn !== null ? ` (${retryIn})` : ''}
+              </button>
+              <button
+                onClick={() => gameManager.setActiveTab('gym')}
+                className="min-h-11 px-4 rounded-2xl bg-black/80 text-zinc-100 font-black text-xs border border-white/25 active:scale-95"
+              >
+                {ui(state.lang, 'go_gym')}
+              </button>
+            </div>
             <button
               onClick={handleReviveWithAd}
-              className="px-4 py-2.5 game-btn-crimson text-white font-black text-xs rounded-2xl shadow-2xl border border-rose-300 flex items-center gap-1.5 animate-pulse active:scale-95 transition-transform"
+              className="mt-1 min-h-11 px-4 rounded-2xl bg-rose-950/80 text-rose-100 font-black text-xs border border-rose-400/60 flex items-center gap-1.5 active:scale-95"
             >
               <Tv className="w-4 h-4" />
               <span>{t('adRevive', state.lang)}</span>
-            </button>
-            <button
-              onClick={() => resetBattle(stageRef.current)}
-              className="min-h-10 px-4 rounded-2xl bg-black/80 text-zinc-100 font-black text-xs border border-white/25 active:scale-95"
-            >
-              {ui(state.lang, 'retry')}
             </button>
           </div>
         )}

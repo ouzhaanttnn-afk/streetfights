@@ -1,7 +1,7 @@
 // Google AdMob bridge: native rewarded ads on iOS/Android (Capacitor), web simulation elsewhere.
 // The next ad is always loaded in the background, so tapping a reward button shows it instantly.
 import { Capacitor } from '@capacitor/core';
-import { AdMob, RewardAdPluginEvents } from '@capacitor-community/admob';
+import { AdMob, AdmobConsentStatus, MaxAdContentRating, RewardAdPluginEvents } from '@capacitor-community/admob';
 
 export interface AdMobConfig {
   appId: string;
@@ -36,6 +36,8 @@ class AdMobManager {
   private showing = false;
   private earned = false;
   private onDismiss: (() => void) | null = null;
+  // EEA/UK/CH players must be able to change their ad consent later (Settings > Privacy choices)
+  public privacyOptionsRequired = false;
 
   public readonly isNative = Capacitor.isNativePlatform();
 
@@ -65,12 +67,25 @@ class AdMobManager {
       return;
     }
     try {
+      // 1. Google consent (UMP): the form only appears where the law requires it (EEA, UK, Switzerland)
+      try {
+        const info = await AdMob.requestConsentInfo();
+        let latest = info;
+        if (info.isConsentFormAvailable && info.status === AdmobConsentStatus.REQUIRED) {
+          latest = await AdMob.showConsentForm();
+        }
+        this.privacyOptionsRequired = String(latest.privacyOptionsRequirementStatus) === 'REQUIRED';
+      } catch {
+        // no consent message configured or offline: ads still load (non-personalised where required)
+      }
+      // 2. Apple tracking prompt
       try {
         await AdMob.requestTrackingAuthorization();
       } catch {
         // ATT unavailable or already answered
       }
-      await AdMob.initialize({ initializeForTesting: this.config.isTesting });
+      // 3. Ads SDK
+      await AdMob.initialize({ initializeForTesting: this.config.isTesting, maxAdContentRating: MaxAdContentRating.ParentalGuidance });
       this.initialized = true;
       await AdMob.addListener(RewardAdPluginEvents.Loaded, () => {
         this.retryCount = 0;
@@ -80,7 +95,7 @@ class AdMobManager {
       await AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
         this.earned = true;
       });
-      await AdMob.addListener(RewardAdPluginEvents.FailedToShow, () => this.finishShow(false));
+      await AdMob.addListener(RewardAdPluginEvents.FailedToShow, () => this.finishShow(false, true));
       await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => this.finishShow(this.earned));
       this.preload();
     } catch (err) {
@@ -89,22 +104,38 @@ class AdMobManager {
     }
   }
 
+  public async showPrivacyOptions() {
+    if (!this.isNative) return;
+    try {
+      await AdMob.showPrivacyOptionsForm();
+    } catch {
+      // form not available
+    }
+  }
+
   // Start loading the next rewarded ad in the background (no-op if one is loading/ready).
   public preload() {
     if (!this.isNative || !this.initialized || this.showing) return;
     if (this._status === 'loading' || this._status === 'ready') return;
+    // A manual preload replaces a pending retry (the old timer must not reset a freshly loaded ad later)
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     this.setStatus('loading');
     AdMob.prepareRewardVideoAd({ adId: this.config.rewardedAdUnitId, isTesting: this.config.isTesting })
       .catch(() => this.scheduleRetry());
   }
 
   private scheduleRetry() {
+    // FailedToLoad and the rejected prepare call both report the same failure: count it once
+    if (this.retryTimer || this._status === 'failed') return;
     this.setStatus('failed');
-    if (this.retryTimer) clearTimeout(this.retryTimer);
     const delay = RETRY_DELAYS_MS[Math.min(this.retryCount, RETRY_DELAYS_MS.length - 1)];
     this.retryCount += 1;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
+      if (this._status !== 'failed') return;
       this.setStatus('idle');
       this.preload();
     }, delay);
@@ -129,7 +160,7 @@ class AdMobManager {
     });
   }
 
-  private finishShow(rewarded: boolean) {
+  private finishShow(rewarded: boolean, failedToShow = false) {
     const cb = this.onDismiss;
     this.onDismiss = null;
     this.showing = false;
@@ -137,7 +168,7 @@ class AdMobManager {
     this.setStatus('idle');
     this.preload(); // next ad starts loading immediately
     cb?.();
-    this.lastResult = rewarded ? 'rewarded' : 'dismissed';
+    this.lastResult = rewarded ? 'rewarded' : failedToShow ? 'unavailable' : 'dismissed';
     this.resolveShow?.(this.lastResult);
   }
 

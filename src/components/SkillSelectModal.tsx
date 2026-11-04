@@ -3,9 +3,10 @@ import { Skill } from '../types/game';
 import { RARITY_CONFIG } from '../core/lootGenerator';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
+import { ui } from '../i18n/ui';
 import { 
   Sparkles, 
-  Dices, 
+  RefreshCw, 
   Check, 
   Zap, 
   Shield, 
@@ -23,7 +24,8 @@ interface SkillSelectModalProps {
 
 export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state }) => {
   const rarity = RARITY_CONFIG[skill.rarity];
-  const canReroll = state.coins >= 25;
+  const rerollCost = gameManager.rerollCost();
+  const canReroll = state.coins >= rerollCost;
 
   const renderIcon = () => {
     switch (skill.iconName) {
@@ -93,8 +95,8 @@ export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state
                 : 'bg-neutral-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
             }`}
           >
-            <Dices className="w-4 h-4" />
-            <span>{t('rollSkill', state.lang)} (25 🪙)</span>
+            <RefreshCw className="w-4 h-4" />
+            <span>{t('rollSkill', state.lang)} ({rerollCost === 0 ? ui(state.lang, 'reroll_free') : `${rerollCost} 🪙`})</span>
           </button>
 
           <button

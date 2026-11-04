@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { EquipmentItem } from '../types/game';
 import { RARITY_CONFIG } from '../core/lootGenerator';
+import { RARITY_HEX } from '../game/itemModels';
 import { ui } from '../i18n/ui';
 import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
@@ -21,6 +22,8 @@ interface LootCardModalProps {
 
 export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => {
   const rarity = RARITY_CONFIG[item.rarity];
+  // Godrays take the rarity colour so epic reads purple, legendary gold, mythic red
+  const rarityHex = '#' + RARITY_HEX[item.rarity].toString(16).padStart(6, '0');
   const currentEquipped = state.playerFighter.equipped[item.slot];
 
   const currentPower = currentEquipped ? currentEquipped.powerScore : 0;
@@ -30,13 +33,13 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
     <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
       {/* 3D Enhanced Loot Card Box */}
       <div className={`relative w-full max-w-sm rounded-3xl border-2 ${rarity.borderColor} ${rarity.bgColor} p-5 shadow-2xl flex flex-col items-center text-center text-white overflow-hidden game-card ${
-        ['epic', 'legendary', 'mythic'].includes(item.rarity) ? 'holographic-card ring-2 ring-amber-400/40 shadow-amber-500/20' : ''
+        ['epic', 'legendary', 'mythic'].includes(item.rarity) ? 'ring-2 ring-white/10' : ''
       }`}>
         
         {/* Rotating Godrays Light Beams for Rare+ Items */}
         {['rare', 'epic', 'legendary', 'mythic'].includes(item.rarity) && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-[340px] h-[340px] pointer-events-none opacity-25 godrays-spin -z-0">
-            <svg viewBox="0 0 200 200" className="w-full h-full text-amber-300">
+          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-[340px] h-[340px] pointer-events-none opacity-30 godrays-spin -z-0">
+            <svg viewBox="0 0 200 200" className="w-full h-full" style={{ color: rarityHex }}>
               <defs>
                 <radialGradient id="godrayGrad" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="currentColor" stopOpacity="0.8" />
@@ -65,17 +68,15 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
 
         {/* 3D WebGL Turntable Interactive Item Model */}
         <div className="relative z-10 my-1 flex items-center justify-center">
-          <Suspense fallback={<div className="w-[140px] h-[140px]" />}>
-            <ThreeItemViewer slot={item.slot} rarity={item.rarity} size={140} />
+          <Suspense fallback={<div className="w-[180px] h-[180px]" />}>
+            <ThreeItemViewer slot={item.slot} rarity={item.rarity} size={180} />
           </Suspense>
-          <span className="absolute bottom-0 text-[8px] text-zinc-400 font-mono tracking-wider opacity-70 bg-black/50 px-2 py-0.5 rounded-full border border-white/5">
-            DRAG TO ROTATE 3D
-          </span>
         </div>
+        <span className="relative z-10 -mt-1 mb-1 text-[10px] text-zinc-400 font-bold">{ui(state.lang, 'drag_rotate')}</span>
 
         {/* Item Name & Rarity */}
         <h2 className="text-xl font-black tracking-tight text-white mb-0.5">
-          {item.name}
+          {item.name.replace(/^(UNCOMMON|RARE|EPIC|LEGENDARY|MYTHIC) /, '')}
         </h2>
         <div className={`text-[11px] font-black uppercase tracking-wider ${rarity.color} mb-3`}>
           {rarity.name} • Lv.{item.level} {ui(state.lang, 'slot_' + item.slot)}
@@ -101,49 +102,49 @@ export const LootCardModal: React.FC<LootCardModalProps> = ({ item, state }) => 
         <div className="w-full bg-black/50 rounded-2xl p-3 border border-white/5 mb-4 text-left space-y-1.5 text-xs">
           {item.stats.hp > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Health (HP)</span>
+              <span className="text-zinc-400">{t('stat_hp', state.lang)}</span>
               <span className="font-mono font-black text-emerald-400">+{item.stats.hp}</span>
             </div>
           )}
           {item.stats.atk > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Attack (ATK)</span>
+              <span className="text-zinc-400">{t('stat_atk', state.lang)}</span>
               <span className="font-mono font-black text-rose-400">+{item.stats.atk}</span>
             </div>
           )}
           {item.stats.def > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Defense (DEF)</span>
+              <span className="text-zinc-400">{t('stat_def', state.lang)}</span>
               <span className="font-mono font-black text-sky-400">+{item.stats.def}</span>
             </div>
           )}
           {item.stats.spd > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Speed (SPD)</span>
+              <span className="text-zinc-400">{t('stat_spd', state.lang)}</span>
               <span className="font-mono font-black text-amber-400">+{item.stats.spd}</span>
             </div>
           )}
           {item.stats.critRate > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Crit Rate</span>
+              <span className="text-zinc-400">{t('stat_crit', state.lang)}</span>
               <span className="font-mono font-black text-purple-400">+{item.stats.critRate}%</span>
             </div>
           )}
           {item.stats.comboRate > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Combo Rate</span>
+              <span className="text-zinc-400">{t('stat_cmb', state.lang)}</span>
               <span className="font-mono font-black text-yellow-400">+{item.stats.comboRate}%</span>
             </div>
           )}
           {item.stats.dodgeRate > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Dodge Chance</span>
+              <span className="text-zinc-400">{t('stat_dge', state.lang)}</span>
               <span className="font-mono font-black text-cyan-400">+{item.stats.dodgeRate}%</span>
             </div>
           )}
           {item.stats.lifesteal > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-zinc-400">Vampiric Lifesteal</span>
+              <span className="text-zinc-400">{t('stat_vamp', state.lang)}</span>
               <span className="font-mono font-black text-pink-400">+{item.stats.lifesteal}%</span>
             </div>
           )}

@@ -19,11 +19,11 @@ import {
 interface StatBarProps {
   stats: FighterStats;
   lang: Language;
-  opponentPower: number;
+  odds: number;
 }
 
 // One compact row (your power vs. the rival's, plus difficulty); the full stat sheet opens on tap
-export const StatBar: React.FC<StatBarProps> = ({ stats, lang, opponentPower }) => {
+export const StatBar: React.FC<StatBarProps> = ({ stats, lang, odds }) => {
   const [open, setOpen] = useState(false);
   // Show "+N POWER" whenever an upgrade (gear, gym, level, skill) raises the power score
   const prevPower = useRef(stats.powerScore);
@@ -48,7 +48,7 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang, opponentPower }) 
     { label: t('stat_dge', lang), value: `${stats.dodgeRate}%`, icon: Wind, color: 'text-cyan-400' },
     { label: t('stat_vamp', lang), value: `${stats.lifesteal}%`, icon: HeartPulse, color: 'text-pink-400' },
   ];
-  const [diffKey, diffClass] = difficultyOf(stats.powerScore / Math.max(1, opponentPower));
+  const [diffKey, diffClass] = difficultyOf(odds);
 
   return (
     <div className="stat-bar bg-[#0b0c13]/90 backdrop-blur-md border-b border-white/10 px-3 py-1.5 select-none shadow-md">
@@ -68,11 +68,10 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang, opponentPower }) 
           <span className="text-[10px] font-black uppercase tracking-wider text-zinc-300">{ui(lang, 'power_word')}</span>
           <span className="text-[13px] font-black font-mono">{stats.powerScore.toLocaleString()}</span>
         </div>
-        <span className="text-[10px] font-black text-zinc-500">vs</span>
+
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[10px] font-bold text-zinc-400 truncate">{ui(lang, 'rival')}</span>
-          <span className="text-[12px] font-black font-mono text-zinc-200">{opponentPower.toLocaleString()}</span>
-          <span className={`shrink-0 px-1.5 py-0.5 rounded-md bg-black/60 border text-[9px] font-black tracking-wider ${diffClass}`}>{ui(lang, diffKey)}</span>
+          <span className="text-[11px] font-bold text-zinc-400 truncate">{ui(lang, 'rival')}:</span>
+          <span className={`shrink-0 px-1.5 py-0.5 rounded-md bg-black/60 border text-[10px] font-black tracking-wider ${diffClass}`}>{ui(lang, diffKey)}</span>
         </div>
         <ChevronDown className={`ml-auto w-4 h-4 text-zinc-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -83,7 +82,7 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang, opponentPower }) 
             const Icon = item.icon;
             return (
               <div key={item.label} className="min-w-0 flex flex-col gap-0.5 px-2 py-1 rounded-xl bg-black/40 border border-white/5 shadow-sm">
-                <div className="min-w-0 flex items-center gap-1 text-[9px] font-bold text-zinc-400 leading-none">
+                <div className="min-w-0 flex items-center gap-1 text-[10px] font-bold text-zinc-400 leading-none">
                   <Icon className={`w-3 h-3 shrink-0 ${item.color}`} />
                   <span className="tracking-tight truncate">{item.label}</span>
                 </div>

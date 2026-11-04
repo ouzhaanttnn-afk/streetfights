@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { Language, t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
+import { adMobManager } from '../core/admob';
 import { 
   Settings, 
   Volume2, 
@@ -14,7 +15,10 @@ import {
   Copy,
   Sparkles,
   ShieldCheck,
-  Bell
+  Bell,
+  Vibrate,
+  Accessibility,
+  MonitorCog
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -42,29 +46,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const handleExportSave = () => {
+  const handleExportSave = async () => {
     try {
-      const data = JSON.stringify(state);
-      navigator.clipboard.writeText(data);
+      await navigator.clipboard.writeText(JSON.stringify(state));
       showToast(t('saveCopied', state.lang));
     } catch {
-      showToast('Kopyalama başarısız!');
+      showToast(ui(state.lang, 'copy_failed'));
     }
   };
 
   const handleImportSave = () => {
-    try {
-      if (!importText.trim()) return;
-      const parsed = JSON.parse(importText);
-      if (parsed && typeof parsed.playerLevel === 'number') {
-        localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify(parsed));
-        window.location.reload();
-      } else {
-        showToast(t('invalidSave', state.lang));
-      }
-    } catch {
-      showToast(t('invalidSave', state.lang));
-    }
+    if (!importText.trim()) return;
+    if (!gameManager.importSave(importText.trim())) showToast(t('invalidSave', state.lang));
   };
 
   return (
@@ -146,7 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
-                <Zap className="w-4 h-4 text-cyan-400" />
+                <Vibrate className="w-4 h-4 text-cyan-400" />
                 <span>{ui(state.lang, 'haptics')}</span>
               </div>
               <button
@@ -179,7 +172,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
-                <Zap className="w-4 h-4 text-fuchsia-400" />
+                <Accessibility className="w-4 h-4 text-fuchsia-400" />
                 <span>{ui(state.lang, 'reduce_motion')}</span>
               </div>
               <button
@@ -195,7 +188,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
 
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
               <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
-                <Zap className="w-4 h-4 text-sky-400" />
+                <MonitorCog className="w-4 h-4 text-sky-400" />
                 <span>{ui(state.lang, 'quality')}</span>
               </div>
               <div className="flex gap-1">
@@ -214,6 +207,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
             </div>
           </div>
 
+          {/* Google consent: EEA/UK/CH players can change their ad choices at any time */}
+          {adMobManager.privacyOptionsRequired && (
+            <button
+              onClick={() => adMobManager.showPrivacyOptions()}
+              className="w-full min-h-11 rounded-2xl bg-black/50 border border-white/10 text-xs font-black text-zinc-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              {ui(state.lang, 'privacy_choices')}
+            </button>
+          )}
+
           {/* 3. Cloud / Local Save Management */}
           <div className="bg-black/50 rounded-2xl p-3.5 border border-white/10 space-y-2.5 shadow-inner">
             <span className="text-xs font-black text-zinc-200 block">
@@ -225,7 +229,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
                 className="py-2.5 px-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-zinc-200 text-xs font-black flex items-center justify-center gap-1.5 border border-zinc-700 active:scale-95 transition-all shadow-sm"
               >
                 <Copy className="w-3.5 h-3.5 text-amber-400" />
-                <span>Export Save</span>
+                <span>{ui(state.lang, 'save_export')}</span>
               </button>
 
               <button
@@ -233,12 +237,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
                 className="py-2.5 px-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-zinc-200 text-xs font-black flex items-center justify-center gap-1.5 border border-zinc-700 active:scale-95 transition-all shadow-sm"
               >
                 <Upload className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Import Save</span>
+                <span>{ui(state.lang, 'save_import')}</span>
               </button>
             </div>
             <input
               type="text"
-              placeholder="Paste JSON save here to import..."
+              placeholder={ui(state.lang, 'save_paste')}
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
               className="w-full bg-black/70 border border-zinc-800 rounded-xl px-3 py-2 text-base font-mono text-zinc-300 focus:outline-none focus:border-amber-500"

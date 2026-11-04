@@ -188,7 +188,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
                 }`}
               >
                 <span className="text-2xl drop-shadow">{avatar.avatarChar}</span>
-                <span className="text-[8px] font-black text-white uppercase truncate max-w-[58px] mt-1 drop-shadow-md">
+                <span lang="en" className="text-[10px] font-black text-white uppercase truncate max-w-[58px] mt-1 drop-shadow-md">
                   {avatar.name.split(" ")[0]}
                 </span>
                 {isSelected && (
@@ -236,14 +236,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
                     <div className={`text-xs font-black ${isUnlocked ? title.color : "text-zinc-500"}`}>
                       {titleName}
                     </div>
-                    <div className="text-[9px] text-zinc-400 font-mono">
+                    <div className="text-[10px] text-zinc-400 font-mono">
                       {isUnlocked ? ui(state.lang, "unlocked") : `🔒 Lv.${title.unlockLevel}`}
                     </div>
                   </div>
                 </div>
 
                 {isSelected && (
-                  <div className="px-2 py-0.5 rounded-lg bg-amber-400 text-black text-[9px] font-black uppercase">
+                  <div className="px-2 py-0.5 rounded-lg bg-amber-400 text-black text-[10px] font-black uppercase">
                     {ui(state.lang, "active_word")}
                   </div>
                 )}
@@ -289,7 +289,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
               {t("highestStage", state.lang)}
             </span>
             <span className="font-mono font-black text-sm text-cyan-300 mt-1">
-              W{state.highestWorld} - S{state.highestSubStage}
+              {ui(state.lang, 'stage_short', { w: state.highestWorld, s: state.highestSubStage })}
             </span>
           </div>
 

@@ -23,11 +23,11 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
   const rewards = [
     { day: 1, type: "coins", amount: 500, label: "500", icon: Coins, color: "text-amber-400" },
     { day: 2, type: "gems", amount: 50, label: "50", icon: Gem, color: "text-cyan-400" },
-    { day: 3, type: "buff", amount: 1, label: "2x ⚔️", icon: Flame, color: "text-rose-400" },
-    { day: 4, type: "coins", amount: 1500, label: "1,500", icon: Coins, color: "text-amber-400" },
+    { day: 3, type: "buff", amount: 1, label: ui(state.lang, "dmg_buff_short"), icon: Flame, color: "text-rose-400" },
+    { day: 4, type: "coins", amount: 1500, label: (1500).toLocaleString(), icon: Coins, color: "text-amber-400" },
     { day: 5, type: "gems", amount: 100, label: "100", icon: Gem, color: "text-cyan-400" },
-    { day: 6, type: "gear", amount: 1, label: "★ LEGEND", icon: Sparkles, color: "text-yellow-300" },
-    { day: 7, type: "mythic", amount: 250, label: "Mythic Crown + 250 Gems", icon: Crown, color: "text-fuchsia-400", isJackpot: true }
+    { day: 6, type: "gear", amount: 1, label: ui(state.lang, "legend_word"), icon: Sparkles, color: "text-yellow-300" },
+    { day: 7, type: "mythic", amount: 250, label: ui(state.lang, "day7_desc"), icon: Crown, color: "text-fuchsia-400", isJackpot: true }
   ];
 
   const currentStreak = state.dailyLoginStreak || 1;
@@ -38,8 +38,11 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
     confetti({
       particleCount: 80,
       spread: 70,
-      origin: { y: 0.5 }
+      origin: { y: 0.5 },
+      disableForReducedMotion: true,
     });
+    // Claiming is the whole point of this card: close it after a short celebration
+    setTimeout(onClose, 900);
   };
 
   return (
@@ -87,7 +90,7 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
                     : "bg-black/60 border-white/10"
                 }`}
               >
-                <div className="text-[9px] font-black font-mono text-zinc-400 uppercase">
+                <div className="text-[10px] font-black font-mono text-zinc-400 uppercase">
                   {ui(state.lang, "day_n", { n: r.day })}
                 </div>
                 <div className="my-1.5 p-2 rounded-xl bg-black/50 border border-white/5">
@@ -98,18 +101,18 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
                 </div>
 
                 {isClaimed ? (
-                  <div className="mt-1 flex items-center gap-1 text-[9px] font-black text-emerald-400 font-mono">
+                  <div className="mt-1 flex items-center gap-1 text-[10px] font-black text-emerald-400 font-mono">
                     <Check className="w-3 h-3" /> {ui(state.lang, "claimed")}
                   </div>
                 ) : isToday ? (
                   <button
                     onClick={() => handleClaim(r.day)}
-                    className="mt-1 w-full py-1 rounded-lg game-btn-gold text-black font-black text-[9px] uppercase shadow-md active:scale-95 animate-pulse"
+                    className="mt-1 w-full py-1 rounded-lg game-btn-gold text-black font-black text-[10px] uppercase shadow-md active:scale-95 animate-pulse"
                   >
                     {ui(state.lang, "claim")}
                   </button>
                 ) : (
-                  <div className="mt-1 text-[8px] font-mono text-zinc-500 uppercase">
+                  <div className="mt-1 text-[10px] font-mono text-zinc-500 uppercase">
                     {ui(state.lang, "locked")}
                   </div>
                 )}
@@ -156,7 +159,7 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
                   {ui(state.lang, "claim")}
                 </button>
               ) : (
-                <div className="text-[9px] font-mono text-zinc-500 uppercase">
+                <div className="text-[10px] font-mono text-zinc-500 uppercase">
                   {ui(state.lang, "locked")}
                 </div>
               )}

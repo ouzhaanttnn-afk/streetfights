@@ -111,7 +111,7 @@ export const GymTab: React.FC<GymTabProps> = ({ state }) => {
                     : 'bg-zinc-850 text-zinc-600 border-zinc-800 cursor-not-allowed'
                 }`}
               >
-                <span className="text-[9px] uppercase tracking-wider font-black">{t('train', state.lang)}</span>
+                <span className="text-[10px] uppercase tracking-wider font-black">{t('train', state.lang)}</span>
                 <div className="flex items-center gap-1 text-[11px] font-mono font-black mt-0.5">
                   <Coins className="w-3 h-3 text-black" />
                   <span>{training.cost}</span>

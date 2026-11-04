@@ -156,8 +156,8 @@ export const COSMETICS_LIST: CosmeticItem[] = [
   {
     id: 'ball_street',
     category: 'ball',
-    name: 'Classic Street Ball',
-    description: 'Standard rubber street ball.',
+    name: 'Classic Energy Orb',
+    description: 'A classic glowing energy orb.',
     priceCoins: 0,
     priceGems: 0,
     unlockedByDefault: true,
@@ -176,7 +176,7 @@ export const COSMETICS_LIST: CosmeticItem[] = [
     id: 'ball_plasma',
     category: 'ball',
     name: 'Cyber Plasma Orb',
-    description: 'High-tech anti-gravity ball emitting cyan energy.',
+    description: 'High-tech plasma orb that pulses cyan energy.',
     priceCoins: 3000,
     priceGems: 70,
     visualData: { ballColor: '#06b6d4' },
@@ -184,7 +184,7 @@ export const COSMETICS_LIST: CosmeticItem[] = [
   {
     id: 'ball_golden',
     category: 'ball',
-    name: '24K Golden World Trophy Ball',
+    name: 'Golden Champion Orb',
     description: 'Solid gold striker sphere forged for ultimate glory.',
     priceCoins: 6000,
     priceGems: 150,

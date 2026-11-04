@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ItemIcon } from './ItemIcon';
 import * as THREE from 'three';
 import { EquipmentSlot, Rarity } from '../types/game';
 import { buildItemGroup, RARITY_HEX } from '../game/itemModels';
@@ -19,10 +20,12 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
   size = 160,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // No WebGL context (old device, too many contexts, lost GPU): show the rendered icon instead of crashing
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const mount = mountRef.current;
-    if (!mount) return;
+    if (!mount || failed) return;
 
     // 1. Scene & Camera Setup
     const scene = new THREE.Scene();
@@ -30,7 +33,13 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
     camera.position.set(0, 0.5, 3.2);
 
     // 2. WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    } catch {
+      setFailed(true);
+      return;
+    }
     renderer.setSize(size, size);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -181,7 +190,15 @@ export const ThreeItemViewer: React.FC<ThreeItemViewerProps> = ({
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [slot, rarity, size]);
+  }, [slot, rarity, size, failed]);
+
+  if (failed) {
+    return (
+      <div className={`relative flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
+        <ItemIcon slot={slot} rarity={rarity} size={Math.round(size * 0.8)} fallback={null} />
+      </div>
+    );
+  }
 
   return (
     <div

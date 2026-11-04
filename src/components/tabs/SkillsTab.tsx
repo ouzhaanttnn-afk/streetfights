@@ -11,7 +11,6 @@ import {
   Wind, 
   HeartPulse, 
   Crosshair, 
-  Dices,
   CircleDot,
   Skull
 } from 'lucide-react';
@@ -50,18 +49,6 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
           </p>
         </div>
 
-        <button
-          onClick={() => gameManager.rerollSkill()}
-          disabled={state.coins < 25}
-          className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-2xl font-black text-xs flex items-center gap-1.5 border transition-all ${
-            state.coins >= 25 
-              ? 'game-btn-gold text-black border-amber-300 shadow-xl active:scale-95 shine-effect' 
-              : 'bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed'
-          }`}
-        >
-          <Dices className="w-4 h-4" />
-          <span>{t('rollSkill', state.lang)} (25 🪙)</span>
-        </button>
       </div>
 
       {/* Set bonuses */}
@@ -91,7 +78,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
       <div className="space-y-3">
         {state.playerFighter.equippedSkills.length === 0 ? (
           <div className="py-10 text-center text-xs text-zinc-500 italic game-card rounded-3xl border border-white/5 p-5">
-            No active skills yet. Complete stages or roll for skills!
+            {ui(state.lang, 'deck_empty')}
           </div>
         ) : (
           state.playerFighter.equippedSkills.map((skill) => {
@@ -128,7 +115,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
                   </p>
 
                   <div className="mt-2.5 flex items-center gap-2">
-                    <span className={`text-[9px] font-black uppercase tracking-wider ${rarity.color} bg-black/60 px-2 py-0.5 rounded-lg border border-white/10`}>
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${rarity.color} bg-black/60 px-2 py-0.5 rounded-lg border border-white/10`}>
                       {rarity.name}
                     </span>
                     <span className="text-[10px] font-mono font-black text-amber-300 bg-black/70 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
@@ -142,31 +129,6 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
         )}
       </div>
 
-      {/* Synergy Recommendations */}
-      <div className="game-card rounded-3xl p-4 shadow-2xl border border-white/10">
-        <h4 className="text-[11px] font-black text-zinc-300 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>{t('synergyBuilds', state.lang)}</span>
-        </h4>
-        <div className="grid grid-cols-2 gap-2 text-[10px]">
-          <div className="bg-black/50 p-3 rounded-2xl border border-rose-500/20 shadow-sm">
-            <span className="font-black text-rose-400 block mb-1">🥊 Flurry Striker</span>
-            <span className="text-zinc-400 leading-tight">High ATK + Combo Rate + Double Punch</span>
-          </div>
-          <div className="bg-black/50 p-3 rounded-2xl border border-cyan-500/20 shadow-sm">
-            <span className="font-black text-cyan-400 block mb-1">⚡ Counter Ghost</span>
-            <span className="text-zinc-400 leading-tight">High Dodge Rate + Counter Strike + SPD</span>
-          </div>
-          <div className="bg-black/50 p-3 rounded-2xl border border-pink-500/20 shadow-sm">
-            <span className="font-black text-pink-400 block mb-1">🩸 Vampiric Berserker</span>
-            <span className="text-zinc-400 leading-tight">Lifesteal + Heavy Haymaker + HP Pool</span>
-          </div>
-          <div className="bg-black/50 p-3 rounded-2xl border border-amber-500/20 shadow-sm">
-            <span className="font-black text-amber-400 block mb-1">⚽ Bicycle Overlord</span>
-            <span className="text-zinc-400 leading-tight">Crit DMG + Curveball + Thunder Kick</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

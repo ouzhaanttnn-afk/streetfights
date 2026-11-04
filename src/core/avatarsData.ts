@@ -46,7 +46,7 @@ export const PREMIUM_AVATARS: PremiumAvatar[] = [
   {
     id: "avatar_flame_brawler",
     name: "Flame Brawler",
-    tagline: "Inferno Volley Master",
+    tagline: "Inferno Combo Master",
     avatarChar: "🔥",
     gradient: "from-rose-500 via-red-600 to-orange-800",
     borderColor: "border-rose-400",
@@ -111,7 +111,7 @@ export const PREMIUM_AVATARS: PremiumAvatar[] = [
   },
   {
     id: "avatar_golden_god",
-    name: "God of Vole",
+    name: "God of the Ring",
     tagline: "Ascended Martial Legend",
     avatarChar: "⚡",
     gradient: "from-yellow-300 via-amber-500 to-yellow-900",
@@ -174,8 +174,8 @@ export const FIGHTER_TITLES: FighterTitle[] = [
   },
   {
     id: "title_volley_king",
-    nameTr: "Altın Vole Kralı",
-    nameEn: "Golden Volley King",
+    nameTr: "Altın Eldiven Kralı",
+    nameEn: "Golden Glove King",
     badge: "👑",
     color: "text-amber-400",
     unlockLevel: 5

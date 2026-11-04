@@ -66,7 +66,7 @@ function cloneSkill(skill: Skill): Skill {
 }
 
 export interface AdOffer {
-  type: 'free_gems' | 'double_damage' | 'double_coins' | 'mystery_chest' | 'revive' | 'offline_double' | 'wheel_spin' | 'boss_double';
+  type: 'free_gems' | 'double_damage' | 'double_coins' | 'revive' | 'offline_double' | 'boss_double';
   title: string;
   rewardDesc: string;
 }
@@ -109,8 +109,6 @@ export interface GameStateData {
   claimedDailyDays: number[];
   isDailyLoginOpen: boolean;
 
-  // Lucky Wheel
-  isLuckyWheelOpen: boolean;
 
   // AFK Offline Gold
   lastOfflineTimestamp: number;
@@ -136,14 +134,18 @@ export interface GameStateData {
   reducedMotion: boolean;
   tutorialStep: number;
   claimedAchievements: string[];
-  lastWheelSpinDate: string;
-  bonusWheelSpins: number;
+  // Auto daily popup shown on this date (manual opening via the gift button is always possible)
+  dailyPopupShownDate: string;
   hapticsEnabled: boolean;
   // Local reminders (vault full, daily reward). notifAsked: the in-game soft ask was answered
   notificationsEnabled: boolean;
   notifAsked: boolean;
   // Optional rewarded ad after a boss win: get the boss payout again
   bossBonus: { coins: number; gems: number; expiresAt: number } | null;
+  // Rerolls used on the current skill offer (first one is free)
+  offerRerolls: number;
+  // Daily caps for shop ads: { date, counts per offer }
+  adCaps: { date: string; counts: Record<string, number> };
   autoAdvance: boolean;
   lossStreak: number;
   battleNonce: number;
@@ -312,7 +314,6 @@ function createDefaultState(): GameStateData {
     lastDailyLoginDate: '',
     claimedDailyDays: [],
     isDailyLoginOpen: false,
-    isLuckyWheelOpen: false,
     lastOfflineTimestamp: Date.now(),
     isOfflineRewardOpen: false,
     offlineGoldAccumulated: 0,
@@ -328,14 +329,15 @@ function createDefaultState(): GameStateData {
     saveVersion: SAVE_VERSION,
     tutorialStep: 0,
     claimedAchievements: [],
-    lastWheelSpinDate: '',
-    bonusWheelSpins: 0,
+    dailyPopupShownDate: '',
     quality: 'medium',
     reducedMotion: typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     hapticsEnabled: true,
     notificationsEnabled: false,
     notifAsked: false,
     bossBonus: null,
+    offerRerolls: 0,
+    adCaps: { date: '', counts: {} },
     autoAdvance: true,
     lossStreak: 0,
     battleNonce: 0,
@@ -344,20 +346,129 @@ function createDefaultState(): GameStateData {
   };
 }
 
+// Repairs saves with missing or wrong-typed parts so one bad field never bricks the game
+function sanitizeSave(raw: unknown): Record<string, any> {
+  const p: Record<string, any> = raw && typeof raw === 'object' ? { ...(raw as Record<string, any>) } : {};
+  const arr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => x !== null && x !== undefined) : undefined);
+  const obj = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v : undefined);
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  for (const k of ['inventory', 'claimedDailyDays', 'unlockedCosmetics', 'claimedAchievements', 'gymTrainings']) {
+    const a = arr(p[k]);
+    if (a === undefined) delete p[k];
+    else p[k] = a;
+  }
+  if (Array.isArray(p.inventory)) p.inventory = p.inventory.filter((i: any) => i && typeof i === 'object' && typeof i.slot === 'string' && i.stats);
+  if (Array.isArray(p.dailyQuests)) p.dailyQuests = p.dailyQuests.filter((q: any) => q && typeof q === 'object' && typeof q.id === 'string');
+  else delete p.dailyQuests;
+  for (const k of ['coins', 'gems', 'playerLevel', 'playerXp', 'playerMaxXp', 'currentWorld', 'currentSubStage', 'highestWorld', 'highestSubStage', 'totalFightsWon']) {
+    if (p[k] !== undefined && num(p[k]) === undefined) delete p[k];
+  }
+  if (typeof p.coins === 'number' && p.coins < 0) p.coins = 0;
+  if (typeof p.gems === 'number' && p.gems < 0) p.gems = 0;
+  const f = obj(p.playerFighter);
+  if (!f) delete p.playerFighter;
+  else {
+    const fighter: Record<string, any> = { ...f };
+    if (!obj(fighter.equipped)) delete fighter.equipped;
+    else fighter.equipped = Object.fromEntries(Object.entries(fighter.equipped).map(([k, v]) => [k, obj(v) && (v as any).stats ? v : null]));
+    if (!Array.isArray(fighter.equippedSkills)) delete fighter.equippedSkills;
+    else fighter.equippedSkills = fighter.equippedSkills.filter((s: any) => s && typeof s === 'object' && s.id);
+    if (!obj(fighter.baseStats)) delete fighter.baseStats;
+    p.playerFighter = fighter;
+  }
+  if (p.pendingLootDrop && !(obj(p.pendingLootDrop) && p.pendingLootDrop.stats)) p.pendingLootDrop = null;
+  if (p.pendingSkillOffer && !obj(p.pendingSkillOffer)) p.pendingSkillOffer = null;
+  if (p.pendingSkillReplacement && !obj(p.pendingSkillReplacement)) p.pendingSkillReplacement = null;
+  return p;
+}
+
+function clampSpeed(speed: unknown, p: Record<string, any>): 1 | 2 | 4 {
+  const max = (p.highestWorld || 1) >= 3 ? 4 : (p.bossDefeatedCount || 0) >= 1 || (p.highestWorld || 1) >= 2 ? 2 : 1;
+  const s = speed === 4 ? 4 : speed === 2 ? 2 : 1;
+  return (s > max ? max : s) as 1 | 2 | 4;
+}
+
 class GameManager {
   private state: GameStateData;
   private listeners: Set<(state: GameStateData) => void> = new Set();
 
   constructor() {
     this.state = this.loadState();
+    this.applyEngineSettings();
+    try {
+      this.migrateRemovedSlots();
+      this.applyCosmeticsToPlayer();
+      this.recalculatePlayerStats();
+    } catch {
+      // A save we could not repair: start fresh instead of a white screen (the old save stays in its backup key)
+      try { localStorage.setItem(STORAGE_KEY + '_backup', localStorage.getItem(STORAGE_KEY) || ''); } catch { /* ignore */ }
+      this.state = createDefaultState();
+      this.applyCosmeticsToPlayer();
+      this.recalculatePlayerStats();
+    }
+    this.refreshSession();
+  }
+
+  // Engine-side settings that live outside React (also needed after a reset)
+  private applyEngineSettings() {
     soundFx.soundEnabled = this.state.soundEnabled;
     haptics.enabled = this.state.hapticsEnabled;
     battleRig.quality = this.state.quality;
     battleRig.reducedMotion = this.state.reducedMotion;
-    this.migrateRemovedSlots();
-    this.applyCosmeticsToPlayer();
-    this.recalculatePlayerStats();
-    this.refreshSession();
+    document.documentElement.classList.toggle('reduce-motion', !!this.state.reducedMotion);
+  }
+
+  // Blocks saving while an imported save is being applied by a reload
+  private savingBlocked = false;
+
+  public importSave(json: string): boolean {
+    try {
+      const parsed = JSON.parse(json);
+      if (!parsed || typeof parsed !== 'object' || typeof parsed.playerLevel !== 'number') return false;
+      if (parsed.playerFighter !== undefined && (typeof parsed.playerFighter !== 'object' || parsed.playerFighter === null)) return false;
+      this.savingBlocked = true;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      window.location.reload();
+      return true;
+    } catch {
+      this.savingBlocked = false;
+      return false;
+    }
+  }
+
+  // Loot that arrives while another loot card is open goes to the bag instead of replacing it
+  private setPendingLoot(item: EquipmentItem) {
+    if (this.state.pendingLootDrop) this.stashOrSell(this.state.pendingLootDrop);
+    this.state.pendingLootDrop = item;
+  }
+
+  // Bosses: optional bonus offer keeps its time while a modal covers it
+  public extendBossBonus(ms: number) {
+    if (this.state.bossBonus) this.state.bossBonus.expiresAt += ms;
+  }
+
+  // Shop ads: limited per day so they stay worth something
+  public static AD_DAILY_CAP: Record<string, number> = { free_gems: 5, double_damage: 6 };
+  public freeGemsCoins(): number {
+    return Math.max(1000, this.getCurrentStage().coinReward * 3);
+  }
+
+  public adsLeftToday(type: string): number {
+    const today = dateKey();
+    const used = this.state.adCaps?.date === today ? this.state.adCaps.counts[type] || 0 : 0;
+    return Math.max(0, (GameManager.AD_DAILY_CAP[type] ?? 99) - used);
+  }
+  private countAd(type: string) {
+    const today = dateKey();
+    if (!this.state.adCaps || this.state.adCaps.date !== today) this.state.adCaps = { date: today, counts: {} };
+    this.state.adCaps.counts[type] = (this.state.adCaps.counts[type] || 0) + 1;
+  }
+
+  // Battle speed unlocks with progress: 2x after the first boss, 4x after world 2
+  public maxBattleSpeed(): 1 | 2 | 4 {
+    if (this.state.highestWorld >= 3) return 4;
+    if (this.state.bossDefeatedCount >= 1 || this.state.highestWorld >= 2) return 2;
+    return 1;
   }
 
   private lastBuffActive = false;
@@ -432,6 +543,17 @@ class GameManager {
     }
     this.state.dailyLoginStreak = streak;
     this.state.lastDailyLoginDate = today;
+    this.maybeOpenDailyLogin();
+  }
+
+  // One popup at a time: the daily card waits for the tutorial, the first win and the offline card
+  private maybeOpenDailyLogin() {
+    const unclaimed = !this.state.claimedDailyDays.includes(this.state.dailyLoginStreak);
+    if (!unclaimed || this.state.lastDailyLoginDate !== dateKey()) return;
+    if (this.state.tutorialStep < 4 || this.state.totalFightsWon < 1 || this.state.isOfflineRewardOpen) return;
+    if (this.state.pendingLootDrop || this.state.pendingSkillOffer || this.state.pendingSkillReplacement || this.state.activeAdModal) return;
+    if (this.state.dailyPopupShownDate === dateKey()) return;
+    this.state.dailyPopupShownDate = dateKey();
     this.state.isDailyLoginOpen = true;
   }
 
@@ -464,7 +586,6 @@ class GameManager {
   }
 
   private checkOfflineEarnings() {
-    if (this.state.isOfflineRewardOpen) return;
     const now = Date.now();
     const lastTime = this.state.lastOfflineTimestamp || now;
     this.state.lastOfflineTimestamp = now;
@@ -474,7 +595,9 @@ class GameManager {
 
     // If away for more than 5 minutes
     if (elapsedMinutes >= 5) {
-      const cappedMins = Math.min(OFFLINE_CAP_MINUTES, elapsedMinutes); // 8 hours max
+      // Time away while the reward card is still unanswered adds up (still capped at 8 hours)
+      const prevMins = this.state.isOfflineRewardOpen ? this.state.offlineMinutesAccumulated || 0 : 0;
+      const cappedMins = Math.min(OFFLINE_CAP_MINUTES, prevMins + elapsedMinutes);
       const gymLevelSum = this.state.gymTrainings.reduce((sum, g) => sum + g.level, 0);
       const bestStage = (this.state.highestWorld - 1) * 10 + this.state.highestSubStage;
       const coinsPerMin = Math.max(2, Math.round(5 + gymLevelSum * 0.5 + bestStage * 1.5));
@@ -491,7 +614,7 @@ class GameManager {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved);
+        const parsed = sanitizeSave(JSON.parse(saved));
         const fighter = parsed.playerFighter || defaults.playerFighter;
         if ((parsed.saveVersion || 0) < 4) {
           // Saves from the 9-slot layout: lift existing gear to the new per-slot stat budget (removed slots are cashed out later)
@@ -510,17 +633,18 @@ class GameManager {
           gymTrainings: parsed.gymTrainings?.length ? parsed.gymTrainings : defaults.gymTrainings,
           // Transient UI state is never restored
           activeAdModal: null,
-          pendingSkillReplacement: null,
           isDailyLoginOpen: false,
-          isLuckyWheelOpen: false,
           isProfileOpen: false,
           bossBonus: null,
           // Old saves may point at tabs that were merged away
-          activeTab: parsed.activeTab === 'skills' || parsed.activeTab === 'profile' ? 'gear' : parsed.activeTab || 'gear',
+          activeTab: (['gear', 'gym', 'arena', 'shop'] as TabType[]).includes(parsed.activeTab) ? parsed.activeTab : 'gear',
           fighterView: parsed.activeTab === 'skills' ? 'skills' : parsed.fighterView || 'gear',
-          isOfflineRewardOpen: false,
-          offlineGoldAccumulated: 0,
-          offlineMinutesAccumulated: 0,
+          // An unanswered offline reward survives a relaunch
+          isOfflineRewardOpen: (parsed.offlineGoldAccumulated || 0) > 0,
+          offlineGoldAccumulated: parsed.offlineGoldAccumulated || 0,
+          offlineMinutesAccumulated: parsed.offlineMinutesAccumulated || 0,
+          // Speed unlocks with progress
+          battleSpeed: clampSpeed(parsed.battleSpeed, parsed),
           lastOfflineTimestamp: parsed.lastOfflineTimestamp || Date.now(),
           // Legacy saves started the streak at 1 without a login date
           dailyLoginStreak: parsed.lastDailyLoginDate ? parsed.dailyLoginStreak || 0 : 0,
@@ -537,6 +661,7 @@ class GameManager {
   }
 
   public saveState() {
+    if (this.savingBlocked) return;
     this.state.lastOfflineTimestamp = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
@@ -634,17 +759,16 @@ class GameManager {
 
     if (type === 'free_gems') {
       this.state.gems += 50;
-      this.state.coins += 1000;
+      this.state.coins += this.freeGemsCoins();
+      this.countAd('free_gems');
       soundFx.playVictoryFanfare();
     } else if (type === 'double_damage') {
       this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS;
+      this.countAd('double_damage');
       soundFx.playVictoryFanfare();
     } else if (type === 'double_coins') {
       this.state.doubleCoinsUntil = Date.now() + BUFF_DURATION_MS;
       soundFx.playVictoryFanfare();
-    } else if (type === 'wheel_spin') {
-      this.state.bonusWheelSpins += 1;
-      soundFx.playCoin();
     } else if (type === 'offline_double') {
       this.state.coins += this.state.offlineGoldAccumulated * 2;
       this.state.offlineGoldAccumulated = 0;
@@ -657,12 +781,6 @@ class GameManager {
       }
       this.state.bossBonus = null;
       soundFx.playVictoryFanfare();
-    } else if (type === 'mystery_chest') {
-      const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
-      const rarities: Rarity[] = ['rare', 'epic', 'legendary', 'mythic'];
-      const pickedRarity = rarities[Math.floor(Math.random() * rarities.length)];
-      this.state.pendingLootDrop = generateEquipment(undefined, pickedRarity, stageLvl);
-      soundFx.playLootDrop();
     }
 
     this.state.activeAdModal = null;
@@ -723,9 +841,19 @@ class GameManager {
       calculated.stamina * 0.5
     );
 
+    const r1 = (v: number) => Math.round(v * 10) / 10;
     this.state.playerFighter.stats = {
       ...calculated,
-      maxHp: calculated.hp,
+      hp: Math.round(calculated.hp),
+      atk: Math.round(calculated.atk),
+      def: Math.round(calculated.def),
+      spd: Math.round(calculated.spd),
+      critRate: r1(calculated.critRate),
+      comboRate: r1(calculated.comboRate),
+      dodgeRate: r1(calculated.dodgeRate),
+      lifesteal: r1(calculated.lifesteal),
+      critDmg: Math.round(calculated.critDmg * 100) / 100,
+      maxHp: Math.round(calculated.hp),
       powerScore,
     };
   }
@@ -787,9 +915,11 @@ class GameManager {
     if (stage.subStage % 3 === 0 || stage.isBoss) {
       if (!this.state.pendingSkillOffer && Math.random() < 0.8) {
         this.state.pendingSkillOffer = getRandomSkill();
+        this.state.offerRerolls = 0;
       }
     }
 
+    this.maybeOpenDailyLogin();
     this.recalculatePlayerStats();
     this.notify();
   }
@@ -819,11 +949,13 @@ class GameManager {
 
   public advanceTutorial() {
     this.state.tutorialStep += 1;
+    this.maybeOpenDailyLogin();
     this.notify();
   }
 
   public skipTutorial() {
     this.state.tutorialStep = 99;
+    this.maybeOpenDailyLogin();
     this.notify();
   }
 
@@ -845,7 +977,7 @@ class GameManager {
 
   public toggleReducedMotion() {
     this.state.reducedMotion = !this.state.reducedMotion;
-    battleRig.reducedMotion = this.state.reducedMotion;
+    this.applyEngineSettings();
     this.notify();
   }
 
@@ -965,9 +1097,12 @@ class GameManager {
   }
 
   public sellItem(item: EquipmentItem) {
+    const inBag = this.state.inventory.some((i) => i.id === item.id);
+    const isPending = this.state.pendingLootDrop?.id === item.id;
+    if (!inBag && !isPending) return; // equipped or already gone: nothing to sell
     this.state.coins += item.sellPrice;
     this.state.inventory = this.state.inventory.filter((i) => i.id !== item.id);
-    if (this.state.pendingLootDrop?.id === item.id) {
+    if (isPending) {
       this.state.pendingLootDrop = null;
     }
     soundFx.playCoin();
@@ -978,13 +1113,13 @@ class GameManager {
     const item = this.state.playerFighter.equipped[slot];
     if (!item) return;
 
-    if (this.state.inventory.length < this.state.maxInventorySlots) {
-      this.state.inventory.push(item);
-      this.state.playerFighter.equipped[slot] = null;
-    } else {
-      this.state.coins += item.sellPrice;
-      this.state.playerFighter.equipped[slot] = null;
+    if (this.state.inventory.length >= this.state.maxInventorySlots) {
+      // Never destroy gear silently
+      pushToast(ui(this.state.lang, 'bag_full'), 'info', 3000);
+      return;
     }
+    this.state.inventory.push(item);
+    this.state.playerFighter.equipped[slot] = null;
 
     this.recalculatePlayerStats();
     this.notify();
@@ -1047,11 +1182,18 @@ class GameManager {
     this.notify();
   }
 
-  public rerollSkill(): boolean {
-    const cost = 25;
-    if (this.state.coins < cost) return false;
+  public rerollCost(): number {
+    const n = this.state.offerRerolls || 0;
+    return n === 0 ? 0 : 25 * 2 ** (n - 1);
+  }
 
+  // "Show another skill": only for an open offer; the first one is free, then the price doubles
+  public rerollSkill(): boolean {
+    if (!this.state.pendingSkillOffer) return false;
+    const cost = this.rerollCost();
+    if (this.state.coins < cost) return false;
     this.state.coins -= cost;
+    this.state.offerRerolls = (this.state.offerRerolls || 0) + 1;
     this.state.pendingSkillOffer = getRandomSkill();
     soundFx.playCoin();
     this.notify();
@@ -1123,53 +1265,11 @@ class GameManager {
     else if (day === 5) this.state.gems += 100;
     else if (day === 6) {
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
-      this.state.pendingLootDrop = generateEquipment(undefined, 'legendary', stageLvl);
+      this.setPendingLoot(generateEquipment(undefined, 'legendary', stageLvl));
     } else if (day === 7) {
       this.state.gems += 250;
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
-      this.state.pendingLootDrop = generateEquipment('head', 'mythic', stageLvl);
-    }
-
-    this.recalculatePlayerStats();
-    this.saveState();
-    this.notify();
-  }
-
-  // RETENTION: LUCKY FORTUNE WHEEL
-  public openLuckyWheel() {
-    this.state.isLuckyWheelOpen = true;
-    this.notify();
-  }
-
-  public closeLuckyWheel() {
-    this.state.isLuckyWheelOpen = false;
-    this.notify();
-  }
-
-  // One free spin per calendar day; extra spins come from rewarded ads (was unlimited before).
-  public hasFreeWheelSpin(): boolean {
-    return this.state.lastWheelSpinDate !== dateKey();
-  }
-
-  public consumeWheelSpin(): boolean {
-    if (this.hasFreeWheelSpin()) {
-      this.state.lastWheelSpinDate = dateKey();
-    } else if (this.state.bonusWheelSpins > 0) {
-      this.state.bonusWheelSpins -= 1;
-    } else {
-      return false;
-    }
-    this.notify();
-    return true;
-  }
-
-  public claimLuckyWheelPrize(type: string, amount: number) {
-    if (type === 'coins') this.state.coins += amount;
-    else if (type === 'gems') this.state.gems += amount;
-    else if (type === 'buff') this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS;
-    else if (type === 'gear') {
-      const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
-      this.state.pendingLootDrop = generateEquipment(undefined, 'legendary', stageLvl);
+      this.setPendingLoot(generateEquipment('head', 'mythic', stageLvl));
     }
 
     this.recalculatePlayerStats();
@@ -1185,13 +1285,18 @@ class GameManager {
 
   public closeOfflineReward() {
     this.state.isOfflineRewardOpen = false;
+    this.state.offlineGoldAccumulated = 0;
+    this.state.offlineMinutesAccumulated = 0;
+    this.maybeOpenDailyLogin();
     this.notify();
   }
 
   public claimOfflineGold(amount: number) {
     this.state.coins += amount;
     this.state.offlineGoldAccumulated = 0;
+    this.state.offlineMinutesAccumulated = 0;
     this.state.isOfflineRewardOpen = false;
+    this.maybeOpenDailyLogin();
     this.saveState();
     this.notify();
   }
@@ -1256,9 +1361,14 @@ class GameManager {
   }
 
   public cycleBattleSpeed() {
-    if (this.state.battleSpeed === 1) this.state.battleSpeed = 2;
-    else if (this.state.battleSpeed === 2) this.state.battleSpeed = 4;
-    else this.state.battleSpeed = 1;
+    const max = this.maxBattleSpeed();
+    const next = this.state.battleSpeed === 1 ? 2 : this.state.battleSpeed === 2 ? 4 : 1;
+    if (next > max) {
+      this.state.battleSpeed = 1;
+      pushToast(ui(this.state.lang, max === 1 ? 'speed_locked_boss' : 'speed_locked_world'), 'info', 2600);
+    } else {
+      this.state.battleSpeed = next;
+    }
     this.notify();
   }
 
@@ -1321,6 +1431,7 @@ class GameManager {
     localStorage.removeItem(STORAGE_KEY);
     this.state = createDefaultState();
     this.lastBuffActive = false;
+    this.applyEngineSettings();
     this.applyCosmeticsToPlayer();
     this.recalculatePlayerStats();
     this.refreshSession();

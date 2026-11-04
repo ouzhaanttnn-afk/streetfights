@@ -28,7 +28,7 @@ const WORLDS: WorldConfig[] = [
     opponents: [
       { name: 'Iron Jaw Leo', title: 'Cage Dog', dialogue: 'The cage has no mercy!', skinTone: '#e0ac69', hairColor: '#18181b', hairStyle: 'short', bodyColor: '#374151', gloveColor: '#dc2626', shoeColor: '#111827' },
       { name: 'Ghost Rider Dan', title: 'Subway Bandit', dialogue: 'Fast hands, empty pockets!', skinTone: '#fcd34d', hairColor: '#e11d48', hairStyle: 'dreads', bodyColor: '#4b5563', gloveColor: '#3b82f6', shoeColor: '#1f2937' },
-      { name: 'Kip "Volley"', title: 'Street Striker', dialogue: 'Watch this bicycle kick!', skinTone: '#8d5524', hairColor: '#eab308', hairStyle: 'spiky', bodyColor: '#15803d', gloveColor: '#eab308', shoeColor: '#14532d' },
+      { name: 'Kip "Volley"', title: 'Street Striker', dialogue: 'Watch this spinning kick!', skinTone: '#8d5524', hairColor: '#eab308', hairStyle: 'spiky', bodyColor: '#15803d', gloveColor: '#eab308', shoeColor: '#14532d' },
       { name: 'Hammer Vlad', title: 'Underground Enforcer', dialogue: 'Break your bones!', skinTone: '#f8fafc', hairColor: '#64748b', hairStyle: 'bald', bodyColor: '#1e1b4b', gloveColor: '#9333ea', shoeColor: '#0f172a' },
     ],
     boss: { name: 'Razor "The Beast"', title: 'Cage Champion', dialogue: 'You will leave this cage on a stretcher!', skinTone: '#a26230', hairColor: '#991b1b', hairStyle: 'dreads', bodyColor: '#7f1d1d', gloveColor: '#f43f5e', shoeColor: '#881337' },
@@ -40,7 +40,7 @@ const WORLDS: WorldConfig[] = [
     opponents: [
       { name: 'Flash Victor', title: 'Neon Bouncer', dialogue: 'VIPs only, get lost!', skinTone: '#e0ac69', hairColor: '#06b6d4', hairStyle: 'spiky', bodyColor: '#083344', gloveColor: '#06b6d4', shoeColor: '#0e7490' },
       { name: 'Shadow Shin', title: 'Rooftop Ninja', dialogue: 'Can you strike what you cannot see?', skinTone: '#fcd34d', hairColor: '#a855f7', hairStyle: 'short', bodyColor: '#18181b', gloveColor: '#c084fc', shoeColor: '#09090b' },
-      { name: 'Blaze Marco', title: 'Fire Striker', dialogue: 'My shots burn the net and the keeper!', skinTone: '#c68642', hairColor: '#f97316', hairStyle: 'dreads', bodyColor: '#431407', gloveColor: '#ea580c', shoeColor: '#7c2d12' },
+      { name: 'Blaze Marco', title: 'Fire Striker', dialogue: 'My punches burn through any guard!', skinTone: '#c68642', hairColor: '#f97316', hairStyle: 'dreads', bodyColor: '#431407', gloveColor: '#ea580c', shoeColor: '#7c2d12' },
       { name: 'Jax Titanium', title: 'Cyber Enforcer', dialogue: 'Upgraded for total destruction.', skinTone: '#cbd5e1', hairColor: '#38bdf8', hairStyle: 'bald', bodyColor: '#0369a1', gloveColor: '#38bdf8', shoeColor: '#0c4a6e' },
     ],
     boss: { name: 'Viper "Neon Queen"', title: 'Underworld Striker', dialogue: 'Welcome to the penthouse ring, darling!', skinTone: '#fcd34d', hairColor: '#d946ef', hairStyle: 'dreads', bodyColor: '#4a044e', gloveColor: '#f43f5e', shoeColor: '#701a75' },

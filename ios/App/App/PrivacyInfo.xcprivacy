@@ -5,12 +5,7 @@
 	<key>NSPrivacyTracking</key>
 	<true/>
 	<key>NSPrivacyTrackingDomains</key>
-	<array>
-		<string>googleadservices.com</string>
-		<string>googleads.g.doubleclick.net</string>
-		<string>pagead2.googlesyndication.com</string>
-		<string>googlesyndication.com</string>
-	</array>
+	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>

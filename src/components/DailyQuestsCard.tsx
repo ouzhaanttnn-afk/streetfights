@@ -4,7 +4,9 @@ import { ui } from '../i18n/ui';
 import { Check, Coins, Gem, ListChecks } from 'lucide-react';
 
 export const DailyQuestsCard: React.FC<{ state: GameStateData }> = ({ state }) => {
-  const quests = state.dailyQuests || [];
+  // Claimable first, finished last: "Rewards to claim -> Go" lands on something tappable
+  const rank = (q: { claimed: boolean; progress: number; target: number }) => (q.claimed ? 2 : q.progress >= q.target ? 0 : 1);
+  const quests = [...(state.dailyQuests || [])].sort((a, b) => rank(a) - rank(b));
   const claimable = quests.filter((q) => !q.claimed && q.progress >= q.target).length;
 
   return (

@@ -28,6 +28,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
   const handleClaim = () => {
     gameManager.claimOfflineGold(amount);
     confetti({
+      disableForReducedMotion: true,
       particleCount: 70,
       spread: 60,
       origin: { y: 0.5 }
@@ -46,7 +47,7 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
 
   const hours = Math.floor(minutes / 60);
   const remainingMins = minutes % 60;
-  const timeString = hours > 0 ? `${hours}h ${remainingMins}m` : `${remainingMins}m`;
+  const timeString = hours > 0 ? ui(state.lang, 'time_hm', { h: hours, m: remainingMins }) : ui(state.lang, 'time_m', { m: remainingMins });
 
   return (
     <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fadeIn select-none">
@@ -85,14 +86,14 @@ export const OfflineRewardModal: React.FC<OfflineRewardModalProps> = ({
         <div className="grid grid-cols-2 gap-2.5 w-full">
           <button
             onClick={handleClaim}
-            className="py-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-zinc-300 font-black text-xs border border-zinc-700 active:scale-95 transition-all"
+            className="py-3 rounded-2xl game-btn-emerald text-black font-black text-xs active:scale-95 transition-all"
           >
             {ui(state.lang, 'off_claim')}
           </button>
 
           <button
             onClick={handleDoubleWithAd}
-            className="py-3 rounded-2xl game-btn-gold text-black font-black text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-1.5 animate-pulse"
+            className="py-3 rounded-2xl game-btn-gold text-black font-black text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-1.5"
           >
             <Tv className="w-4 h-4 text-black" />
             <span>{ui(state.lang, 'off_double')} · +{(amount * 2).toLocaleString()}</span>

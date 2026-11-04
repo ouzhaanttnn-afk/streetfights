@@ -21,6 +21,7 @@ import { NextStepCard } from './components/NextStepCard';
 import { BossBonusCard, NotifyAskCard } from './components/OfferCards';
 import { ToastStack } from './components/ToastStack';
 import { getStageData } from './core/stageDatabase';
+import { fightOdds } from './core/combat';
 import { ui } from './i18n/ui';
 import { Stage } from './types/game';
 
@@ -56,8 +57,10 @@ export function App() {
       if (document.hidden) gameManager.onAppHidden();
       else gameManager.refreshSession();
     };
+    // pagehide fires while document.hidden is still false: it must only ever save, never start a new session
+    const onPageHide = () => gameManager.onAppHidden();
     document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
 
     // Expire timed buffs without waiting for the next fight
     const buffTimer = setInterval(() => gameManager.refreshBuffs(), 5000);
@@ -65,7 +68,7 @@ export function App() {
     return () => {
       unsubscribe();
       document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
       clearInterval(buffTimer);
     };
   }, []);
@@ -74,9 +77,20 @@ export function App() {
     gameManager.onStageVictory(stage);
   };
 
+  // The boss bonus offer keeps its time while a loot/skill card or another modal covers it
+  const bonusCovered = Boolean(
+    state.bossBonus && (state.pendingLootDrop || state.pendingSkillOffer || state.pendingSkillReplacement ||
+      state.isDailyLoginOpen || state.isOfflineRewardOpen || state.activeAdModal || isSettingsOpen || state.isProfileOpen)
+  );
+  useEffect(() => {
+    if (!bonusCovered) return;
+    const timer = setInterval(() => gameManager.extendBossBonus(1000), 1000);
+    return () => clearInterval(timer);
+  }, [bonusCovered]);
+
   const isBattlePaused = Boolean(
     state.pendingLootDrop || state.pendingSkillOffer || state.pendingSkillReplacement ||
-    state.isDailyLoginOpen || state.isLuckyWheelOpen || state.isOfflineRewardOpen ||
+    state.isDailyLoginOpen || state.isOfflineRewardOpen ||
     state.activeAdModal || isSettingsOpen || state.isProfileOpen
   );
 
@@ -114,7 +128,10 @@ export function App() {
           <StatBar
             stats={state.playerFighter.stats}
             lang={state.lang}
-            opponentPower={getStageData(state.currentWorld, state.currentSubStage).opponent.stats.powerScore}
+            odds={(() => {
+              const opp = getStageData(state.currentWorld, state.currentSubStage).opponent;
+              return fightOdds(state.playerFighter.stats, opp.stats, opp.profile);
+            })()}
           />
         </div>
 

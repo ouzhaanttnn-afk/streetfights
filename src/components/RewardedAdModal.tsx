@@ -64,6 +64,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
     } else {
       setIsCompleted(true);
       confetti({
+        disableForReducedMotion: true,
         particleCount: 50,
         spread: 60,
         origin: { y: 0.5 },
@@ -168,7 +169,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
             onClick={handleClose}
             className="py-3 px-3 rounded-2xl bg-neutral-800 hover:bg-neutral-700 text-zinc-400 font-bold text-xs transition-all border border-zinc-700 active:scale-95 shadow-sm"
           >
-            {t('unequip', state.lang) === 'ÇIKAR' ? 'Kapat' : 'Dismiss'}
+            {t('close', state.lang)}
           </button>
 
           <button

@@ -69,6 +69,9 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
   };
 
   const isDoubleDmgActive = Date.now() < state.doubleDamageUntil;
+  const gemsLeft = gameManager.adsLeftToday('free_gems');
+  const dmgLeft = gameManager.adsLeftToday('double_damage');
+  const gemsCoins = gameManager.freeGemsCoins();
   const dmgMinutesLeft = Math.ceil((state.doubleDamageUntil - Date.now()) / 60000);
 
   return (
@@ -87,23 +90,26 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
         <div className="grid grid-cols-2 gap-2.5">
           <button
             data-ad="free_gems"
+            disabled={gemsLeft === 0}
             onClick={() => gameManager.openRewardedAd({
               type: 'free_gems',
               title: t('adFreeGems', state.lang),
-              rewardDesc: ui(state.lang, 'ad_gems_desc'),
+              rewardDesc: `+50 💎  +${gemsCoins.toLocaleString()} 🪙`,
             })}
             className="p-3.5 rounded-2xl bg-gradient-to-b from-cyan-950/70 via-black to-neutral-950 border border-cyan-500/40 flex flex-col items-center text-center gap-1.5 transition-all active:scale-95 shadow-lg"
           >
             <Gem className="w-8 h-8 text-cyan-400 drop-shadow" />
             <span className="text-[12px] font-black text-zinc-100">{t('adFreeGems', state.lang)}</span>
-            <span className="text-[10px] font-bold text-cyan-200">{ui(state.lang, 'ad_gems_desc')}</span>
-            <span className="mt-1 w-full min-h-9 flex items-center justify-center gap-1 rounded-xl bg-cyan-500 text-black text-[11px] font-black">
-              <Tv className="w-3.5 h-3.5" /> {ui(state.lang, 'ad_watch')}
+            <span className="text-[11px] font-bold text-cyan-200">+50 💎 · +{gemsCoins.toLocaleString()} 🪙</span>
+            <span className={`mt-1 w-full min-h-9 flex items-center justify-center gap-1 rounded-xl text-[11px] font-black ${gemsLeft === 0 ? 'bg-neutral-900 text-zinc-500 border border-zinc-800' : 'bg-cyan-500 text-black'}`}>
+              {gemsLeft === 0 ? ui(state.lang, 'ads_done') : (<><Tv className="w-3.5 h-3.5" /> {ui(state.lang, 'ad_watch')}</>)}
             </span>
+            {gemsLeft > 0 && <span className="text-[10px] font-bold text-zinc-400">{ui(state.lang, 'ads_left', { n: gemsLeft })}</span>}
           </button>
 
           <button
             data-ad="double_damage"
+            disabled={isDoubleDmgActive || dmgLeft === 0}
             onClick={() => gameManager.openRewardedAd({
               type: 'double_damage',
               title: ui(state.lang, 'ad_dmg_title'),
@@ -115,8 +121,9 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
             <span className="text-[12px] font-black text-zinc-100">{ui(state.lang, 'ad_dmg_title')}</span>
             <span className="text-[10px] font-bold text-rose-200">{ui(state.lang, 'ad_dmg_desc')}</span>
             <span className={`mt-1 w-full min-h-9 flex items-center justify-center gap-1 rounded-xl text-[11px] font-black ${isDoubleDmgActive ? 'bg-rose-950 text-rose-200 border border-rose-500/50' : 'bg-rose-500 text-black'}`}>
-              {isDoubleDmgActive ? ui(state.lang, 'ad_active', { n: dmgMinutesLeft }) : (<><Tv className="w-3.5 h-3.5" /> {ui(state.lang, 'ad_watch')}</>)}
+              {isDoubleDmgActive ? ui(state.lang, 'ad_active', { n: dmgMinutesLeft }) : dmgLeft === 0 ? ui(state.lang, 'ads_done') : (<><Tv className="w-3.5 h-3.5" /> {ui(state.lang, 'ad_watch')}</>)}
             </span>
+            {!isDoubleDmgActive && dmgLeft > 0 && <span className="text-[10px] font-bold text-zinc-400">{ui(state.lang, 'ads_left', { n: dmgLeft })}</span>}
           </button>
         </div>
       </div>
@@ -128,10 +135,6 @@ export const ShopTab: React.FC<ShopTabProps> = ({ state }) => {
             <ShoppingBag className="w-4 h-4 text-purple-400 drop-shadow" />
             {t('shopTitle', state.lang)}
           </h3>
-          <div className="flex items-center gap-2 text-xs font-mono font-black">
-            <span className="text-amber-300 bg-black/60 px-2.5 py-0.5 rounded-lg border border-amber-500/30">🪙 {state.coins.toLocaleString()}</span>
-            <span className="text-cyan-300 bg-black/60 px-2.5 py-0.5 rounded-lg border border-cyan-500/30">💎 {state.gems.toLocaleString()}</span>
-          </div>
         </div>
 
         {/* Category Pills */}

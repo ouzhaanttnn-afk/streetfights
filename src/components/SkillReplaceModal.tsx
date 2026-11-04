@@ -2,6 +2,7 @@ import React from "react";
 import { Skill } from "../types/game";
 import { GameStateData, gameManager } from "../core/gameState";
 import { t } from "../i18n/translations";
+import { ui } from "../i18n/ui";
 import { 
   Zap, 
   ArrowRight, 
@@ -39,10 +40,10 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-black tracking-wide text-white uppercase">
-                SKILL DECK FULL (6/6)
+                {ui(state.lang, 'deck_full_title')}
               </h2>
-              <p className="text-[9px] text-zinc-400">
-                Select a skill to replace with your new discovery
+              <p className="text-[10px] text-zinc-400">
+                {ui(state.lang, 'deck_full_hint')}
               </p>
             </div>
           </div>
@@ -57,7 +58,7 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
         {/* New Incoming Skill Banner */}
         <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-400/50 mb-3 flex items-center justify-between">
           <div>
-            <span className="text-[9px] font-mono font-black text-amber-400 uppercase tracking-wider">
+            <span className="text-[10px] font-mono font-black text-amber-400 uppercase tracking-wider">
               NEW SKILL:
             </span>
             <div className="text-xs font-black text-white flex items-center gap-1.5 mt-0.5">
@@ -84,9 +85,9 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
             >
               <div className="min-w-0 pr-2">
                 <div className="text-xs font-black text-zinc-200 group-hover:text-rose-400 transition-colors truncate">
-                  {equipped.name} <span className="text-[9px] text-amber-400 font-mono">Lv.{equipped.level}</span>
+                  {equipped.name} <span className="text-[10px] text-amber-400 font-mono">Lv.{equipped.level}</span>
                 </div>
-                <div className="text-[9px] text-zinc-400 truncate">
+                <div className="text-[10px] text-zinc-400 truncate">
                   {equipped.bonusText}
                 </div>
               </div>

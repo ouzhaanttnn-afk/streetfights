@@ -248,6 +248,65 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('no page errors in retention flow', errs.length === 0, errs.join('|'));
     await b.close();
   }
+  // ---- 12. Regression tests for the 2026-11-04 playtest bugs
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    const it = (slot, atk) => ({ id:'reg_'+slot+atk, name:'Reg '+slot, slot, rarity:'common', level:1, stats:{hp:0,atk,def:0,spd:0,critRate:0,critDmg:0,comboRate:0,dodgeRate:0,lifesteal:0,stamina:0}, powerScore:Math.round(atk*3.5), sellPrice:25, iconName:'Flame' });
+    const bag = Array.from({ length: 20 }, (_, i) => it('boots', 1 + i));
+    await p.addInitScript(([d, bag, head]) => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'en', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, totalFightsWon:5, notifAsked:true, coins:200, inventory: bag, playerFighter:{ equipped:{ head, gloves:null, robe:null, shorts:null, boots:null, belt:null } } })); } }, [today(), bag, it('head', 10)]);
+    await p.goto(URL); await ready(p); await p.waitForTimeout(2000);
+    let s = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    await p.evaluate(() => window.__game.sellItem(window.__game.getState().playerFighter.equipped.head));
+    let s2 = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('selling an equipped item pays nothing (no infinite coins)', s2.coins === s.coins && s2.playerFighter.equipped.head);
+    await p.evaluate(() => window.__game.unequipItem('head'));
+    s2 = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('unequip with a full bag is blocked (gear never destroyed)', !!s2.playerFighter.equipped.head && s2.coins === s.coins && s2.inventory.length === 20);
+    // speed is locked before the first boss
+    await p.evaluate(() => window.__game.cycleBattleSpeed());
+    ok('2x speed stays locked before the first boss', (await p.evaluate(() => window.__game.getState().battleSpeed)) === 1);
+    // reroll: only with an open offer, first one free
+    const noOffer = await p.evaluate(() => window.__game.rerollSkill());
+    await p.evaluate(() => { const st = window.__game.getState(); st.pendingSkillOffer = { id:'skill_flurry_master', name:'X', description:'', rarity:'rare', category:'strike', level:1, maxLevel:5, statBonus:{}, iconName:'Zap' }; st.offerRerolls = 0; });
+    const c0 = await p.evaluate(() => window.__game.getState().coins);
+    await p.evaluate(() => window.__game.rerollSkill());
+    const c1 = await p.evaluate(() => window.__game.getState().coins);
+    await p.evaluate(() => window.__game.rerollSkill());
+    const c2 = await p.evaluate(() => window.__game.getState().coins);
+    ok('"another skill": needs an offer, first is free, then costs coins', noOffer === false && c1 === c0 && c2 === c0 - 25, `${c0}->${c1}->${c2}`);
+    // import save survives the reload
+    await p.evaluate(() => window.__game.importSave(JSON.stringify({ lang:'en', playerLevel: 7, coins: 777777, tutorialStep: 99, lastDailyLoginDate: new Date().toLocaleDateString('en-CA'), dailyLoginStreak:1, claimedDailyDays:[1] })));
+    await p.waitForTimeout(4000);
+    s2 = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+    ok('import save is kept after the reload', s2.coins >= 777777 && s2.playerLevel === 7, `coins=${s2.coins} lvl=${s2.playerLevel}`);
+    ok('no page errors in regression flow', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    // an unanswered offline reward survives a relaunch
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.addInitScript((d) => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'en', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, totalFightsWon:5, lastOfflineTimestamp: Date.now() - 3 * 3600 * 1000 })); } }, today());
+    await p.goto(URL); await ready(p); await p.waitForTimeout(2000);
+    const g1 = await p.evaluate(() => window.__game.getState().offlineGoldAccumulated);
+    await p.reload(); await ready(p); await p.waitForTimeout(2000);
+    const st = await p.evaluate(() => ({ open: window.__game.getState().isOfflineRewardOpen, gold: window.__game.getState().offlineGoldAccumulated }));
+    ok('offline reward is still offered after a relaunch', g1 > 0 && st.open && st.gold >= g1, `before=${g1} after=${st.gold}`);
+    await b.close();
+  }
+  {
+    // a malformed save never gives a white screen
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'en', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, playerLevel:3, inventory:null, dailyQuests:[null], questDate:d, coins:-50, playerFighter:{ equipped:null } })); }, today());
+    await p.goto(URL); await p.waitForTimeout(5000);
+    ok('malformed save loads (no white screen, no errors)', await p.locator('nav button').count() === 4 && errs.length === 0, errs.join('|'));
+    await b.close();
+  }
   // ---- 10. Dynamic Island: header splits left/right of the island, nothing under it; notch phones keep the classic header
   for (const [w, h, top, island] of [[393, 852, 59, true], [402, 874, 62, true], [390, 844, 47, false]]) {
     const b = await chromium.launch({ args: GL });

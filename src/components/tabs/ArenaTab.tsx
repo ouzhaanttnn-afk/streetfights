@@ -48,8 +48,18 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
 
       {view === 'quests' ? (
         <>
-          <DailyQuestsCard state={state} />
-          <AchievementsCard state={state} />
+          {/* Whichever card has something to claim comes first */}
+          {(state.dailyQuests || []).some((q) => !q.claimed && q.progress >= q.target) || claimableRewards(state) === 0 ? (
+            <>
+              <DailyQuestsCard state={state} />
+              <AchievementsCard state={state} />
+            </>
+          ) : (
+            <>
+              <AchievementsCard state={state} />
+              <DailyQuestsCard state={state} />
+            </>
+          )}
         </>
       ) : (
       <>
@@ -144,7 +154,7 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
                       {stageData.opponent.name}
                     </h4>
                     {stageData.isBoss && (
-                      <span className="px-2 py-0.5 bg-rose-600 text-white font-black text-[9px] rounded-md uppercase shadow-sm">
+                      <span className="px-2 py-0.5 bg-rose-600 text-white font-black text-[10px] rounded-md uppercase shadow-sm">
                         {t('boss', state.lang)}
                       </span>
                     )}

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { EquipmentItem, EquipmentSlot } from '../../types/game';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { ACTIVE_SLOTS, RARITY_CONFIG } from '../../core/lootGenerator';
@@ -34,6 +34,15 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
   const [isEquippedSelected, setIsEquippedSelected] = useState<boolean>(false);
   const [forgeSuccessMsg, setForgeSuccessMsg] = useState<string | null>(null);
 
+  const bagFull = state.inventory.length >= state.maxInventorySlots;
+  useEffect(() => {
+    if (!selectedItem) return;
+    const stillThere = isEquippedSelected
+      ? state.playerFighter.equipped[selectedItem.slot]?.id === selectedItem.id
+      : state.inventory.some((i) => i.id === selectedItem.id);
+    if (!stillThere) setSelectedItem(null);
+  }, [state.inventory, state.playerFighter.equipped, selectedItem, isEquippedSelected]);
+
   const slotsOrder: EquipmentSlot[] = ACTIVE_SLOTS;
   const slotName = (slot: EquipmentSlot) => ui(state.lang, 'slot_' + slot);
   const equippedPower = (slot: EquipmentSlot) => state.playerFighter.equipped[slot]?.powerScore || 0;
@@ -65,19 +74,21 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
     setIsEquippedSelected(false);
   };
 
+  // Sell common/uncommon items that are not an upgrade, after a confirmation that says what goes
+  const sellable = state.inventory.filter((i) => (i.rarity === 'common' || i.rarity === 'uncommon') && i.powerScore <= equippedPower(i.slot));
   const handleSellAllCommon = () => {
-    state.inventory.forEach((item) => {
-      if (item.rarity === 'common' || item.rarity === 'uncommon') {
-        gameManager.sellItem(item);
-      }
-    });
+    if (sellable.length === 0) return;
+    const coins = sellable.reduce((sum, i) => sum + i.sellPrice, 0);
+    if (!window.confirm(ui(state.lang, 'confirm_sell', { n: sellable.length, c: coins }))) return;
+    sellable.forEach((item) => gameManager.sellItem(item));
   };
 
   const handleAutoForge = () => {
     // Look for any 3 items with matching rarity in inventory
     const rarityGroups: Record<string, EquipmentItem[]> = {};
-    state.inventory.forEach((item) => {
-      if (item.rarity !== 'mythic') {
+    // Never burn an item that would be an upgrade; weakest items go first
+    [...state.inventory].sort((a, b) => a.powerScore - b.powerScore).forEach((item) => {
+      if (item.rarity !== 'mythic' && item.powerScore <= equippedPower(item.slot)) {
         if (!rarityGroups[item.rarity]) rarityGroups[item.rarity] = [];
         rarityGroups[item.rarity].push(item);
       }
@@ -90,6 +101,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
           rarityGroups[r][1].id,
           rarityGroups[r][2].id,
         ];
+        if (!window.confirm(ui(state.lang, 'confirm_forge', { r: RARITY_CONFIG[r as EquipmentItem['rarity']].name }))) return;
         const success = gameManager.fuseEquipment(itemIds);
         if (success) {
           setForgeSuccessMsg(`✨ ${ui(state.lang, 'forge_ok')}`);
@@ -134,7 +146,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                     : 'border-zinc-800/80 bg-neutral-900/50 hover:border-zinc-700'
                 }`}
               >
-                <div className="w-full flex justify-between items-center text-[9px] font-bold text-zinc-400">
+                <div className="w-full flex justify-between items-center text-[10px] font-bold text-zinc-400">
                   <span className="truncate uppercase tracking-wider">{slotName(slot)}</span>
                   {item && <span className="font-mono text-amber-300 font-black bg-black/60 px-1.5 py-0.2 rounded border border-white/10">Lv.{item.level}</span>}
                 </div>
@@ -153,7 +165,7 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                       ⚡ {item.powerScore}
                     </span>
                   ) : (
-                    <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider">
+                    <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider">
                       {t('emptySlot', state.lang)}
                     </span>
                   )}
@@ -166,31 +178,34 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
 
       {/* 2. Inventory Bag */}
       <div className="game-card rounded-3xl p-4 shadow-2xl border border-white/10">
-        <div className="flex items-center justify-between mb-3 px-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-zinc-100 tracking-wider uppercase">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-black text-zinc-100 tracking-wider uppercase truncate">
               {t('inventory', state.lang)}
             </span>
-            <span className="text-[10px] text-zinc-400 font-mono font-bold bg-black/40 px-2 py-0.5 rounded-lg border border-white/5">
+            <span className="whitespace-nowrap tabular-nums text-[11px] text-zinc-400 font-bold bg-black/40 px-2 py-0.5 rounded-lg border border-white/5">
               {state.inventory.length} / {state.maxInventorySlots}
             </span>
           </div>
 
           {state.inventory.length > 0 && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 ml-auto">
               <button
                 onClick={handleAutoForge}
-                className="text-[10px] font-black text-cyan-300 bg-cyan-950/80 hover:bg-cyan-900 px-2.5 py-1 rounded-xl border border-cyan-500/40 flex items-center gap-1 active:scale-95 shadow-md"
+                className="whitespace-nowrap min-h-9 text-[11px] font-black text-cyan-300 bg-cyan-950/80 hover:bg-cyan-900 px-2.5 rounded-xl border border-cyan-500/40 flex items-center gap-1 active:scale-95 shadow-md"
               >
-                <Hammer className="w-3 h-3 text-cyan-400" />
+                <Hammer className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{ui(state.lang, 'forge_btn')}</span>
               </button>
 
               <button
                 onClick={handleSellAllCommon}
-                className="text-[10px] font-black text-amber-300 bg-amber-950/80 hover:bg-amber-900 px-2.5 py-1 rounded-xl border border-amber-600/40 flex items-center gap-1 active:scale-95 shadow-md"
+                disabled={sellable.length === 0}
+                className={`whitespace-nowrap min-h-9 text-[11px] font-black px-2.5 rounded-xl border flex items-center gap-1 active:scale-95 shadow-md ${
+                  sellable.length === 0 ? 'text-zinc-600 bg-neutral-900 border-zinc-800' : 'text-amber-300 bg-amber-950/80 hover:bg-amber-900 border-amber-600/40'
+                }`}
               >
-                <Trash2 className="w-3 h-3 text-amber-400" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>{t('sellLowTier', state.lang)}</span>
               </button>
             </div>
@@ -221,18 +236,18 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                   className={`relative aspect-square rounded-2xl p-2 flex flex-col items-center justify-between border-2 transition-all active:scale-95 shadow-md ${rarity.borderColor} ${rarity.bgColor}`}
                 >
                   {isBetter && (
-                    <span data-better className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-md bg-emerald-400 text-black text-[7px] font-black shadow">
+                    <span data-better className="absolute -top-1.5 -right-1.5 px-1 py-0.5 rounded-md bg-emerald-400 text-black text-[9px] font-black shadow">
                       ▲ {ui(state.lang, 'better_badge')}
                     </span>
                   )}
-                  <div className="w-full flex justify-between items-center text-[8px] font-bold text-zinc-400">
+                  <div className="w-full flex justify-between items-center text-[10px] font-bold text-zinc-400">
                     <span className="truncate uppercase">{slotName(item.slot)}</span>
                     <span className="text-amber-400 font-black font-mono">L{item.level}</span>
                   </div>
 
                   <ItemIcon slot={item.slot} rarity={item.rarity} size={46} fallback={<Icon className={`w-5 h-5 ${rarity.color} drop-shadow`} />} />
 
-                  <span className="text-[9px] font-black font-mono text-zinc-200 bg-black/50 px-1 rounded">
+                  <span className="text-[10px] font-black font-mono text-zinc-200 bg-black/50 px-1 rounded">
                     ⚡{item.powerScore}
                   </span>
                 </button>
@@ -335,29 +350,32 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
               )}
             </div>
 
-            <div className="w-full grid grid-cols-2 gap-2.5">
+            {isEquippedSelected ? (
+              // Equipped gear can only be taken off (selling happens from the bag)
               <button
+                disabled={bagFull}
                 onClick={() => {
-                  gameManager.sellItem(selectedItem);
+                  gameManager.unequipItem(selectedItem.slot);
                   setSelectedItem(null);
                 }}
-                className="py-3 bg-neutral-800 hover:bg-neutral-700 text-zinc-300 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 border border-zinc-700 active:scale-95 shadow-md"
+                className={`w-full py-3 font-bold text-xs rounded-2xl border active:scale-95 shadow-md ${
+                  bagFull ? 'bg-neutral-900 text-zinc-500 border-zinc-800' : 'bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-800'
+                }`}
               >
-                <Coins className="w-3.5 h-3.5 text-amber-400" />
-                <span>{t('sell', state.lang)} (+{selectedItem.sellPrice})</span>
+                {bagFull ? ui(state.lang, 'bag_full') : t('unequip', state.lang)}
               </button>
-
-              {isEquippedSelected ? (
+            ) : (
+              <div className="w-full grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => {
-                    gameManager.unequipItem(selectedItem.slot);
+                    gameManager.sellItem(selectedItem);
                     setSelectedItem(null);
                   }}
-                  className="py-3 bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-bold text-xs rounded-2xl border border-rose-800 active:scale-95 shadow-md"
+                  className="py-3 bg-neutral-800 hover:bg-neutral-700 text-zinc-300 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 border border-zinc-700 active:scale-95 shadow-md"
                 >
-                  {t('unequip', state.lang)}
+                  <Coins className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{t('sell', state.lang)} (+{selectedItem.sellPrice})</span>
                 </button>
-              ) : (
                 <button
                   onClick={() => {
                     gameManager.equipItem(selectedItem);
@@ -368,8 +386,8 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                   <Check className="w-4 h-4" />
                   <span>{t('equipNow', state.lang)}</span>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

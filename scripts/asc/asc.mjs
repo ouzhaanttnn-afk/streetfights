@@ -102,7 +102,7 @@ async function inspect() {
 const NOTES = [
   'Street Striker is an offline, single-player idle/auto-battle fighting RPG. No account or login is required and there are no in-app purchases. The player fights AI opponents, collects gear and trains stats.',
   '',
-  '- Optional rewarded video ads (Google AdMob): Shop tab (Free Gems, 2x Damage), revive after a boss defeat, double the offline reward, and an optional bonus card after a boss win. They are never required to progress. App Tracking Transparency permission is requested on first launch.',
+  '- Optional rewarded video ads (Google AdMob): Shop tab (Free Gems, 2x Damage, each capped per day), revive after a boss defeat, double the offline reward, double the daily login reward, one free gym level when the player is short of coins (cooldown), and short-lived offer cards after a boss win or a loss on a hard stage. They are never required to progress. In the EEA/UK the Google consent form is shown first; App Tracking Transparency permission is requested on first launch.',
   '- There is no online multiplayer, leaderboard, chat or user-generated content; all opponents are fictional AI characters.',
   '- Daily rewards use only free in-game currency; nothing can be bought, sold or cashed out. The lucky wheel from the previous build was removed, and the age rating now says Simulated Gambling: None.',
   '- Optional local reminders (gold vault full, daily reward) can be enabled from an in-game card shown after a few wins or in Settings > Notifications. They are scheduled on the device only.',

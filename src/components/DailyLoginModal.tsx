@@ -11,7 +11,8 @@ import {
   Flame, 
   Check, 
   X, 
-  Gift 
+  Gift,
+  Tv,
 } from "lucide-react";
 
 interface DailyLoginModalProps {
@@ -166,6 +167,28 @@ export const DailyLoginModal: React.FC<DailyLoginModalProps> = ({ state, onClose
             </div>
           );
         })()}
+
+        {/* Today's reward: claim, or watch an optional ad to double it (not for the gear day) */}
+        {!claimedDays.includes(currentStreak) && (
+          <div className="w-full grid grid-cols-2 gap-2 mt-3">
+            <button
+              data-daily-claim
+              onClick={() => handleClaim(currentStreak)}
+              className="min-h-11 rounded-2xl game-btn-gold text-black font-black text-xs uppercase active:scale-95"
+            >
+              {ui(state.lang, "claim")}
+            </button>
+            {currentStreak !== 6 ? (
+              <button
+                data-daily-double
+                onClick={() => gameManager.openRewardedAd({ type: "daily_double", day: currentStreak, title: ui(state.lang, "daily_double"), rewardDesc: ui(state.lang, "daily_double") })}
+                className="min-h-11 rounded-2xl bg-rose-950/80 border border-rose-400/60 text-rose-100 font-black text-xs flex items-center justify-center gap-1.5 active:scale-95"
+              >
+                <Tv className="w-4 h-4" /> {ui(state.lang, "daily_double")}
+              </button>
+            ) : <div />}
+          </div>
+        )}
       </div>
     </div>
   );

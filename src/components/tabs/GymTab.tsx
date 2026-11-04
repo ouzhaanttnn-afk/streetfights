@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { t } from '../../i18n/translations';
 import { ui } from '../../i18n/ui';
+import { gymStatCapped } from '../../core/progression';
 
 const STAT_KEY: Record<string, string> = { atk: 'stat_atk', hp: 'stat_hp', def: 'stat_def', spd: 'stat_spd', critRate: 'stat_crit', comboRate: 'stat_cmb', dodgeRate: 'stat_dge', lifesteal: 'stat_vamp' };
 import { 
@@ -12,7 +13,8 @@ import {
   Zap, 
   Wind, 
   Coins, 
-  ArrowUp
+  ArrowUp,
+  Tv
 } from 'lucide-react';
 
 interface GymTabProps {
@@ -63,11 +65,33 @@ export const GymTab: React.FC<GymTabProps> = ({ state }) => {
         </div>
       </div>
 
+      {/* Short on coins: one free level of the cheapest drill for an optional ad (cooldown + daily cap) */}
+      {(() => {
+        const open = state.gymTrainings.filter((g) => !gymStatCapped(g.targetStat, state.playerFighter.stats));
+        const cheapest = open.sort((a, b) => a.cost - b.cost)[0];
+        if (!cheapest || state.coins >= cheapest.cost || !gameManager.gymFreeAvailable()) return null;
+        const name = ui(state.lang, cheapest.id) !== cheapest.id ? ui(state.lang, cheapest.id) : cheapest.name;
+        return (
+          <button
+            data-gym-free
+            onClick={() => gameManager.openRewardedAd({ type: 'gym_free', trainingId: cheapest.id, title: ui(state.lang, 'gym_free_title'), rewardDesc: name })}
+            className="w-full min-h-12 rounded-2xl px-3 flex items-center gap-2.5 bg-gradient-to-r from-amber-500/20 via-black/60 to-black/60 border border-amber-400/50 text-left active:scale-[0.98]"
+          >
+            <span className="w-8 h-8 shrink-0 rounded-xl game-btn-gold text-black flex items-center justify-center"><Tv className="w-4 h-4" /></span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[11px] font-black text-amber-200">{ui(state.lang, 'gym_free_title')}</span>
+              <span className="block text-[10px] font-bold text-zinc-300 truncate">{name} · {ui(state.lang, 'ads_left', { n: gameManager.adsLeftToday('gym_free') })}</span>
+            </span>
+          </button>
+        );
+      })()}
+
       {/* Gym Training Drills */}
       <div className="space-y-3">
         {state.gymTrainings.map((training) => {
           const Icon = getTrainingIcon(training.iconName);
-          const canAfford = state.coins >= training.cost;
+          const capped = gymStatCapped(training.targetStat, state.playerFighter.stats);
+          const canAfford = state.coins >= training.cost && !capped;
           const isAnimating = activeWorkoutAnim === training.id;
 
           return (
@@ -111,11 +135,17 @@ export const GymTab: React.FC<GymTabProps> = ({ state }) => {
                     : 'bg-zinc-850 text-zinc-600 border-zinc-800 cursor-not-allowed'
                 }`}
               >
-                <span className="text-[10px] uppercase tracking-wider font-black">{t('train', state.lang)}</span>
-                <div className="flex items-center gap-1 text-[11px] font-mono font-black mt-0.5">
-                  <Coins className="w-3 h-3 text-black" />
-                  <span>{training.cost}</span>
-                </div>
+                {capped ? (
+                  <span className="text-[11px] uppercase tracking-wider font-black text-emerald-300">{ui(state.lang, 'gym_max')}</span>
+                ) : (
+                  <>
+                    <span className="text-[10px] uppercase tracking-wider font-black">{t('train', state.lang)}</span>
+                    <div className="flex items-center gap-1 text-[11px] font-black tabular-nums mt-0.5">
+                      <Coins className="w-3 h-3" />
+                      <span>{training.cost.toLocaleString()}</span>
+                    </div>
+                  </>
+                )}
               </button>
             </div>
           );

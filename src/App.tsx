@@ -18,7 +18,7 @@ import { OfflineRewardModal } from './components/OfflineRewardModal';
 import { SkillReplaceModal } from './components/SkillReplaceModal';
 import { TutorialHint } from './components/TutorialHint';
 import { NextStepCard } from './components/NextStepCard';
-import { BossBonusCard, NotifyAskCard } from './components/OfferCards';
+import { BossBonusCard, BuffOfferCard, NotifyAskCard } from './components/OfferCards';
 import { ToastStack } from './components/ToastStack';
 import { getStageData } from './core/stageDatabase';
 import { fightOdds } from './core/combat';
@@ -140,6 +140,8 @@ export function App() {
           {/* At most one prompt above the tab: boss bonus > notification ask > next step */}
           {state.bossBonus && Date.now() < state.bossBonus.expiresAt ? (
             <BossBonusCard state={state} />
+          ) : state.buffOffer && Date.now() < state.buffOffer.expiresAt ? (
+            <BuffOfferCard state={state} />
           ) : !state.notifAsked && state.totalFightsWon >= 8 ? (
             <NotifyAskCard state={state} />
           ) : (
@@ -157,9 +159,10 @@ export function App() {
 
         {levelUpTo !== null && (
           <div className="level-up-banner pointer-events-none absolute left-1/2 -translate-x-1/2 z-40 animate-fadeIn">
-            <div className="px-5 py-2 rounded-2xl game-btn-gold text-black text-center shadow-2xl border border-amber-200">
-              <div className="text-[13px] font-black tracking-wider">⬆ {ui(state.lang, 'level_up')}</div>
-              <div className="text-[11px] font-black">Lv. {levelUpTo}</div>
+            <div className="result-slam px-8 py-3 rounded-3xl game-btn-gold text-black text-center shadow-2xl border-2 border-amber-100">
+              <div className="text-lg font-black tracking-wider leading-tight">⬆ {ui(state.lang, 'level_up')}</div>
+              <div className="text-sm font-black">Lv. {levelUpTo}</div>
+              <div className="text-[11px] font-black opacity-80 mt-0.5">+20 HP · +3 ATK · +2 DEF · +1 SPD</div>
             </div>
           </div>
         )}

@@ -7,7 +7,7 @@ const ok = (n, c, extra='') => { results.push(`${c ? 'PASS' : 'FAIL'}  ${n} ${ex
 const today = () => new Date().toLocaleDateString('en-CA');
 const URL = process.env.URL || 'http://localhost:5199';
 // Wait until the app has booted and written its save (more reliable than fixed sleeps on a loaded machine)
-const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion === 4; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
+const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion === 5; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
 
 (async () => {
   // ---- 1. Legacy save compatibility (shape written by the ORIGINAL game, before my changes)
@@ -25,7 +25,7 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     const s = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
     ok('legacy save: level/world/inventory kept', s.playerLevel === 9 && s.currentWorld === 2 && s.inventory.length === 1 && s.totalFightsWon >= 33 && s.bossDefeatedCount === 2, `lvl=${s.playerLevel} inv=${s.inventory.length} fights=${s.totalFightsWon}`);
     ok('legacy save: coins not reset (>=12345)', s.coins >= 12345, `coins=${s.coins}`);
-    ok('legacy save: new fields filled', s.saveVersion === 4 && s.dailyQuests?.length === 4 && s.quality === 'medium');
+    ok('legacy save: new fields filled', s.saveVersion === 5 && s.dailyQuests?.length === 4 && s.quality === 'medium');
     ok('legacy save: daily login opens for old save', await p.getByText(/7-DAY LOGIN REWARDS|7 GÜNLÜK GİRİŞ ÖDÜLÜ/).count() > 0);
     ok('legacy save: no page errors', errs.length === 0, errs.join('|'));
     await b.close();
@@ -211,7 +211,7 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     // Stat bar: one row, expands on tap
     const chipsBefore = await p.locator('.stat-bar .grid > div').count();
     await p.locator('.stat-bar > button').click(); await p.waitForTimeout(300);
-    ok('stat bar is a single row that expands to 8 stats', chipsBefore === 0 && await p.locator('.stat-bar .grid > div').count() === 8);
+    ok('stat bar is a single row that expands to 9 stats', chipsBefore === 0 && await p.locator('.stat-bar .grid > div').count() === 9);
     // Shop: two clear ad offers
     await p.locator('nav [data-tab=shop]').click(); await p.waitForTimeout(500);
     ok('shop shows exactly 2 ad offers', await p.locator('[data-ad]').count() === 2);
@@ -281,6 +281,14 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     await p.waitForTimeout(4000);
     s2 = await p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
     ok('import save is kept after the reload', s2.coins >= 777777 && s2.playerLevel === 7, `coins=${s2.coins} lvl=${s2.playerLevel}`);
+    // phase 2: manual mode runs at 1x
+    await p.evaluate(() => { const g = window.__game; if (g.getState().autoBattle) g.toggleAutoBattle(); g.cycleBattleSpeed(); });
+    ok('manual mode stays at 1x speed', (await p.evaluate(() => window.__game.getState().battleSpeed)) === 1);
+    await p.evaluate(() => { const g = window.__game; if (!g.getState().autoBattle) g.toggleAutoBattle(); });
+    // phase 2: a loss on a hard stage offers the optional 2x damage ad
+    await p.evaluate(() => { const g = window.__game; const st = g.getState(); st.lastBuffOfferAt = 0; st.doubleDamageUntil = 0; g.onStageDefeat({ isBoss: false, world: 9, subStage: 3, opponent: { stats: { hp: 1e7, maxHp: 1e7, atk: 1e6, def: 1e6, spd: 500, critRate: 10, critDmg: 1.5, comboRate: 5, dodgeRate: 5, lifesteal: 0, stamina: 100, powerScore: 1 }, profile: 'aggressive' } }); g.notify(); });
+    await p.waitForTimeout(400);
+    ok('hard-stage loss offers the 2x damage ad card', await p.locator('[data-buff-offer]').count() === 1);
     ok('no page errors in regression flow', errs.length === 0, errs.join('|'));
     await b.close();
   }

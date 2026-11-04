@@ -198,6 +198,30 @@ export const ACTIVE_SLOTS: EquipmentSlot[] = ['head', 'gloves', 'robe', 'shorts'
 // Six slots carry the stat budget nine used to; keeps the progression curve (tuned with scripts/run-balance-sim.mjs)
 export const SLOT_COMPENSATION = 1.3;
 
+// Secondary percentage stats of an item, from its rarity multiplier (1 common ... 8.5 mythic)
+export function rateStat(stat: 'critRate' | 'critDmg' | 'comboRate' | 'dodgeRate', rarityMult: number): number {
+  if (stat === 'critRate') return Math.round((2 + rarityMult * 1.2) * 10) / 10;
+  if (stat === 'comboRate') return Math.round((3 + rarityMult * 1.5) * 10) / 10;
+  if (stat === 'dodgeRate') return Math.round((2 + rarityMult * 1.1) * 10) / 10;
+  return Math.round((0.1 + rarityMult * 0.06) * 100) / 100;
+}
+
+// Saves before v5: bring level-scaled percentage stats of old items down to the rarity-based values
+export function normalizeItemRates(item: EquipmentItem): EquipmentItem {
+  const info = SLOT_INFO[item.slot];
+  const rarityMult = RARITY_CONFIG[item.rarity]?.statMultiplier ?? 1;
+  const stats = { ...item.stats };
+  const sec = info?.secondaryStat;
+  if (sec === 'critRate' || sec === 'critDmg' || sec === 'comboRate' || sec === 'dodgeRate') {
+    const target = rateStat(sec, rarityMult);
+    const bonus = sec === 'critRate' && (item.rarity === 'legendary' || item.rarity === 'mythic') ? 4
+      : sec === 'comboRate' && (item.rarity === 'legendary' || item.rarity === 'mythic') ? 5
+      : sec === 'dodgeRate' && item.rarity === 'mythic' ? 5 : 0;
+    stats[sec] = Math.min(stats[sec] || 0, target + bonus);
+  }
+  return { ...item, stats, powerScore: computePowerScore(stats) };
+}
+
 export function computePowerScore(s: StatModifiers): number {
   return Math.round(
     (s.hp || 0) * 0.4 +
@@ -292,17 +316,18 @@ export function generateEquipment(
     case 'hp':
       stats.hp += Math.round((15 + itemLevel * 5) * mult);
       break;
+    // Percentage stats grow with rarity only: scaling them with item level hit the caps by stage ~20
     case 'critRate':
-      stats.critRate = Math.min(Math.round((2 + mult * 1.2) * 10) / 10, 50);
+      stats.critRate = rateStat('critRate', rarityConf.statMultiplier);
       break;
     case 'critDmg':
-      stats.critDmg = Math.round((0.15 * mult) * 100) / 100;
+      stats.critDmg = rateStat('critDmg', rarityConf.statMultiplier);
       break;
     case 'comboRate':
-      stats.comboRate = Math.min(Math.round((3 + mult * 1.5) * 10) / 10, 60);
+      stats.comboRate = rateStat('comboRate', rarityConf.statMultiplier);
       break;
     case 'dodgeRate':
-      stats.dodgeRate = Math.min(Math.round((2 + mult * 1.1) * 10) / 10, 45);
+      stats.dodgeRate = rateStat('dodgeRate', rarityConf.statMultiplier);
       break;
     case 'def':
       stats.def += Math.round((2 + itemLevel * 1.2) * mult);
@@ -352,16 +377,21 @@ export interface Synergy {
 }
 
 // Equipping 2 or 3+ skills of the same family grants a set bonus.
-export function skillSynergies(skills: { category?: string }[]): Synergy[] {
+// Two skills of one family give the set bonus; levelling them (levels adding up to 6+) upgrades it
+export function skillSynergies(skills: { category?: string; level?: number }[]): Synergy[] {
   const counts: Partial<Record<SkillCategory, number>> = {};
+  const levels: Partial<Record<SkillCategory, number>> = {};
   skills.forEach((s) => {
-    if (s.category) counts[s.category as SkillCategory] = (counts[s.category as SkillCategory] || 0) + 1;
+    if (!s.category) return;
+    const c = s.category as SkillCategory;
+    counts[c] = (counts[c] || 0) + 1;
+    levels[c] = (levels[c] || 0) + (s.level || 1);
   });
   const out: Synergy[] = [];
   (Object.keys(counts) as SkillCategory[]).forEach((category) => {
     const count = counts[category] || 0;
     if (count < 2) return;
-    const tier = count >= 3 ? 3 : 2;
+    const tier = count >= 3 || (levels[category] || 0) >= 6 ? 3 : 2;
     const bonus = category === 'combo' ? (tier === 3 ? '+9%' : '+4%')
       : category === 'lifesteal' ? (tier === 3 ? '+3.5%' : '+1.5%')
       : category === 'rage' ? (tier === 3 ? '+0.25x' : '+0.10x')
@@ -375,7 +405,7 @@ export function calculateTotalStats(
   base: Required<StatModifiers>,
   gymBonus: Required<StatModifiers>,
   equipped: Record<EquipmentSlot, EquipmentItem | null>,
-  skills: { statBonus: Partial<StatModifiers>; category?: string }[]
+  skills: { statBonus: Partial<StatModifiers>; category?: string; level?: number }[]
 ): Required<StatModifiers> {
   const result: Required<StatModifiers> = {
     hp: base.hp + gymBonus.hp,

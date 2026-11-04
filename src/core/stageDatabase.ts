@@ -73,7 +73,9 @@ const WORLDS: WorldConfig[] = [
 // Fighting styles rotate across the roster so neighbouring stages feel different.
 const NORMAL_PROFILES: OpponentProfile[] = ['aggressive', 'defensive', 'counter', 'fast', 'heavy'];
 
-export const BALANCE = { linear: 0.15, growth: 1.03, boss: 1.4, subBoss: 1.25, firstWorldBoss: 1.25 };
+// Tuned with scripts/run-balance-sim.mjs (docs/BALANCE.md): ~15-25% losses on normal stages up to 100, bosses 20-60%,
+// fights 6-10 s at 1x, a soft wall after stage ~100. Growth was 1.03, which made late opponents outscale everything.
+export const BALANCE = { linear: 0.34, growth: 1.008, boss: 1.05, subBoss: 1.0, firstWorldBoss: 0.9 };
 
 export const WORLD_COUNT = WORLDS.length;
 

@@ -9,7 +9,7 @@ import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { difficultyOf } from '../core/guidance';
-import { DAMAGE_MULT, fightOdds, opponentInterval, playerInterval } from '../core/combat';
+import { DAMAGE_MULT, damageMult, fightOdds, opponentInterval, playerInterval } from '../core/combat';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
 
@@ -193,11 +193,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   }, []);
 
   const addFloatingText = (text: string, x: number, y: number, color: string, type: FloatingText['type'] = 'damage') => {
+    // Stack numbers that spawn close together in time and place instead of drawing them on top of each other
+    const now = Date.now();
+    const crowd = floatingTextsRef.current.filter((f) => now - f.createdAt < 450 && Math.abs(f.x - x) < 45).length;
     floatingTextsRef.current.push({
       id: Math.random().toString(),
       text,
-      x: x + (Math.random() * 20 - 10),
-      y: y + (Math.random() * 10 - 5),
+      x: x + (Math.random() * 12 - 6),
+      y: y - crowd * 15,
       color,
       type,
       createdAt: Date.now(),
@@ -205,7 +208,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     });
   };
 
-  const addCallout = (text: string, x: number, y: number, color: string = '#fef08a') => {
+  // One headline callout at a time: a stronger moment (KO > super > crit > block) replaces a weaker one
+  const calloutRankRef = useRef(0);
+  const addCallout = (text: string, x: number, y: number, color: string = '#fef08a', rank = 1) => {
+    const now = Date.now();
+    const active = calloutsRef.current.filter((c) => now - c.createdAt < c.duration * 0.7);
+    if (active.length && rank < calloutRankRef.current) return;
+    calloutsRef.current = [];
+    calloutRankRef.current = rank;
     calloutsRef.current.push({
       id: Math.random().toString(),
       text,
@@ -295,7 +305,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     let baseDmg = pStats.atk * (0.85 + Math.random() * 0.3);
 
     // Asymptotic Defense Formula (eliminates 1 DMG wall)
-    const defMultiplier = 100 / (100 + oppStats.def * 0.45);
+    const defMultiplier = damageMult(pStats.atk, oppStats.def);
     let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
 
     if (isCrit) {
@@ -376,7 +386,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       screenShakeRef.current = battleRig.reducedMotion ? 3 : 12;
       hitStopTimerRef.current = 70; // 70ms Hit-Stop Freeze
       spawnHitParticles(oppChest.x, oppChest.y, '#fbbf24', particleCount(24));
-      addCallout(ui(state.lang, 'c_super'), oppChest.x - 25, oppHead.y - 15, '#fde047');
+      addCallout(ui(state.lang, 'c_super'), oppChest.x - 25, oppHead.y - 15, '#fde047', 4);
       addFloatingText(`${t('superCrit', state.lang)} ${finalDmg}`, oppHead.x, oppHead.y, '#fbbf24', 'crit');
       battleRig.kickCamera(1);
     } else if (isCrit) {
@@ -386,7 +396,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       hitStopTimerRef.current = 45; // 45ms Hit-Stop Freeze
       spawnHitParticles(oppChest.x, oppChest.y, '#fbbf24', particleCount(16));
       const critCallouts = ['CRUNCH!', 'POW!', 'SMASH!', 'BOOM!'];
-      addCallout(critCallouts[Math.floor(Math.random() * critCallouts.length)], oppChest.x - 10, oppHead.y - 15, '#f59e0b');
+      addCallout(critCallouts[Math.floor(Math.random() * critCallouts.length)], oppChest.x - 10, oppHead.y - 15, '#f59e0b', 3);
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, oppHead.x, oppHead.y, '#fbbf24', 'crit');
       battleRig.kickCamera(0.6);
     } else {
@@ -484,7 +494,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         schedule(160, () => {
           if (isMatchOverRef.current) return;
           const opp = stageRef.current.opponent.stats;
-          const dmg = Math.max(1, Math.round(pStats.atk * (counter.specialProc?.multiplier || 1.5) * (100 / (100 + opp.def * 0.45))));
+          const dmg = Math.max(1, Math.round(pStats.atk * (counter.specialProc?.multiplier || 1.5) * damageMult(pStats.atk, opp.def)));
           battleRig.command('player', 'jab');
           opponentHpRef.current = Math.max(0, opponentHpRef.current - dmg);
           setOpponentHpDisplay(opponentHpRef.current);
@@ -507,7 +517,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     let baseDmg = oppStats.atk * (0.85 + Math.random() * 0.3) * dmgMult;
 
     // Asymptotic Defense Formula for Player
-    const defMultiplier = 100 / (100 + pStats.def * 0.45);
+    const defMultiplier = damageMult(oppStats.atk, pStats.def);
     let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
 
     if (isCrit) {
@@ -562,7 +572,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       screenShakeRef.current = battleRig.reducedMotion ? 2 : 7;
       hitStopTimerRef.current = 40;
       spawnHitParticles(playerChest.x, playerChest.y, '#f97316', particleCount(12));
-      addCallout(ui(state.lang, 'c_ouch'), playerChest.x, playerHead.y - 15, '#ef4444');
+      addCallout(ui(state.lang, 'c_ouch'), playerChest.x, playerHead.y - 15, '#ef4444', 2);
       addFloatingText(`${t('crit', state.lang)} -${finalDmg}`, playerHead.x, playerHead.y + 4, '#ef4444', 'crit');
       battleRig.flash('player', 1);
       battleRig.kickCamera(0.35);
@@ -593,7 +603,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     setMatchStatus('victory');
     battleRig.command('player', 'victory');
     soundFx.playVictoryFanfare();
-    addCallout(ui(state.lang, 'c_ko'), 160, 75, '#fbbf24');
+    addCallout(ui(state.lang, 'c_ko'), 160, 75, '#fbbf24', 5);
 
     // Show what the win paid out
     const won = stageRef.current;
@@ -742,8 +752,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           setManualAttackReady(true);
         }
 
-        const pInterval = playerInterval(state.playerFighter.stats.spd);
-        const oppInterval = opponentInterval(stageRef.current.opponent.stats.spd, stageRef.current.opponent.profile);
+        const pInterval = playerInterval(state.playerFighter.stats.spd, stageRef.current.opponent.stats.spd);
+        const oppInterval = opponentInterval(stageRef.current.opponent.stats.spd, stageRef.current.opponent.profile, state.playerFighter.stats.spd);
 
         if (state.autoBattle && playerCooldownRef.current <= 0) {
           playerCooldownRef.current = pInterval;
@@ -934,19 +944,29 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       p.x += p.vx;
       p.y += p.vy;
       p.vy += 0.2;
-      p.life -= 0.04;
+      p.life -= 0.055;
 
       if (p.life <= 0) {
         particlesRef.current.splice(i, 1);
         continue;
       }
 
+      // Additive light streaks with a hot core read as sparks instead of flat discs
       ctx.globalAlpha = Math.max(0, p.life);
-      ctx.fillStyle = p.color;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = p.color;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = p.size * 0.9;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx * 2.2, p.y - p.vy * 2.2);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 0.35, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1.0;
 
     // Manga Onomatopoeia Callouts
@@ -1449,6 +1469,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           </button>
           <button
             type="button"
+            data-auto-toggle
             onClick={() => gameManager.toggleAutoBattle()}
             className="min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
             aria-label={ui(state.lang, state.autoBattle ? 'aria_to_manual' : 'aria_to_auto')}
@@ -1543,8 +1564,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
         {/* Match Result Overlay */}
         {matchStatus !== 'fighting' && !showReviveAd && (
-          <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center pointer-events-none z-20 px-6 text-center">
-            <span className={`text-3xl font-black italic tracking-wider drop-shadow-2xl ${
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-6 text-center" style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.7) 100%)' }}>
+            <span className={`result-slam text-3xl font-black italic tracking-wider drop-shadow-2xl ${
               matchStatus === 'victory' 
                 ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent' 
                 : 'text-rose-500'

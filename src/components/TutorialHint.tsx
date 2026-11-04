@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
 import { ui } from '../i18n/ui';
 
@@ -6,6 +6,19 @@ const STEPS = ['tut1', 'tut2', 'tut3', 'tut4'];
 
 export const TutorialHint: React.FC<{ state: GameStateData; blocked: boolean }> = ({ state, blocked }) => {
   const step = state.tutorialStep;
+  // Point at what the card talks about: AUTO, the rage bar's SUPER spot, the Gym tab, the Arena tab
+  useEffect(() => {
+    const selector = [
+      '[data-auto-toggle]',
+      '',
+      'nav [data-tab=gym]',
+      'nav [data-tab=arena]',
+    ][step];
+    if (!selector || blocked) return;
+    const el = document.querySelector(selector);
+    el?.classList.add('tutorial-target');
+    return () => el?.classList.remove('tutorial-target');
+  }, [step, blocked]);
   if (step >= STEPS.length || blocked) return null;
   return (
     <div

@@ -47,6 +47,7 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang, odds }) => {
     { label: t('stat_cmb', lang), value: `${stats.comboRate}%`, icon: Zap, color: 'text-yellow-400' },
     { label: t('stat_dge', lang), value: `${stats.dodgeRate}%`, icon: Wind, color: 'text-cyan-400' },
     { label: t('stat_vamp', lang), value: `${stats.lifesteal}%`, icon: HeartPulse, color: 'text-pink-400' },
+    { label: ui(lang, 'stat_critdmg'), value: `x${(stats.critDmg || 1.5).toFixed(2)}`, icon: Crosshair, color: 'text-orange-300' },
   ];
   const [diffKey, diffClass] = difficultyOf(odds);
 
@@ -77,7 +78,7 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang, odds }) => {
       </button>
 
       {open && (
-        <div className="grid grid-cols-4 gap-1.5 mt-1.5 animate-fadeIn">
+        <div className="grid grid-cols-3 gap-1.5 mt-1.5 animate-fadeIn">
           {statItems.map((item) => {
             const Icon = item.icon;
             return (

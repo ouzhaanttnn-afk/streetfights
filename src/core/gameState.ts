@@ -1,8 +1,11 @@
 import { EquipmentItem, EquipmentSlot, Fighter, FighterStats, GymTraining, Rarity, Skill, Stage, TabType } from '../types/game';
-import { ACTIVE_SLOTS, calculateTotalStats, generateEquipment, upgradeLegacyItem } from './lootGenerator';
+import { ACTIVE_SLOTS, calculateTotalStats, generateEquipment, normalizeItemRates, upgradeLegacyItem } from './lootGenerator';
 import { pushToast } from './toast';
+import { GYM_TEMPLATES, INITIAL_BASE_STATS, applyGymPercent, gymCostAt, gymGainAt, gymStatCapped } from './progression';
 import { cancelReminders, OFFLINE_CAP_MINUTES, requestNotificationPermission, scheduleReminders } from './notifications';
 import { ui } from '../i18n/ui';
+import { fightOdds } from './combat';
+import { skillName } from '../i18n/content-helpers';
 import { getStageData } from './stageDatabase';
 import { getRandomSkill, SKILL_DATABASE } from './skillDatabase';
 import { COSMETICS_LIST, CosmeticItem } from './cosmeticsData';
@@ -14,7 +17,7 @@ import { battleRig, QualityLevel } from '../game/battleRig';
 import { ACHIEVEMENTS } from './achievements';
 
 const STORAGE_KEY = 'street_striker_rpg_save_v2';
-const SAVE_VERSION = 4; // v4: 6 equipment slots
+const SAVE_VERSION = 5; // v4: 6 equipment slots, v5: rarity-based percentage stats on items
 const BUFF_DURATION_MS = 10 * 60 * 1000;
 const LOSSES_BEFORE_RETREAT = 3;
 const BOSS_LOSSES_BEFORE_RETREAT = 2;
@@ -66,9 +69,17 @@ function cloneSkill(skill: Skill): Skill {
 }
 
 export interface AdOffer {
-  type: 'free_gems' | 'double_damage' | 'double_coins' | 'revive' | 'offline_double' | 'boss_double';
+  type: 'free_gems' | 'double_damage' | 'double_coins' | 'revive' | 'offline_double' | 'boss_double' | 'daily_double' | 'gym_free';
   title: string;
   rewardDesc: string;
+  // daily_double: which login day; gym_free: which training
+  day?: number;
+  trainingId?: string;
+}
+
+// Quest coin rewards grow with progress so they stay worth claiming
+export function questCoins(base: number, highestStage: number): number {
+  return Math.round(base * (1 + Math.max(0, highestStage - 1) / 6));
 }
 
 export interface GameStateData {
@@ -144,6 +155,11 @@ export interface GameStateData {
   bossBonus: { coins: number; gems: number; expiresAt: number } | null;
   // Rerolls used on the current skill offer (first one is free)
   offerRerolls: number;
+  // After a loss on a hard stage: optional 2x damage ad offer (with a cooldown)
+  buffOffer: { expiresAt: number } | null;
+  lastBuffOfferAt: number;
+  // Gym: one free level for an ad, with a cooldown
+  gymFreeReadyAt: number;
   // Daily caps for shop ads: { date, counts per offer }
   adCaps: { date: string; counts: Record<string, number> };
   autoAdvance: boolean;
@@ -153,73 +169,9 @@ export interface GameStateData {
   questDate: string;
 }
 
-const GYM_TEMPLATES: GymTraining[] = [
-  {
-    id: 'gym_punching_bag',
-    name: 'Heavy Boxing Bag',
-    description: 'Pound dense leather to increase raw striking power.',
-    targetStat: 'atk',
-    statGain: 3,
-    level: 1,
-    cost: 30,
-    iconName: 'Flame',
-  },
-  {
-    id: 'gym_bench_press',
-    name: 'Heavy Iron Weights',
-    description: 'Build core mass to increase maximum health & defense.',
-    targetStat: 'hp',
-    statGain: 25,
-    level: 1,
-    cost: 35,
-    iconName: 'Shield',
-  },
-  {
-    id: 'gym_agility_ladder',
-    name: 'Agility Ladder & Cones',
-    description: 'Fast footwork drill to boost movement speed & evasion.',
-    targetStat: 'spd',
-    statGain: 2,
-    level: 1,
-    cost: 40,
-    iconName: 'Footprints',
-  },
-  {
-    id: 'gym_reflex_ball',
-    name: 'Speed Bag & Reflex Ball',
-    description: 'Sharpen timing for deadly critical hits & combos.',
-    targetStat: 'critRate',
-    statGain: 0.8,
-    level: 1,
-    cost: 50,
-    iconName: 'Zap',
-  },
-  {
-    id: 'gym_jump_rope',
-    name: 'Speed Rope Drills',
-    description: 'Cardio workout to increase endurance & dodge instincts.',
-    targetStat: 'dodgeRate',
-    statGain: 0.7,
-    level: 1,
-    cost: 45,
-    iconName: 'Wind',
-  },
-];
 
-const INITIAL_BASE_STATS: FighterStats = {
-  hp: 220,
-  maxHp: 220,
-  atk: 22,
-  def: 12,
-  spd: 15,
-  critRate: 8,
-  critDmg: 1.5,
-  comboRate: 8,
-  dodgeRate: 6,
-  lifesteal: 0,
-  stamina: 100,
-  powerScore: 280,
-};
+
+
 
 function createInitialPlayer(): Fighter {
   const equipped: Record<EquipmentSlot, EquipmentItem | null> = {
@@ -337,6 +289,9 @@ function createDefaultState(): GameStateData {
     notifAsked: false,
     bossBonus: null,
     offerRerolls: 0,
+    buffOffer: null,
+    lastBuffOfferAt: 0,
+    gymFreeReadyAt: 0,
     adCaps: { date: '', counts: {} },
     autoAdvance: true,
     lossStreak: 0,
@@ -448,7 +403,7 @@ class GameManager {
   }
 
   // Shop ads: limited per day so they stay worth something
-  public static AD_DAILY_CAP: Record<string, number> = { free_gems: 5, double_damage: 6 };
+  public static AD_DAILY_CAP: Record<string, number> = { free_gems: 5, double_damage: 6, gym_free: 6 };
   public freeGemsCoins(): number {
     return Math.max(1000, this.getCurrentStage().coinReward * 3);
   }
@@ -517,6 +472,15 @@ class GameManager {
     this.openRewardedAd({ type: 'boss_double', title: ui(this.state.lang, 'boss_bonus'), rewardDesc: `+${b.coins.toLocaleString()} 🪙  +${b.gems} 💎` });
   }
 
+  public dismissBuffOffer() {
+    this.state.buffOffer = null;
+    this.notify();
+  }
+
+  public gymFreeAvailable(): boolean {
+    return Date.now() >= (this.state.gymFreeReadyAt || 0) && this.adsLeftToday('gym_free') > 0;
+  }
+
   public dismissBossBonus() {
     this.state.bossBonus = null;
     this.notify();
@@ -579,7 +543,7 @@ class GameManager {
     if (!quest || quest.claimed || quest.progress < quest.target) return;
     quest.claimed = true;
     this.state.gems += quest.gems;
-    this.state.coins += quest.coins;
+    this.state.coins += questCoins(quest.coins, (this.state.highestWorld - 1) * 10 + this.state.highestSubStage);
     soundFx.playCoin();
     haptics.trigger('success');
     this.notify();
@@ -600,7 +564,8 @@ class GameManager {
       const cappedMins = Math.min(OFFLINE_CAP_MINUTES, prevMins + elapsedMinutes);
       const gymLevelSum = this.state.gymTrainings.reduce((sum, g) => sum + g.level, 0);
       const bestStage = (this.state.highestWorld - 1) * 10 + this.state.highestSubStage;
-      const coinsPerMin = Math.max(2, Math.round(5 + gymLevelSum * 0.5 + bestStage * 1.5));
+      // About a fifth of what active play earns at the best stage (it used to be ~1%)
+      const coinsPerMin = Math.max(5, Math.round(getStageData(this.state.highestWorld, this.state.highestSubStage).coinReward * 0.5 + gymLevelSum * 0.5 + bestStage));
       const totalOfflineCoins = cappedMins * coinsPerMin;
 
       this.state.offlineGoldAccumulated = totalOfflineCoins;
@@ -616,6 +581,12 @@ class GameManager {
       if (saved) {
         const parsed = sanitizeSave(JSON.parse(saved));
         const fighter = parsed.playerFighter || defaults.playerFighter;
+        if ((parsed.saveVersion || 0) < 5) {
+          // v5: percentage stats on items depend on rarity only
+          const norm = (i: EquipmentItem | null) => (i && i.stats ? normalizeItemRates(i) : i);
+          if (fighter.equipped) Object.keys(fighter.equipped).forEach((k) => (fighter.equipped[k] = norm(fighter.equipped[k])));
+          if (Array.isArray(parsed.inventory)) parsed.inventory = parsed.inventory.map(norm);
+        }
         if ((parsed.saveVersion || 0) < 4) {
           // Saves from the 9-slot layout: lift existing gear to the new per-slot stat budget (removed slots are cashed out later)
           const up = (i: EquipmentItem | null) => (i && ACTIVE_SLOTS.includes(i.slot) ? upgradeLegacyItem(i) : i);
@@ -628,11 +599,17 @@ class GameManager {
           playerFighter: {
             ...defaults.playerFighter,
             ...fighter,
-            equippedSkills: (fighter.equippedSkills || defaults.playerFighter.equippedSkills).map(cloneSkill),
+            // Skill families were rebalanced: saved skills take their family from the database
+            equippedSkills: (fighter.equippedSkills || defaults.playerFighter.equippedSkills).map((sk: Skill) => {
+              const db = SKILL_DATABASE.find((d) => d.id === sk.id);
+              return cloneSkill(db ? { ...sk, category: db.category } : sk);
+            }),
           },
-          gymTrainings: parsed.gymTrainings?.length ? parsed.gymTrainings : defaults.gymTrainings,
+          // Gym prices follow the current cost curve (older saves stored prices from a steeper curve)
+          gymTrainings: (parsed.gymTrainings?.length ? parsed.gymTrainings : defaults.gymTrainings).map((g: GymTraining) => ({ ...g, cost: gymCostAt(g.id, g.level), statGain: gymGainAt(g.id, g.level) })),
           // Transient UI state is never restored
           activeAdModal: null,
+          buffOffer: null,
           isDailyLoginOpen: false,
           isProfileOpen: false,
           bossBonus: null,
@@ -755,7 +732,9 @@ class GameManager {
 
   public claimRewardedAdReward() {
     if (!this.state.activeAdModal) return;
-    const type = this.state.activeAdModal.type;
+    const offer = this.state.activeAdModal;
+    const type = offer.type;
+    if (type === 'double_damage') this.state.buffOffer = null;
 
     if (type === 'free_gems') {
       this.state.gems += 50;
@@ -774,6 +753,19 @@ class GameManager {
       this.state.offlineGoldAccumulated = 0;
       this.state.isOfflineRewardOpen = false;
       soundFx.playVictoryFanfare();
+    } else if (type === 'daily_double') {
+      if (offer.day) this.claimDailyLoginReward(offer.day, true);
+    } else if (type === 'gym_free') {
+      const g = this.state.gymTrainings.find((x) => x.id === offer.trainingId);
+      if (g && !gymStatCapped(g.targetStat, this.state.playerFighter.stats)) {
+        g.level += 1;
+        g.cost = gymCostAt(g.id, g.level);
+        g.statGain = gymGainAt(g.id, g.level);
+        this.recordQuest('train_gym', 1, true);
+      }
+      this.countAd('gym_free');
+      this.state.gymFreeReadyAt = Date.now() + 20 * 60000;
+      soundFx.playGymTap();
     } else if (type === 'boss_double') {
       if (this.state.bossBonus) {
         this.state.coins += this.state.bossBonus.coins;
@@ -814,11 +806,14 @@ class GameManager {
       if (t.targetStat === 'dodgeRate') gymBonus.dodgeRate += bonusVal;
     });
 
-    const calculated = calculateTotalStats(
-      this.state.playerFighter.baseStats,
-      gymBonus,
-      this.state.playerFighter.equipped,
-      this.state.playerFighter.equippedSkills
+    const calculated = applyGymPercent(
+      calculateTotalStats(
+        this.state.playerFighter.baseStats,
+        gymBonus,
+        this.state.playerFighter.equipped,
+        this.state.playerFighter.equippedSkills
+      ),
+      this.state.gymTrainings
     );
 
     // Apply timed active 2x damage buff from rewarded video
@@ -861,7 +856,8 @@ class GameManager {
   // BATTLE REWARDS & PROGRESSION
   public onStageVictory(stage: Stage) {
     const isDoubleCoins = Date.now() < this.state.doubleCoinsUntil;
-    const coinMult = isDoubleCoins ? 2.0 : 1.0;
+    // Manual fights run at 1x and pay 25% more
+    const coinMult = (isDoubleCoins ? 2.0 : 1.0) * (this.state.autoBattle ? 1 : 1.25);
 
     this.state.coins += Math.round(stage.coinReward * coinMult);
     this.state.gems += stage.gemReward;
@@ -914,8 +910,24 @@ class GameManager {
     // Roll Roguelite Skill every 3 stages or after boss
     if (stage.subStage % 3 === 0 || stage.isBoss) {
       if (!this.state.pendingSkillOffer && Math.random() < 0.8) {
-        this.state.pendingSkillOffer = getRandomSkill();
-        this.state.offerRerolls = 0;
+        const offer = getRandomSkill();
+        const deck = this.state.playerFighter.equippedSkills;
+        const owned = deck.find((sk) => sk.id === offer.id);
+        if (this.state.autoBattle && owned) {
+          // Idle play: duplicates level up without stopping the fight
+          if (owned.level < owned.maxLevel) {
+            this.levelUpSkill(owned);
+            pushToast(ui(this.state.lang, 'toast_skill_up', { name: skillName(owned.id, owned.name, this.state.lang), n: owned.level }), 'good');
+          }
+        } else if (this.state.autoBattle && deck.length < 6) {
+          deck.push(cloneSkill(offer));
+          pushToast(ui(this.state.lang, 'toast_skill_new', { name: skillName(offer.id, offer.name, this.state.lang) }), 'good');
+        } else if (!this.state.autoBattle) {
+          // Manual players choose (and may ask for another skill)
+          this.state.pendingSkillOffer = offer;
+          this.state.offerRerolls = 0;
+        }
+        // auto mode with a full deck: the offer is skipped instead of pausing the fight
       }
     }
 
@@ -927,6 +939,13 @@ class GameManager {
   // Returns true when the fighter was moved back a stage to farm up
   public onStageDefeat(stage: Stage): boolean {
     this.state.lossStreak += 1;
+    // Struggling on a normal stage: offer the 2x damage ad (optional, with a cooldown and the daily cap)
+    const now = Date.now();
+    if (!stage.isBoss && now >= this.state.doubleDamageUntil && now - (this.state.lastBuffOfferAt || 0) > 10 * 60000 &&
+        this.adsLeftToday('double_damage') > 0 && fightOdds(this.state.playerFighter.stats, stage.opponent.stats, stage.opponent.profile) < 1.1) {
+      this.state.buffOffer = { expiresAt: now + 30000 };
+      this.state.lastBuffOfferAt = now;
+    }
     let retreated = false;
     if (this.state.lossStreak >= (stage.isBoss ? BOSS_LOSSES_BEFORE_RETREAT : LOSSES_BEFORE_RETREAT)) {
       const total = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
@@ -1135,17 +1154,7 @@ class GameManager {
     const existingIdx = this.state.playerFighter.equippedSkills.findIndex((s) => s.id === skill.id);
     if (existingIdx >= 0) {
       const existing = this.state.playerFighter.equippedSkills[existingIdx];
-      if (existing.level < existing.maxLevel) {
-        existing.level += 1;
-        if (existing.statBonus.atk) existing.statBonus.atk = Math.round(existing.statBonus.atk * 1.5);
-        if (existing.statBonus.hp) existing.statBonus.hp = Math.round(existing.statBonus.hp * 1.5);
-        if (existing.statBonus.def) existing.statBonus.def = Math.round(existing.statBonus.def * 1.5);
-        if (existing.statBonus.spd) existing.statBonus.spd = Math.round(existing.statBonus.spd * 1.5);
-        if (existing.statBonus.critRate) existing.statBonus.critRate = Math.min(existing.statBonus.critRate + 3, 50);
-        if (existing.statBonus.comboRate) existing.statBonus.comboRate = Math.min(existing.statBonus.comboRate + 3, 50);
-        if (existing.statBonus.dodgeRate) existing.statBonus.dodgeRate = Math.min(existing.statBonus.dodgeRate + 3, 40);
-        if (existing.statBonus.lifesteal) existing.statBonus.lifesteal = Math.min(existing.statBonus.lifesteal + 2.5, 30);
-      }
+      if (existing.level < existing.maxLevel) this.levelUpSkill(existing);
       this.state.pendingSkillOffer = null;
     } else {
       if (this.state.playerFighter.equippedSkills.length < 6) {
@@ -1162,6 +1171,18 @@ class GameManager {
     this.recalculatePlayerStats();
     this.saveState();
     this.notify();
+  }
+
+  private levelUpSkill(existing: Skill) {
+    existing.level += 1;
+    if (existing.statBonus.atk) existing.statBonus.atk = Math.round(existing.statBonus.atk * 1.5);
+    if (existing.statBonus.hp) existing.statBonus.hp = Math.round(existing.statBonus.hp * 1.5);
+    if (existing.statBonus.def) existing.statBonus.def = Math.round(existing.statBonus.def * 1.5);
+    if (existing.statBonus.spd) existing.statBonus.spd = Math.round(existing.statBonus.spd * 1.5);
+    if (existing.statBonus.critRate) existing.statBonus.critRate = Math.min(existing.statBonus.critRate + 3, 50);
+    if (existing.statBonus.comboRate) existing.statBonus.comboRate = Math.min(existing.statBonus.comboRate + 3, 50);
+    if (existing.statBonus.dodgeRate) existing.statBonus.dodgeRate = Math.min(existing.statBonus.dodgeRate + 3, 40);
+    if (existing.statBonus.lifesteal) existing.statBonus.lifesteal = Math.min(existing.statBonus.lifesteal + 2.5, 30);
   }
 
   public replaceSkillInDeck(oldSkillId: string, newSkill: Skill) {
@@ -1233,8 +1254,9 @@ class GameManager {
     this.state.inventory = this.state.inventory.filter((i) => !itemIds.includes(i.id));
 
     // Generate forged item
-    const avgLevel = Math.max(1, Math.round((items[0].level + items[1].level + items[2].level) / 3));
-    const forgedItem = generateEquipment(items[0].slot, nextRarity, avgLevel);
+    // The forged item keeps the highest item level of the three (averaging made forging feel like a loss)
+    const bestLevel = Math.max(items[0].level, items[1].level, items[2].level);
+    const forgedItem = generateEquipment(items[0].slot, nextRarity, bestLevel);
     this.state.inventory.push(forgedItem);
 
     soundFx.playLootDrop();
@@ -1254,20 +1276,22 @@ class GameManager {
     this.notify();
   }
 
-  public claimDailyLoginReward(day: number) {
+  // doubled: the player watched an ad to double the coins/gems of the day
+  public claimDailyLoginReward(day: number, doubled = false) {
     if (this.state.claimedDailyDays.includes(day) || day !== this.state.dailyLoginStreak) return;
     this.state.claimedDailyDays.push(day);
+    const x = doubled ? 2 : 1;
 
-    if (day === 1) this.state.coins += 500;
-    else if (day === 2) this.state.gems += 50;
-    else if (day === 3) this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS;
-    else if (day === 4) this.state.coins += 1500;
-    else if (day === 5) this.state.gems += 100;
+    if (day === 1) this.state.coins += 500 * x;
+    else if (day === 2) this.state.gems += 50 * x;
+    else if (day === 3) this.state.doubleDamageUntil = Date.now() + BUFF_DURATION_MS * x;
+    else if (day === 4) this.state.coins += 1500 * x;
+    else if (day === 5) this.state.gems += 100 * x;
     else if (day === 6) {
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
       this.setPendingLoot(generateEquipment(undefined, 'legendary', stageLvl));
     } else if (day === 7) {
-      this.state.gems += 250;
+      this.state.gems += 250 * x;
       const stageLvl = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
       this.setPendingLoot(generateEquipment('head', 'mythic', stageLvl));
     }
@@ -1306,15 +1330,14 @@ class GameManager {
     const training = this.state.gymTrainings.find((t) => t.id === trainingId);
     if (!training) return false;
     if (this.state.coins < training.cost) return false;
+    // Capped stats (crit, dodge) cannot be trained further
+    if (gymStatCapped(training.targetStat, this.state.playerFighter.stats)) return false;
 
     this.state.coins -= training.cost;
     training.level += 1;
-    training.cost = Math.round(training.cost * 1.35);
+    training.cost = gymCostAt(training.id, training.level);
 
-    // Tiered Gym scaling: bonus stats increase every 5 levels
-    if (training.level % 5 === 0) {
-      training.statGain = Math.round(training.statGain * 1.4 * 10) / 10;
-    }
+    training.statGain = gymGainAt(training.id, training.level);
 
     soundFx.playGymTap();
     this.recordQuest('train_gym', 1, true);
@@ -1357,10 +1380,21 @@ class GameManager {
 
   public toggleAutoBattle() {
     this.state.autoBattle = !this.state.autoBattle;
+    if (!this.state.autoBattle) {
+      // Manual fights need real reaction time: 1x speed, +25% coins
+      this.state.battleSpeed = 1;
+      pushToast(ui(this.state.lang, 'manual_info'), 'info', 3200);
+    }
     this.notify();
   }
 
   public cycleBattleSpeed() {
+    if (!this.state.autoBattle) {
+      this.state.battleSpeed = 1;
+      pushToast(ui(this.state.lang, 'manual_info'), 'info', 3200);
+      this.notify();
+      return;
+    }
     const max = this.maxBattleSpeed();
     const next = this.state.battleSpeed === 1 ? 2 : this.state.battleSpeed === 2 ? 4 : 1;
     if (next > max) {

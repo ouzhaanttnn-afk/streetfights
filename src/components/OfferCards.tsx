@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { GameStateData, gameManager } from '../core/gameState';
 import { ui } from '../i18n/ui';
-import { Bell, Tv, X } from 'lucide-react';
+import { Bell, Tv, X, Zap } from 'lucide-react';
 
 // After a boss win: optional rewarded ad that pays the boss reward once more. Disappears by itself.
 export const BossBonusCard: React.FC<{ state: GameStateData }> = ({ state }) => {
@@ -49,6 +49,35 @@ export const NotifyAskCard: React.FC<{ state: GameStateData }> = ({ state }) => 
           {ui(state.lang, 'notif_yes')}
         </button>
       </div>
+    </div>
+  );
+};
+
+// After a loss on a hard stage: optional 2x damage for 10 minutes (cooldown + daily cap live in gameState)
+export const BuffOfferCard: React.FC<{ state: GameStateData }> = ({ state }) => {
+  const offer = state.buffOffer;
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!offer) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [offer]);
+  if (!offer || now > offer.expiresAt || state.activeAdModal) return null;
+  return (
+    <div data-buff-offer className="mx-3 mt-3 flex items-center gap-2 rounded-2xl px-3 py-2 bg-gradient-to-r from-rose-500/20 via-black/70 to-black/60 border border-rose-400/50 animate-fadeIn">
+      <button
+        onClick={() => gameManager.openRewardedAd({ type: 'double_damage', title: ui(state.lang, 'ad_dmg_title'), rewardDesc: ui(state.lang, 'ad_dmg_desc') })}
+        className="flex-1 min-h-10 flex items-center gap-2.5 text-left active:scale-[0.98]"
+      >
+        <span className="w-8 h-8 shrink-0 rounded-xl bg-rose-500 text-black flex items-center justify-center"><Zap className="w-4 h-4" /></span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-[11px] font-black text-rose-100">{ui(state.lang, 'buff_offer_title')}</span>
+          <span className="block text-[10px] font-bold text-zinc-300">{ui(state.lang, 'ad_dmg_desc')}</span>
+        </span>
+      </button>
+      <button onClick={() => gameManager.dismissBuffOffer()} aria-label="Close" className="w-8 h-8 shrink-0 rounded-xl bg-black/50 border border-white/10 text-zinc-400 flex items-center justify-center active:scale-95">
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 };

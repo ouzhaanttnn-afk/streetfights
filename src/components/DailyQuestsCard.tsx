@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameStateData, QuestId, gameManager } from '../core/gameState';
+import { GameStateData, QuestId, gameManager, questCoins } from '../core/gameState';
 import { ui } from '../i18n/ui';
 import { Check, Coins, Gem, ListChecks } from 'lucide-react';
 
@@ -38,7 +38,7 @@ export const DailyQuestsCard: React.FC<{ state: GameStateData }> = ({ state }) =
               </div>
               <div className="flex items-center gap-2.5 mt-1 text-[10px] font-mono font-bold">
                 <span className="flex items-center gap-1 text-cyan-300"><Gem className="w-3 h-3" />{q.gems}</span>
-                <span className="flex items-center gap-1 text-amber-300"><Coins className="w-3 h-3" />{q.coins}</span>
+                <span className="flex items-center gap-1 text-amber-300"><Coins className="w-3 h-3" />{questCoins(q.coins, (state.highestWorld - 1) * 10 + state.highestSubStage).toLocaleString()}</span>
               </div>
             </div>
             {q.claimed ? (

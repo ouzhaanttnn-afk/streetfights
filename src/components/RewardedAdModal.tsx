@@ -116,7 +116,7 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
         <div className="w-full flex items-center justify-between mb-3 text-xs">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
             <Tv className="w-3.5 h-3.5 text-amber-400" />
-            <span>{t('adSponsor', state.lang)}</span>
+            <span>{ui(state.lang, 'ad_preview')}</span>
           </div>
 
           <div className="text-zinc-400 font-mono text-[11px]">
@@ -138,12 +138,10 @@ export const RewardedAdModal: React.FC<RewardedAdModalProps> = ({ state, onReviv
             ⚡
           </div>
 
+          {/* Web preview only: on iPhone a real rewarded video is shown here */}
           <h3 className="text-base font-black tracking-wider text-amber-300 drop-shadow">
-            VOLT STRIKER ENERGY DRINK
+            {ui(state.lang, 'ad_preview')}
           </h3>
-          <p className="text-[11px] text-zinc-300 italic text-center max-w-[240px] mt-1">
-            "Fuel your bicycle kicks with 100% pure adrenaline!"
-          </p>
 
           {/* Video Timer Bar */}
           <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/80">

@@ -199,7 +199,35 @@ async function prepareAndSubmit(buildVersion) {
   }
 
   if (!ok) { console.log('NOT SUBMITTED: fix the failures above first'); return; }
+  await submitVersion(appId, ver);
+}
 
+// Waits for the version's screenshots to finish processing (they can take several minutes)
+async function screenshotsReady(verId, maxWaitMs) {
+  const t0 = Date.now();
+  for (;;) {
+    const locs = await call('GET', `/v1/appStoreVersions/${verId}/appStoreVersionLocalizations`);
+    const states = [];
+    for (const l of locs.json.data) {
+      const sets = await call('GET', `/v1/appStoreVersionLocalizations/${l.id}/appScreenshotSets?include=appScreenshots`);
+      (sets.json?.included || []).forEach((sh) => states.push(sh.attributes?.assetDeliveryState?.state));
+    }
+    const pending = states.filter((st) => st !== 'COMPLETE');
+    if (!pending.length) { line(true, 'screenshots processed', `${states.length}/${states.length}`); return true; }
+    if (states.includes('FAILED')) { line(false, 'screenshots processed', states.join(',')); return false; }
+    if (Date.now() - t0 > maxWaitMs) { line(false, 'screenshots processed', `${states.length - pending.length}/${states.length} complete, still processing`); return false; }
+    await sleep(15000);
+  }
+}
+
+// Only the submission part: used after a run where processing was still going on
+async function finish() {
+  const { appId, ver } = await appAndVersion();
+  if (await screenshotsReady(ver.id, 8 * 60000)) await submitVersion(appId, ver);
+  else console.log('NOT SUBMITTED: screenshots still processing, run "finish" again later');
+}
+
+async function submitVersion(appId, ver) {
   // Resubmit: reuse the submission that has unresolved issues, otherwise create a new one
   const subs = await call('GET', `/v1/reviewSubmissions?filter[app]=${appId}&filter[platform]=IOS&limit=10`);
   let sub = (subs.json.data || []).find((x) => ['UNRESOLVED_ISSUES', 'READY_FOR_REVIEW'].includes(x.attributes.state));
@@ -222,7 +250,14 @@ async function prepareAndSubmit(buildVersion) {
       line(r.status === 200, 'mark rejected item resolved', r.status === 200 ? r.json.data.attributes.state : `${r.status} ${errText(r)}`);
     }
   }
-  const submit = await call('PATCH', `/v1/reviewSubmissions/${sub.id}`, { data: { type: 'reviewSubmissions', id: sub.id, attributes: { submitted: true } } });
+  // Apple needs a moment after a build/screenshot change ("Version is not ready to be submitted yet"): retry
+  let submit;
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    submit = await call('PATCH', `/v1/reviewSubmissions/${sub.id}`, { data: { type: 'reviewSubmissions', id: sub.id, attributes: { submitted: true } } });
+    if (submit.status === 200 || !JSON.stringify(submit.json || {}).includes('not ready')) break;
+    console.log(`  not ready yet, retry ${attempt}/8 in 30 s`);
+    await sleep(30000);
+  }
   line(submit.status === 200, 'SUBMIT FOR REVIEW', submit.status === 200 ? `state=${submit.json.data.attributes.state}` : `${submit.status} ${errText(submit)}`);
 }
 
@@ -252,5 +287,6 @@ for (const t of req.tasks) {
   else if (t === 'inspect') await inspect();
   else if (t.startsWith('submit:')) await prepareAndSubmit(t.split(':')[1]);
   else if (t.startsWith('resubmit:')) await resubmit(t.split(':')[1]);
+  else if (t === 'finish') await finish();
   else console.log(`unknown task ${t}`);
 }

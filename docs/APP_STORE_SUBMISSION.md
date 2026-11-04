@@ -170,3 +170,9 @@ age rating Simulated Gambling = None, new review notes, build 15 attached, 7 new
 rejected item marked resolved, submission sent. Version 1.0 state: WAITING_FOR_REVIEW.
 The key stored in the GitHub secrets is read + upload only (enough for `build-ios.yml`, not for edits or submission).
 
+## 15. 2026-11-04: build 17 submitted
+Build 15 was pulled from the queue and version 1.0 was resubmitted with build 17 (playtest fixes + phase 2) through the
+API robot with a temporary App Manager key the owner provided (used in memory only, deleted afterwards): new review notes
+(all rewarded placements listed), 7 new 6.5" screenshots each for en-US and tr. State: WAITING_FOR_REVIEW.
+Screenshot processing on Apple's side took ~15 minutes; `asc.mjs finish` waits for it and then submits.
+

@@ -19,14 +19,14 @@
 ## Shipping
 - Bump `CURRENT_PROJECT_VERSION` in `ios/App/App.xcodeproj/project.pbxproj`, push, dispatch `.github/workflows/build-ios.yml`
   with `upload_to_testflight: true`, confirm "UPLOAD SUCCEEDED" in the job log. Last uploaded build: 17 (version 1.0).
-- App Store Connect API: `scripts/asc/asc.mjs` (tasks `check`, `inspect`, `submit:<build>`), also runnable from
+- App Store Connect API: `scripts/asc/asc.mjs` (tasks `check`, `inspect`, `submit:<build>`, `resubmit:<build>`, `finish`), also runnable from
   `.github/workflows/asc.yml` by editing `.github/asc/request.json`. The key in the GitHub secrets can only read and
   upload builds; edits and submissions need an App Manager key. Never ask the owner to paste keys into the chat;
   suggest storing an App Manager key in the GitHub secrets instead.
 - Development branch: `claude/stoic-clarke-qjgg6b`. Do not open pull requests unless asked.
 
 ## Status (2026-11-04)
-- Version 1.0 with build 15 is WAITING_FOR_REVIEW. Build 16 = playtest fixes, build 17 = phase 2 (balance rework,
+- 2026-11-04: build 15 was pulled from review; version 1.0 with build 17 is WAITING_FOR_REVIEW. Build 16 = playtest fixes, build 17 = phase 2 (balance rework,
   content in 8 languages, new rewarded placements, 3D faces/arenas); see `docs/PLAYTEST_2026-11-04.md`.
 - Data strings (skills, items, opponents, cosmetics, avatars, titles, worlds) are translated in `src/i18n/content.ts`;
   components use `src/i18n/content-helpers.ts`. New data entries need a content.ts entry in all 8 languages.

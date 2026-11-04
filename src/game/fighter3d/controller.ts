@@ -2,6 +2,59 @@ import { FighterCmd } from '../battleRig';
 import { Clip, getClip, sampleClip } from './clips';
 import { Pose, STANCE, lerpPose } from './pose';
 
+// ---- Spacing between the two fighters
+// Each fighter is approximated by a few spheres in world space (head, chest, pelvis = body; gloves, feet = limbs).
+// Bodies never overlap; a limb may sink in a little so a landed blow still reads as contact.
+export interface SpacingProbe {
+  x: number;
+  y: number;
+  z: number;
+  r: number;
+  limb: boolean;
+}
+
+export interface SpacingBody {
+  ctrl: AnimationController;
+  probes: SpacingProbe[];
+  scale: number; // holder scale: pose units -> world units
+}
+
+const LIMB_SINK = 0.05; // glove/foot into a body
+const LIMB_LIMB_SINK = 0.03; // glove against glove (blocked punch)
+
+// World distance along x the two fighters overlap by (0 when they are clear). `left` faces +x, `right` faces -x.
+export function spacingOverlap(left: SpacingProbe[], right: SpacingProbe[]): number {
+  let push = 0;
+  for (const a of left) {
+    for (const b of right) {
+      const sink = a.limb && b.limb ? LIMB_LIMB_SINK : a.limb || b.limb ? LIMB_SINK : 0;
+      const reach = a.r + b.r - sink;
+      const dy = b.y - a.y;
+      const dz = b.z - a.z;
+      const lateral = dy * dy + dz * dz;
+      if (lateral >= reach * reach) continue;
+      const need = Math.sqrt(reach * reach - lateral) - (b.x - a.x);
+      if (need > push) push = need;
+    }
+  }
+  return push;
+}
+
+// Removes any overlap by sliding the fighters back along their own forward axis (pose.rz).
+// The one who stepped in further takes most of the correction, so a lunge stops on contact
+// instead of the defender sliding away. Returns the world-space shift applied to each side.
+export function enforceSpacing(left: SpacingBody, right: SpacingBody): [number, number] {
+  const push = spacingOverlap(left.probes, right.probes);
+  if (push <= 0) return [0, 0];
+  const wl = Math.max(0, left.ctrl.pose.rz * left.scale) + 0.02;
+  const wr = Math.max(0, right.ctrl.pose.rz * right.scale) + 0.02;
+  const dl = (push * wl) / (wl + wr);
+  const dr = push - dl;
+  left.ctrl.pose.rz -= dl / left.scale;
+  right.ctrl.pose.rz -= dr / right.scale;
+  return [dl, dr];
+}
+
 // Plays one clip at a time and cross-fades between them from a snapshot of the current pose.
 export class AnimationController {
   public pose: Pose = { ...STANCE };

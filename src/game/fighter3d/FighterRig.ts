@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { QualityLevel } from '../battleRig';
-import { AnimationController } from './controller';
-import { Pose } from './pose';
+import { FighterCmd, QualityLevel, battleRig } from '../battleRig';
+import { AnimationController, SpacingBody, SpacingProbe, enforceSpacing } from './controller';
+import { Pose, STANCE } from './pose';
 
 export type RarityName = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
 
@@ -46,6 +46,94 @@ function gradientMap(): THREE.DataTexture {
 const WHITE = new THREE.Color(0xffffff);
 const OUTLINE_MAT = new THREE.MeshBasicMaterial({ color: 0x0a0a12, side: THREE.BackSide });
 
+// ---- Face: a handful of tiny shared meshes, sized to read on a ~20 CSS px head
+const FACE_INK = new THREE.MeshBasicMaterial({ color: 0x14141c });
+const FACE_SHINE = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const FACE_MOUTH = new THREE.MeshBasicMaterial({ color: 0x4c0f17 });
+const EYE_GEO = new THREE.CircleGeometry(0.042, 14);
+const SHINE_GEO = new THREE.CircleGeometry(0.014, 8);
+const ARC_GEO = new THREE.TorusGeometry(0.034, 0.012, 4, 10, Math.PI); // "∩": happy eye, turned into "<"/">" when hurt, "∪" smile
+const BROW_GEO = new THREE.BoxGeometry(0.1, 0.032, 0.01);
+const MOUTH_GEO = new THREE.BoxGeometry(0.064, 0.018, 0.006);
+const MOUTH_O_GEO = new THREE.CircleGeometry(0.026, 12);
+const SHARED = new Set<object>([OUTLINE_MAT, FACE_INK, FACE_SHINE, FACE_MOUTH, EYE_GEO, SHINE_GEO, ARC_GEO, BROW_GEO, MOUTH_GEO, MOUTH_O_GEO]);
+
+const SKULL_R = 0.2;
+const EYE_YAW = 0.36; // eyes sit this far (radians) left/right of the face centre
+const EYE_PITCH = 0.04;
+const BROW_PITCH = 0.36;
+const EYE_ASPECT = 1.3; // eyes are tall ovals
+// The camera looks at the fighters from the side: heads turn this far toward it (3/4 view) so faces read.
+const FACE_TURN = 0.75;
+// Net yaw of the head in the base stance; cancelled so both fighters show the same 3/4 angle.
+const STANCE_HEAD_YAW = STANCE.hipsY + STANCE.chestY + STANCE.headY;
+
+interface Mood {
+  tilt: number; // brow angle: > 0 angry (inner ends down), < 0 worried
+  lift: number; // brow height offset (radians on the skull)
+  open: number; // eye height 0..1
+  eyes: 'open' | 'happy' | 'hurt';
+  mouth: 'line' | 'grit' | 'o' | 'smile';
+}
+const CALM: Mood = { tilt: 0.14, lift: 0, open: 1, eyes: 'open', mouth: 'line' };
+const FOCUS: Mood = { tilt: 0.3, lift: -0.02, open: 0.85, eyes: 'open', mouth: 'line' };
+const ANGRY: Mood = { tilt: 0.55, lift: -0.05, open: 0.7, eyes: 'open', mouth: 'grit' };
+const HURT: Mood = { tilt: -0.45, lift: 0.06, open: 1, eyes: 'hurt', mouth: 'o' };
+const BEATEN: Mood = { tilt: -0.4, lift: 0.03, open: 0.35, eyes: 'open', mouth: 'line' };
+const HAPPY: Mood = { tilt: -0.15, lift: 0.08, open: 1, eyes: 'happy', mouth: 'smile' };
+const MOODS: Record<FighterCmd, Mood> = {
+  idle: CALM, guard: FOCUS, dodge: FOCUS,
+  jab: ANGRY, heavy: ANGRY, heavy_slow: ANGRY, kick: ANGRY, combo: ANGRY, rage: ANGRY,
+  hit: HURT, crit_hit: HURT, knockdown: HURT, defeat: BEATEN, victory: HAPPY,
+};
+
+interface FaceParts {
+  eyes: THREE.Mesh[];
+  arcs: THREE.Mesh[];
+  brows: THREE.Mesh[];
+  mouth: THREE.Mesh; // line, or the mouthguard when one is worn
+  mouthO: THREE.Mesh | null;
+  smile: THREE.Mesh | null;
+  guard: boolean;
+}
+
+// Puts a flat feature on the skull surface, facing outward (yaw/pitch in radians from the face centre).
+function onSkull(o: THREE.Object3D, yaw: number, pitch: number, lift = 0.005) {
+  const r = SKULL_R + lift;
+  const cp = Math.cos(pitch);
+  o.position.set(Math.sin(yaw) * cp * r, Math.sin(pitch) * r * 1.06, Math.cos(yaw) * cp * r);
+  o.rotation.set(-pitch, yaw, o.rotation.z, 'YXZ');
+}
+
+// Soft round glow (64px, generated: no canvas needed) for epic+ gloves
+let glowTex: THREE.DataTexture | null = null;
+function glowTexture(): THREE.DataTexture {
+  if (!glowTex) {
+    const n = 64;
+    const data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const d = Math.hypot(x - (n - 1) / 2, y - (n - 1) / 2) / (n / 2);
+        const a = Math.max(0, 1 - d);
+        const i = (y * n + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = 255;
+        data[i + 3] = Math.round(a * a * 255);
+      }
+    }
+    glowTex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+    glowTex.minFilter = THREE.LinearFilter;
+    glowTex.magFilter = THREE.LinearFilter;
+    glowTex.needsUpdate = true;
+  }
+  return glowTex;
+}
+
+// Spacing spheres: head, chest, pelvis (body), glove A, glove B, foot A, foot B (limbs)
+const PROBE_R = [0.21, 0.21, 0.19, 0.12, 0.12, 0.1, 0.1];
+
+// Rigs by holder, so two fighters in the same scene can find each other for spacing
+const RIGS = new WeakMap<THREE.Object3D, FighterRig>();
+
 export class FighterRig {
   public readonly holder = new THREE.Group();
   public readonly ctrl = new AnimationController();
@@ -78,11 +166,31 @@ export class FighterRig {
   private clock = 0;
   private breathPhase = Math.random() * 6;
   private tmp = new THREE.Vector3();
+  // Face
+  private face: FaceParts | null = null;
+  private faceNow = { tilt: CALM.tilt, lift: 0, open: 1 };
+  private meanBrows = 0;
+  private blinkIn = 1500 + Math.random() * 2500;
+  private blinkLeft = 0;
+  // Rarity glow around epic+ gloves
+  private gloveGlow: THREE.SpriteMaterial | null = null;
+  private gloveGlowBase = 0;
+  // Spacing against the other fighter in the same scene
+  private partner: FighterRig | null = null;
+  private lastNow = -1;
+  private gloveReach = 1;
+  private spacing: SpacingBody;
 
   constructor(private quality: QualityLevel = 'medium') {
     this.root.rotation.order = 'YXZ';
     this.holder.add(this.root);
     this.root.add(this.hips, this.legBase, this.auraGroup, this.fx);
+    this.spacing = {
+      ctrl: this.ctrl,
+      scale: 1,
+      probes: PROBE_R.map((r, i): SpacingProbe => ({ x: 0, y: 0, z: 0, r, limb: i >= 3 })),
+    };
+    RIGS.set(this.holder, this);
   }
 
   public setQuality(q: QualityLevel) {
@@ -118,11 +226,13 @@ export class FighterRig {
         g.remove(c);
         c.traverse((o) => {
           if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
-            o.geometry.dispose();
+            if (!SHARED.has(o.geometry)) o.geometry.dispose();
             const mats = Array.isArray(o.material) ? o.material : [o.material];
             mats.forEach((mm) => {
-              if (mm !== OUTLINE_MAT) mm.dispose();
+              if (!SHARED.has(mm)) mm.dispose();
             });
+          } else if (o instanceof THREE.Sprite) {
+            o.material.dispose();
           }
         });
       }
@@ -140,6 +250,8 @@ export class FighterRig {
     this.halo = null;
     this.ring = null;
     this.cape = null;
+    this.face = null;
+    this.gloveGlow = null;
   }
 
   // Rebuilds the whole figure from avatar colors + equipped gear (cheap: ~60 meshes).
@@ -224,24 +336,13 @@ export class FighterRig {
     skull.scale.set(1, 1.06, 1);
     skull.position.y = 0.2;
     this.head.add(skull);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x15151c });
     [-1, 1].forEach((s) => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 5), eyeMat);
-      eye.position.set(s * 0.075, 0.22, 0.18);
-      this.head.add(eye);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.02), eyeMat);
-      brow.position.set(s * 0.075, 0.265, 0.185);
-      brow.rotation.z = -s * 0.28;
-      this.head.add(brow);
       const ear = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), skin);
       ear.position.set(s * 0.2, 0.2, 0);
       this.head.add(ear);
     });
-    if (gear.mouth) {
-      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.02), new THREE.MeshBasicMaterial({ color: accent(gear.mouth) }));
-      guard.position.set(0, 0.13, 0.19);
-      this.head.add(guard);
-    }
+    this.buildFace(gear.mouth ? accent(gear.mouth) : null);
+    this.meanBrows = a.isBoss ? 0.15 : 0;
     this.buildHair(a);
     this.buildHeadGear(gear.head, a);
 
@@ -265,6 +366,7 @@ export class FighterRig {
       glove.position.y = -0.33;
       el.add(glove);
     });
+    this.gloveReach = 1 + Math.max(0, gloveRank) * 0.04;
 
     // --- Legs
     [
@@ -322,7 +424,7 @@ export class FighterRig {
       const bodyM = this.mesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshToonMaterial({ color: pc, gradientMap: gradientMap(), emissive: pc, emissiveIntensity: 0.25 }));
       buddy.add(bodyM);
       [-1, 1].forEach((s) => {
-        const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), eyeMat);
+        const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), FACE_INK);
         e.position.set(s * 0.05, 0.03, 0.105);
         buddy.add(e);
       });
@@ -334,12 +436,104 @@ export class FighterRig {
     this.buildAura(a);
   }
 
+  // Eyes, brows and mouth on the front of the skull. Expressions are driven from the current clip in updateFace().
+  private buildFace(mouthguard: number | null) {
+    const face = new THREE.Group();
+    face.position.y = 0.2; // skull centre
+    this.head.add(face);
+    const parts: FaceParts = { eyes: [], arcs: [], brows: [], mouth: null as unknown as THREE.Mesh, mouthO: null, smile: null, guard: mouthguard !== null };
+    [-1, 1].forEach((s) => {
+      const eye = new THREE.Mesh(EYE_GEO, FACE_INK);
+      onSkull(eye, s * EYE_YAW, EYE_PITCH);
+      eye.scale.y = EYE_ASPECT;
+      if (this.quality !== 'low') {
+        const shine = new THREE.Mesh(SHINE_GEO, FACE_SHINE);
+        shine.position.set(0.014, 0.014, 0.002);
+        eye.add(shine);
+      }
+      face.add(eye);
+      parts.eyes.push(eye);
+      const arc = new THREE.Mesh(ARC_GEO, FACE_INK);
+      onSkull(arc, s * EYE_YAW, EYE_PITCH);
+      arc.visible = false;
+      face.add(arc);
+      parts.arcs.push(arc);
+      const brow = new THREE.Mesh(BROW_GEO, FACE_INK);
+      brow.rotation.z = s * CALM.tilt;
+      onSkull(brow, s * EYE_YAW, BROW_PITCH, 0.008);
+      face.add(brow);
+      parts.brows.push(brow);
+    });
+    if (mouthguard !== null) {
+      parts.mouth = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.034, 0.012), new THREE.MeshBasicMaterial({ color: mouthguard }));
+    } else {
+      parts.mouth = new THREE.Mesh(MOUTH_GEO, FACE_INK);
+      parts.mouthO = new THREE.Mesh(MOUTH_O_GEO, FACE_MOUTH);
+      onSkull(parts.mouthO, 0, -0.4);
+      parts.mouthO.scale.y = 1.25;
+      parts.mouthO.visible = false;
+      parts.smile = new THREE.Mesh(ARC_GEO, FACE_INK);
+      parts.smile.rotation.z = Math.PI;
+      onSkull(parts.smile, 0, -0.3);
+      parts.smile.visible = false;
+      face.add(parts.mouthO, parts.smile);
+    }
+    onSkull(parts.mouth, 0, -0.36);
+    face.add(parts.mouth);
+    this.face = parts;
+    this.faceNow = { tilt: CALM.tilt, lift: 0, open: 1 };
+  }
+
+  private updateFace(dtMs: number) {
+    const f = this.face;
+    if (!f) return;
+    const mood = MOODS[this.ctrl.current] ?? CALM;
+    const k = 1 - Math.exp(-dtMs / 55);
+    const now = this.faceNow;
+    const tilt = mood.tilt + (mood.tilt >= 0 ? this.meanBrows : 0);
+    now.tilt += (tilt - now.tilt) * k;
+    now.lift += (mood.lift - now.lift) * k;
+    now.open += (mood.open - now.open) * k;
+
+    // Blink every few seconds while the eyes are open
+    this.blinkIn -= dtMs;
+    if (this.blinkIn <= 0) {
+      this.blinkLeft = 110;
+      this.blinkIn = 2200 + Math.random() * 2800;
+    }
+    if (this.blinkLeft > 0) this.blinkLeft -= dtMs;
+    const open = this.blinkLeft > 0 && mood.eyes === 'open' ? 0.12 : now.open;
+
+    const arcs = mood.eyes !== 'open';
+    for (let i = 0; i < 2; i++) {
+      const s = i === 0 ? -1 : 1;
+      f.eyes[i].visible = !arcs;
+      f.eyes[i].scale.y = EYE_ASPECT * Math.max(0.1, open);
+      f.arcs[i].visible = arcs;
+      if (arcs) {
+        // happy: "∩ ∩"; hurt: "> <" (each arc points at the nose)
+        f.arcs[i].rotation.z = mood.eyes === 'hurt' ? s * Math.PI * 0.5 : 0;
+        f.arcs[i].scale.set(1, mood.eyes === 'hurt' ? 0.8 : 1, 1);
+      }
+      const brow = f.brows[i];
+      brow.rotation.z = s * now.tilt;
+      onSkull(brow, s * EYE_YAW, BROW_PITCH + now.lift, 0.008);
+    }
+    const mouth = mood.mouth;
+    if (f.guard) return;
+    f.mouth.visible = mouth === 'line' || mouth === 'grit';
+    f.mouth.scale.set(mouth === 'grit' ? 1.4 : 1, mouth === 'grit' ? 1.3 : 1, 1);
+    if (f.mouthO) f.mouthO.visible = mouth === 'o';
+    if (f.smile) f.smile.visible = mouth === 'smile';
+  }
+
   private buildHair(a: FighterAppearance) {
     const hair = this.mat(a.hairColor);
+    // Tilted back so the hairline sits above the brows and the face stays visible
     const cap = () => {
       const c = this.mesh(new THREE.SphereGeometry(0.215, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
-      c.position.set(0, 0.215, -0.01);
-      c.rotation.x = -0.18;
+      c.position.set(0, 0.21, -0.012);
+      c.rotation.x = -0.62;
       this.head.add(c);
     };
     if (a.hairStyle === 'short') cap();
@@ -354,8 +548,10 @@ export class FighterRig {
       }
     } else if (a.hairStyle === 'dreads') {
       cap();
+      // Around the sides and back only: nothing hangs over the face
+      const gap = 0.95;
       for (let i = 0; i < 9; i++) {
-        const ang = (i / 9) * Math.PI * 2;
+        const ang = Math.PI * 0.5 + gap + (i / 8) * (Math.PI * 2 - gap * 2);
         const d = this.mesh(new THREE.CapsuleGeometry(0.035, 0.26, 3, 6), hair, false);
         d.position.set(Math.cos(ang) * 0.19, 0.2, Math.sin(ang) * 0.19 - 0.03);
         d.rotation.set(Math.sin(ang) * 0.15, 0, -Math.cos(ang) * 0.15);
@@ -363,11 +559,12 @@ export class FighterRig {
       }
     } else if (a.hairStyle === 'cap') {
       const dome = this.mesh(new THREE.SphereGeometry(0.225, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), hair);
-      dome.position.set(0, 0.22, 0);
+      dome.position.set(0, 0.225, -0.005);
+      dome.rotation.x = -0.42;
       this.head.add(dome);
       const brim = this.mesh(new THREE.BoxGeometry(0.2, 0.025, 0.16), hair, false);
-      brim.position.set(0, 0.27, 0.22);
-      brim.rotation.x = 0.12;
+      brim.position.set(0, 0.315, 0.27);
+      brim.rotation.x = 0.15;
       this.head.add(brim);
     }
   }
@@ -389,12 +586,15 @@ export class FighterRig {
         this.head.add(sp);
       }
     } else if (n.includes('visor')) {
-      const v = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.07, 0.06), new THREE.MeshBasicMaterial({ color: c }));
-      v.position.set(0, 0.23, 0.17);
+      // Curved band over the eyes (the brows still show the mood)
+      const v = new THREE.Mesh(new THREE.CylinderGeometry(0.218, 0.218, 0.085, 14, 1, true, -1.15, 2.3), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+      v.position.y = 0.21;
       this.head.add(v);
     } else if (n.includes('headgear') || n.includes('sparring')) {
-      const pad = this.mesh(new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), this.mat(a.bodyColor), false);
-      pad.position.y = 0.22;
+      // Open face: padding over the crown, sides and back
+      const pad = this.mesh(new THREE.SphereGeometry(0.225, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.56), this.mat(a.bodyColor), false);
+      pad.position.y = 0.21;
+      pad.rotation.x = -0.6;
       this.head.add(pad);
       [-1, 1].forEach((s) => {
         const ear = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), glow);
@@ -441,6 +641,19 @@ export class FighterRig {
         sp.rotation.x = Math.PI / 2;
         grp.add(sp);
       }
+    }
+    // Epic and better gloves carry a soft halo in their rarity colour (the fist hides its centre, so it reads as a rim glow)
+    if (g && rank >= 3 && this.quality !== 'low') {
+      if (!this.gloveGlow) {
+        this.gloveGlowBase = rank >= 5 ? 0.75 : rank >= 4 ? 0.65 : 0.55;
+        this.gloveGlow = new THREE.SpriteMaterial({
+          map: glowTexture(), color: RARITY_COLOR[g.rarity], transparent: true, opacity: this.gloveGlowBase,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+      }
+      const halo = new THREE.Sprite(this.gloveGlow);
+      halo.scale.setScalar(rank >= 4 ? 0.5 : 0.44);
+      grp.add(halo);
     }
     if (g && /dragon/i.test(g.name)) {
       const fl = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 6), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.75 }));
@@ -555,7 +768,11 @@ export class FighterRig {
 
     this.hips.rotation.y = p.hipsY;
     this.chest.rotation.set(p.chestX + (idleLike ? breath * 0.018 : 0), p.chestY, p.chestZ);
-    this.head.rotation.set(p.headX, p.headY, 0);
+    // Cheat the head toward the camera (assumed on world +z, as in the battle scene) for a 3/4 face
+    const camSide = Math.round(-Math.sin(this.holder.rotation.y));
+    const turn = camSide === 0 ? 0 : camSide * FACE_TURN - STANCE_HEAD_YAW;
+    this.head.rotation.set(p.headX, p.headY + turn, 0);
+    this.updateFace(dtMs);
     this.shoulderA.rotation.set(p.aSx + (idleLike ? breath * 0.03 : 0), p.aSy, p.aSz);
     this.shoulderB.rotation.set(p.bSx + (idleLike ? breath * 0.03 : 0), p.bSy, p.bSz);
     this.elbowA.rotation.x = p.aE;
@@ -587,6 +804,9 @@ export class FighterRig {
     }
     const buddy = this.fx.getObjectByName('buddy');
     if (buddy) buddy.position.y = 1.35 + Math.sin(nowMs * 0.003) * 0.08;
+    if (this.gloveGlow) {
+      this.gloveGlow.opacity = this.gloveGlowBase * (battleRig.reducedMotion ? 0.9 : 0.8 + Math.sin(nowMs * 0.004 + this.breathPhase) * 0.2);
+    }
 
     // Hit flash decays quickly; blends emissive toward white and then back to each material's base glow
     this.flashAmount = Math.max(0, this.flashAmount - dtMs * 0.006);
@@ -604,9 +824,70 @@ export class FighterRig {
       }
       if (f > 0.01) m.userData.flashed = true;
     }
+
+    // Once both fighters have their pose for this frame, push them apart if they overlap
+    this.lastNow = nowMs;
+    const other = this.findPartner();
+    if (other && other.lastNow === nowMs) this.keepApart(other);
+  }
+
+  private findPartner(): FighterRig | null {
+    const parent = this.holder.parent;
+    if (!parent) return null;
+    if (this.partner && this.partner.holder.parent === parent) return this.partner;
+    this.partner = null;
+    for (const c of parent.children) {
+      const rig = RIGS.get(c);
+      if (rig && rig !== this) {
+        this.partner = rig;
+        break;
+      }
+    }
+    return this.partner;
+  }
+
+  // World-space spheres for the spacing check (see controller.ts)
+  private updateProbes() {
+    const s = this.holder.scale.x;
+    const pr = this.spacing.probes;
+    this.spacing.scale = s;
+    const put = (i: number, obj: THREE.Object3D, x: number, y: number, z: number) => {
+      this.tmp.set(x, y, z).applyMatrix4(obj.matrixWorld);
+      pr[i].x = this.tmp.x;
+      pr[i].y = this.tmp.y;
+      pr[i].z = this.tmp.z;
+    };
+    this.head.updateWorldMatrix(true, false);
+    this.elbowA.updateWorldMatrix(true, false);
+    this.elbowB.updateWorldMatrix(true, false);
+    this.shinA.updateWorldMatrix(true, false);
+    this.shinB.updateWorldMatrix(true, false);
+    put(0, this.head, 0, 0.2, 0);
+    put(1, this.chest, 0, 0.36, 0);
+    put(2, this.hips, 0, 0.04, 0);
+    put(3, this.elbowA, 0, -0.33, 0);
+    put(4, this.elbowB, 0, -0.33, 0);
+    put(5, this.shinA, 0, -SHIN, 0.07);
+    put(6, this.shinB, 0, -SHIN, 0.07);
+    for (let i = 0; i < pr.length; i++) pr[i].r = PROBE_R[i] * s * (pr[i].limb && i < 5 ? this.gloveReach : 1);
+  }
+
+  private keepApart(other: FighterRig) {
+    this.updateProbes();
+    other.updateProbes();
+    const meLeft = this.holder.matrixWorld.elements[12] <= other.holder.matrixWorld.elements[12];
+    const left = meLeft ? this : other;
+    const right = meLeft ? other : this;
+    // Only meaningful when they face each other along x (left looks to +x, right to -x)
+    if (Math.sin(left.holder.rotation.y) < 0.5 || Math.sin(right.holder.rotation.y) > -0.5) return;
+    const [dl, dr] = enforceSpacing(left.spacing, right.spacing);
+    if (dl > 0) left.root.position.z = left.ctrl.pose.rz;
+    if (dr > 0) right.root.position.z = right.ctrl.pose.rz;
   }
 
   public dispose() {
     this.clear();
+    if (this.partner?.partner === this) this.partner.partner = null;
+    this.partner = null;
   }
 }

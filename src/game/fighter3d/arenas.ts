@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ArenaEnvironment } from '../../types/game';
-import { QualityLevel } from '../battleRig';
+import { QualityLevel, battleRig } from '../battleRig';
 
 export interface Arena {
   group: THREE.Group;
@@ -39,6 +39,42 @@ const basic = (color: number, opacity = 1, additive = false) =>
     color, transparent: opacity < 1 || additive, opacity, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: !additive,
   });
 const std = (color: number, rough = 0.7, metal = 0.1) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+
+// Main signs sit left of centre and below the top edge: the 1X / AUTO pills cover the top-right corner of the view.
+
+// "Living arena" touches only run on medium/high quality and never with reduced motion.
+const lively = (q: QualityLevel) => q !== 'low' && !battleRig.reducedMotion;
+
+// Stable pseudo-random 0..1 per integer slot
+function hash01(n: number) {
+  const h = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+// 1 = lit. Every `period` ms a short burst of rapid on/off, like a failing tube or bulb.
+function flicker(t: number, seed: number, period: number, burst: number) {
+  const local = (t + seed * 1733) % period;
+  if (local > burst) return 1;
+  return hash01(Math.floor(t / 55) + seed * 31) < 0.45 ? 0.3 : 1;
+}
+
+// Path only (ctx.roundRect needs iOS 16; the app supports iOS 15)
+function roundedRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+// Text that shrinks to fit a width (Impact is missing on some systems; the fallback font is wider)
+function fitText(g: CanvasRenderingContext2D, text: string, maxW: number, px: number, family = 'Impact, Arial Black, sans-serif') {
+  g.font = `900 ${px}px ${family}`;
+  const w = g.measureText(text).width;
+  if (w > maxW) g.font = `900 ${Math.floor((px * maxW) / w)}px ${family}`;
+}
 
 // Soft circular fake shadow
 export function makeBlobShadow() {
@@ -103,7 +139,7 @@ function lamp(group: THREE.Group, x: number, z: number, color: number) {
   const cone = new THREE.Mesh(new THREE.ConeGeometry(1.3, 3, 16, 1, true), basic(color, 0.1, true));
   cone.position.set(x + 0.6, 1.55, z);
   group.add(cone);
-  return bulb;
+  return { bulb, cone };
 }
 
 function buildAlley(q: QualityLevel): Arena {
@@ -143,22 +179,28 @@ function buildAlley(q: QualityLevel): Arena {
         g.fillRect(x + 2, y + 2, 60, 17);
       }
     }
-    // graffiti
-    g.save();
-    g.translate(120, 150); g.rotate(-0.08);
-    g.font = '900 64px Impact, Arial Black, sans-serif';
-    g.lineWidth = 8; g.strokeStyle = '#111';
-    g.strokeText('STRIKER', 0, 0);
-    const grd = g.createLinearGradient(0, -50, 0, 10);
-    grd.addColorStop(0, '#f472b6'); grd.addColorStop(1, '#22d3ee');
-    g.fillStyle = grd; g.fillText('STRIKER', 0, 0);
-    g.restore();
-    g.fillStyle = '#facc15'; g.beginPath(); g.arc(420, 70, 22, 0, 7); g.fill();
-    g.fillStyle = '#111'; g.fillRect(412, 62, 5, 5); g.fillRect(425, 62, 5, 5); g.fillRect(410, 77, 22, 4);
+    // smiley tag, low on the left of the back wall (clear of the HUD pills)
+    g.fillStyle = '#facc15'; g.beginPath(); g.arc(70, 188, 20, 0, 7); g.fill();
+    g.fillStyle = '#111'; g.fillRect(62, 180, 5, 5); g.fillRect(74, 180, 5, 5); g.fillRect(61, 194, 20, 4);
   });
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(13, 4.6), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95 }));
   wall.position.set(0, 2.3, -2.4);
   group.add(wall);
+  // "STRIKER" graffiti: its own decal so it can sit above the fighters, left of the HUD pills
+  const graffiti = canvasTex(256, 64, (g) => {
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    fitText(g, 'STRIKER', 236, 52);
+    g.lineJoin = 'round';
+    g.lineWidth = 7; g.strokeStyle = '#111';
+    g.strokeText('STRIKER', 128, 34);
+    const grd = g.createLinearGradient(0, 8, 0, 56);
+    grd.addColorStop(0, '#f472b6'); grd.addColorStop(1, '#22d3ee');
+    g.fillStyle = grd; g.fillText('STRIKER', 128, 34);
+  });
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.05), new THREE.MeshStandardMaterial({ map: graffiti, transparent: true, roughness: 0.9, depthWrite: false }));
+  tag.position.set(-1.05, 2.75, -2.38);
+  tag.rotation.z = 0.05;
+  group.add(tag);
   [-1, 1].forEach((s) => {
     const side = new THREE.Mesh(new THREE.PlaneGeometry(6, 4.6), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95 }));
     side.position.set(s * 5.2, 2.3, 0.2);
@@ -166,7 +208,7 @@ function buildAlley(q: QualityLevel): Arena {
     group.add(side);
   });
 
-  const bulb = lamp(group, -3.2, -1.7, 0xfde68a);
+  const { bulb, cone } = lamp(group, -3.2, -1.7, 0xfde68a);
   const dump = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.0, 0.8), std(0x166534, 0.6, 0.3));
   dump.position.set(3.4, 0.5, -1.8);
   group.add(dump);
@@ -195,7 +237,10 @@ function buildAlley(q: QualityLevel): Arena {
     fog: new THREE.Fog(0x0b1226, 7, 16),
     ambient: { color: 0x6b7bb0, intensity: 1.25 },
     update: (t) => {
-      (bulb.material as THREE.MeshBasicMaterial).color.setHex(Math.sin(t * 0.03) > 0.97 ? 0x78716c : 0xfde68a);
+      // Failing street lamp: steady, with a short stutter every few seconds
+      const on = lively(q) ? flicker(t, 1, 4300, 650) : 1;
+      (bulb.material as THREE.MeshBasicMaterial).color.setHex(on < 1 ? 0x78716c : 0xfde68a);
+      (cone.material as THREE.MeshBasicMaterial).opacity = 0.1 * on;
     },
   };
 }
@@ -279,26 +324,38 @@ function buildNeon(q: QualityLevel): Arena {
     g.fillStyle = '#07030f'; g.fillRect(0, 0, 256, 128);
     const grd = g.createLinearGradient(0, 128, 0, 0);
     grd.addColorStop(0, '#22d3ee'); grd.addColorStop(0.5, '#c026d3'); grd.addColorStop(1, '#f472b6');
+    // Equalizer bars stay in the lower half so the neon sign above has a dark backdrop
     for (let i = 0; i < 32; i++) {
-      const h = 20 + ((i * 53) % 90);
+      const h = 14 + ((i * 53) % 52);
       bars.push(h);
       g.fillStyle = grd;
       g.fillRect(i * 8 + 1, 128 - h, 6, h);
     }
-    g.font = '900 28px Impact, sans-serif';
-    g.fillStyle = '#fff'; g.textAlign = 'center';
-    g.fillText('NEON NIGHTS', 128, 40);
   });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.4), new THREE.MeshBasicMaterial({ map: led }));
   screen.position.set(0, 2.2, -2.4);
   group.add(screen);
+  const signTex = canvasTex(256, 64, (g) => {
+    g.fillStyle = 'rgba(12,4,24,0.92)';
+    roundedRect(g, 4, 6, 248, 52, 12); g.fill();
+    g.strokeStyle = '#22d3ee'; g.lineWidth = 3; g.shadowColor = '#22d3ee'; g.shadowBlur = 8;
+    roundedRect(g, 6, 8, 244, 48, 11); g.stroke();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    fitText(g, 'NEON NIGHTS', 216, 34);
+    g.shadowColor = '#f0abfc'; g.shadowBlur = 12;
+    g.fillStyle = '#f472b6'; g.fillText('NEON NIGHTS', 128, 33);
+    g.shadowBlur = 0; g.fillStyle = '#fdf4ff'; g.globalAlpha = 0.55; g.fillText('NEON NIGHTS', 128, 33);
+  });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.95), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
+  sign.position.set(-1.0, 2.85, -2.32);
+  group.add(sign);
 
-  const tubes: THREE.Mesh[] = [];
+  const tubes: { mesh: THREE.Mesh; color: THREE.Color }[] = [];
   const tube = (x: number, y: number, w: number, h: number, color: number) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.07), basic(color));
     m.position.set(x, y, -2.3);
     group.add(m);
-    tubes.push(m);
+    tubes.push({ mesh: m, color: new THREE.Color(color) });
   };
   tube(0, 3.95, 8.4, 0.08, 0xf0abfc);
   tube(0, 0.5, 8.4, 0.08, 0x22d3ee);
@@ -332,8 +389,12 @@ function buildNeon(q: QualityLevel): Arena {
         b.rotation.z = Math.sin(t * 0.0015 + i * 1.6) * 0.5;
         b.rotation.x = Math.cos(t * 0.0012 + i) * 0.3;
       });
-      tubes.forEach((m, i) => ((m.material as THREE.MeshBasicMaterial).opacity = 1, (m.material as THREE.MeshBasicMaterial).color.offsetHSL(0, 0, Math.sin(t * 0.01 + i) * 0.002)));
-      screen.position.y = 2.2;
+      // Neon flicker: the sign and each tube stutter now and then, out of step with each other
+      const live = lively(q);
+      (sign.material as THREE.MeshBasicMaterial).color.setScalar(live ? flicker(t, 7, 5200, 420) : 1);
+      tubes.forEach(({ mesh, color }, i) => {
+        (mesh.material as THREE.MeshBasicMaterial).color.copy(color).multiplyScalar(live ? flicker(t, i + 2, 6100 + i * 900, 260) : 1);
+      });
     },
   };
 }
@@ -398,13 +459,16 @@ function buildRing(q: QualityLevel): Arena {
     beam.position.set(x, 2.1, -0.6);
     group.add(beam);
   });
-  const banner = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.9), new THREE.MeshBasicMaterial({
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.95), new THREE.MeshBasicMaterial({
     map: canvasTex(256, 64, (g) => {
       g.fillStyle = '#7f1d1d'; g.fillRect(0, 0, 256, 64);
-      g.font = '900 34px Impact, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fde047'; g.fillText('WORLD TITLE', 128, 44);
+      g.strokeStyle = '#fbbf24'; g.lineWidth = 4; g.strokeRect(4, 4, 248, 56);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      fitText(g, 'WORLD TITLE', 220, 36);
+      g.fillStyle = '#fde047'; g.fillText('WORLD TITLE', 128, 34);
     }),
   }));
-  banner.position.set(0, 3.3, -3.0);
+  banner.position.set(-1.05, 3.0, -3.0);
   group.add(banner);
   return {
     group,
@@ -437,12 +501,15 @@ function buildStadium(q: QualityLevel): Arena {
       g.fillRect(r() * 256, r() * 64, 3, 3);
     }
   });
-  const stands: THREE.Mesh[] = [];
+  // One texture view per tier (same image on the GPU) so each row of fans can bob on its own beat
+  crowdTex.wrapT = THREE.RepeatWrapping;
+  const stands: THREE.Texture[] = [];
   for (let i = 0; i < 5; i++) {
-    const tier = new THREE.Mesh(new THREE.BoxGeometry(14, 0.7, 1.2), new THREE.MeshBasicMaterial({ map: crowdTex, color: 0xbbbbbb }));
+    const view = i === 0 ? crowdTex : crowdTex.clone();
+    const tier = new THREE.Mesh(new THREE.BoxGeometry(14, 0.7, 1.2), new THREE.MeshBasicMaterial({ map: view, color: 0xbbbbbb }));
     tier.position.set(0, 0.5 + i * 0.75, -3.2 - i * 1.1);
     group.add(tier);
-    stands.push(tier);
+    stands.push(view);
   }
   const towers: THREE.Mesh[] = [];
   [-5.5, 5.5].forEach((x) => {
@@ -459,14 +526,19 @@ function buildStadium(q: QualityLevel): Arena {
     glow.rotation.z = Math.sign(x) * 0.5;
     group.add(glow);
   });
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.1), new THREE.MeshBasicMaterial({
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.06), new THREE.MeshBasicMaterial({
     map: canvasTex(256, 80, (g) => {
       g.fillStyle = '#0a0a0a'; g.fillRect(0, 0, 256, 80);
-      g.font = '900 34px Impact, sans-serif'; g.textAlign = 'center'; g.fillStyle = '#fbbf24'; g.fillText('CHAMPIONS', 128, 50);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      fitText(g, 'CHAMPIONS', 224, 40);
+      g.fillStyle = '#fbbf24'; g.fillText('CHAMPIONS', 128, 42);
     }),
   }));
-  board.position.set(0, 4.0, -4.1);
+  board.position.set(-1.1, 3.15, -4.1);
   group.add(board);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.26, 0.08), std(0x27272a, 0.4, 0.8));
+  frame.position.set(-1.1, 3.15, -4.15);
+  group.add(frame);
   const confetti: THREE.Mesh[] = [];
   if (q === 'high') {
     const r = rand(2);
@@ -482,11 +554,16 @@ function buildStadium(q: QualityLevel): Arena {
     background: new THREE.Color(0x0b1730),
     fog: new THREE.Fog(0x0b1730, 9, 22),
     ambient: { color: 0xdbeafe, intensity: 1.2 },
-    update: (t) => confetti.forEach((c, i) => {
-      c.position.y -= 0.01;
-      if (c.position.y < 0.1) c.position.y = 4;
-      c.rotation.set(t * 0.002 + i, t * 0.003, 0);
-    }),
+    update: (t) => {
+      confetti.forEach((c, i) => {
+        c.position.y -= 0.01;
+        if (c.position.y < 0.1) c.position.y = 4;
+        c.rotation.set(t * 0.002 + i, t * 0.003, 0);
+      });
+      // Slow crowd bob, each tier on its own beat
+      const live = lively(q);
+      stands.forEach((tex, i) => (tex.offset.y = live ? Math.sin(t * 0.0045 + i * 1.3) * 0.035 : 0));
+    },
   };
 }
 

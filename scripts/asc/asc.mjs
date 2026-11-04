@@ -281,7 +281,7 @@ async function resubmit(buildVersion) {
 }
 
 const req = JSON.parse(fs.readFileSync('.github/asc/request.json', 'utf8'));
-console.log(`ASC request #${req.id}: ${req.tasks.join(', ')}`);
+console.log(`ASC request #${req.id}: ${req.tasks.join(', ')} [${process.env.ASC_KEY_KIND || 'local key'}]`);
 for (const t of req.tasks) {
   if (t === 'check') await check();
   else if (t === 'inspect') await inspect();

@@ -21,7 +21,10 @@ jobs:
           node-version: 22
       - name: Run App Store Connect tasks
         env:
-          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          # ASC_ADMIN_KEY_ID + ASC_ADMIN_PRIVATE_KEY (an App Manager key, same team) are needed for edits and
+          # submissions; without them the read + upload key from the build workflow is used.
+          ASC_KEY_ID: ${{ secrets.ASC_ADMIN_KEY_ID || secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          ASC_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_ADMIN_PRIVATE_KEY || secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          ASC_KEY_KIND: ${{ secrets.ASC_ADMIN_KEY_ID && 'App Manager key (ASC_ADMIN_*)' || 'read + upload key' }}
         run: node scripts/asc/asc.mjs

@@ -20,9 +20,9 @@
 - Bump `CURRENT_PROJECT_VERSION` in `ios/App/App.xcodeproj/project.pbxproj`, push, dispatch `.github/workflows/build-ios.yml`
   with `upload_to_testflight: true`, confirm "UPLOAD SUCCEEDED" in the job log. Last uploaded build: 18 (version 1.0).
 - App Store Connect API: `scripts/asc/asc.mjs` (tasks `check`, `inspect`, `submit:<build>`, `resubmit:<build>`, `finish`), also runnable from
-  `.github/workflows/asc.yml` by editing `.github/asc/request.json`. The key in the GitHub secrets can only read and
-  upload builds; edits and submissions need an App Manager key. Never ask the owner to paste keys into the chat;
-  suggest storing an App Manager key in the GitHub secrets instead.
+  `.github/workflows/asc.yml` by editing `.github/asc/request.json`. The build key in the GitHub secrets can only read and
+  upload builds; edits and submissions need an App Manager key in the secrets `ASC_ADMIN_KEY_ID` + `ASC_ADMIN_PRIVATE_KEY`
+  (the robot uses them when present; its log line shows which key ran). Never ask the owner to paste keys into the chat.
 - Development branch: `claude/stoic-clarke-qjgg6b`. Do not open pull requests unless asked.
 
 ## Status (2026-11-04)

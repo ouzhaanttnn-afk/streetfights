@@ -226,11 +226,31 @@ async function prepareAndSubmit(buildVersion) {
   line(submit.status === 200, 'SUBMIT FOR REVIEW', submit.status === 200 ? `state=${submit.json.data.attributes.state}` : `${submit.status} ${errText(submit)}`);
 }
 
+// Pull a submission that is still waiting for review (to swap in a newer build), then submit that build
+async function resubmit(buildVersion) {
+  const { appId } = await appAndVersion();
+  const subs = await call('GET', `/v1/reviewSubmissions?filter[app]=${appId}&filter[platform]=IOS&limit=10`);
+  const waiting = (subs.json?.data || []).find((x) => ['WAITING_FOR_REVIEW', 'READY_FOR_REVIEW'].includes(x.attributes.state));
+  if (waiting && waiting.attributes.state === 'WAITING_FOR_REVIEW') {
+    const c = await call('PATCH', `/v1/reviewSubmissions/${waiting.id}`, { data: { type: 'reviewSubmissions', id: waiting.id, attributes: { canceled: true } } });
+    line(c.status === 200, 'cancel waiting submission', c.status === 200 ? c.json.data.attributes.state : `${c.status} ${errText(c)}`);
+    if (c.status !== 200) return;
+    for (let i = 0; i < 30; i++) {
+      const r = await call('GET', `/v1/reviewSubmissions/${waiting.id}`);
+      const st = r.json?.data?.attributes?.state;
+      if (st && st !== 'CANCELING') { line(true, 'submission after cancel', st); break; }
+      await sleep(4000);
+    }
+  }
+  await prepareAndSubmit(buildVersion);
+}
+
 const req = JSON.parse(fs.readFileSync('.github/asc/request.json', 'utf8'));
 console.log(`ASC request #${req.id}: ${req.tasks.join(', ')}`);
 for (const t of req.tasks) {
   if (t === 'check') await check();
   else if (t === 'inspect') await inspect();
   else if (t.startsWith('submit:')) await prepareAndSubmit(t.split(':')[1]);
+  else if (t.startsWith('resubmit:')) await resubmit(t.split(':')[1]);
   else console.log(`unknown task ${t}`);
 }

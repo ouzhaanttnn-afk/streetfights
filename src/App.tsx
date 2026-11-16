@@ -129,7 +129,7 @@ export function App() {
           <StatBar
             stats={state.playerFighter.stats}
             lang={state.lang}
-            odds={stageOdds(state.playerFighter.stats, getStageData(state.currentWorld, state.currentSubStage))}
+            odds={stageOdds(state.playerFighter.stats, getStageData(state.currentWorld, state.currentSubStage), state.playerFighter.equippedSkills)}
           />
         </div>
 

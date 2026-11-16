@@ -7,7 +7,7 @@ import { ui } from '../i18n/ui';
 import { WORLD_MECHANICS, fightOdds, stageOdds } from './combat';
 import { skillName } from '../i18n/content-helpers';
 import { getStageData } from './stageDatabase';
-import { DECK_SIZE, makeDraft, recommendedDraftIndex, SKILL_DATABASE } from './skillDatabase';
+import { DECK_SIZE, isDraftStage, makeDraft, recommendedDraftIndex, SKILL_DATABASE } from './skillDatabase';
 import { leagueOfWorld, promotionReward, WORLDS_PER_LEAGUE } from './leagues';
 import { COSMETICS_LIST, CosmeticItem } from './cosmeticsData';
 import { Language } from '../i18n/translations';
@@ -958,7 +958,8 @@ class GameManager {
     // Track highest unlocked
     const currentTotal = (nextWorld - 1) * 10 + nextSub;
     const highestTotal = (this.state.highestWorld - 1) * 10 + this.state.highestSubStage;
-    if (currentTotal > highestTotal) {
+    const firstClear = currentTotal > highestTotal;
+    if (firstClear) {
       this.state.highestWorld = nextWorld;
       this.state.highestSubStage = nextSub;
       // Beating the last boss of a league promotes the fighter (celebration screen with a fixed reward)
@@ -979,8 +980,8 @@ class GameManager {
       this.handleLootDrop(generateEquipment(undefined, undefined, stageLvl));
     }
 
-    // Skill draft every 3 stages or after a boss (choose 1 of 3)
-    if ((stage.subStage % 3 === 0 || stage.isBoss) && !this.state.pendingSkillDraft && Math.random() < 0.8) {
+    // Skill draft on the first clear of every 3rd stage and every boss (farming never opens drafts)
+    if (firstClear && isDraftStage(stage.subStage) && !this.state.pendingSkillDraft) {
       this.openSkillDraft();
     }
 
@@ -1038,7 +1039,7 @@ class GameManager {
     for (let i = target - 1; i >= 1; i--) {
       const w = Math.floor((i - 1) / 10) + 1;
       const s = ((i - 1) % 10) + 1;
-      if (stageOdds(p, getStageData(w, s)) >= FARM_RELIABLE_ODDS) return { world: w, sub: s };
+      if (stageOdds(p, getStageData(w, s), this.state.playerFighter.equippedSkills) >= FARM_RELIABLE_ODDS) return { world: w, sub: s };
     }
     return { world: 1, sub: 1 };
   }
@@ -1046,7 +1047,7 @@ class GameManager {
   /** Odds against the farm target (null when not farming) */
   public farmOdds(): number | null {
     if (!this.state.farm) return null;
-    return stageOdds(this.state.playerFighter.stats, getStageData(this.state.farm.world, this.state.farm.sub));
+    return stageOdds(this.state.playerFighter.stats, getStageData(this.state.farm.world, this.state.farm.sub), this.state.playerFighter.equippedSkills);
   }
 
   public farmReady(): boolean {

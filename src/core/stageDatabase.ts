@@ -75,11 +75,12 @@ const WORLDS: WorldConfig[] = [
 // Fighting styles rotate across the roster so neighbouring stages feel different.
 const NORMAL_PROFILES: OpponentProfile[] = ['aggressive', 'defensive', 'counter', 'fast', 'heavy'];
 
-// Tuned with scripts/run-balance-sim.mjs (docs/BALANCE.md). Growth was 1.03, which made late opponents outscale everything.
+// Tuned with scripts/run-balance-sim.mjs (docs/BALANCE.md, build 19): growth 1.015 makes opponents outpace gear drops a
+// little so bosses become walls you farm through; 1.03 was a brick wall, 1.008 never pushed back. oppHp/oppAtk scale all opponents.
 // subBossMech: strength of the sub-boss version of the world's boss mechanic (the boss has 1).
 // coinBase/coinPerStage/coinBoss: coin reward per win; xp*: XP per win.
 export const BALANCE = {
-  linear: 0.34, growth: 1.008, boss: 1.05, subBoss: 1.0, firstWorldBoss: 0.9, subBossMech: 0.5,
+  linear: 0.34, growth: 1.015, boss: 1.2, subBoss: 1.15, firstWorldBoss: 1.5, subBossMech: 0.5, oppHp: 0.95, oppAtk: 1.08,
   coinBase: 40, coinPerStage: 25, coinBoss: 2.5, xpBase: 25, xpPerStage: 15,
 };
 
@@ -111,12 +112,13 @@ export function getStageData(worldNum: number, subNum: number): Stage {
   const scale = (1 + (totalStageIndex - 1) * BALANCE.linear) * Math.pow(BALANCE.growth, totalStageIndex - 1);
   const bossScale = isFinalBoss ? (worldNum === 1 ? BALANCE.firstWorldBoss : BALANCE.boss) : isBoss ? BALANCE.subBoss : 1.0;
 
-  const maxHp = Math.round((140 + totalStageIndex * 45) * scale * bossScale);
-  const atk = Math.round((14 + totalStageIndex * 4.2) * scale * bossScale);
+  const maxHp = Math.round((140 + totalStageIndex * 45) * scale * bossScale * BALANCE.oppHp);
+  const atk = Math.round((14 + totalStageIndex * 4.2) * scale * bossScale * BALANCE.oppAtk);
   const def = Math.round((8 + totalStageIndex * 2.8) * scale * bossScale);
   const spd = Math.round((10 + totalStageIndex * 1.5) * scale);
   const critRate = Math.min(Math.round((5 + totalStageIndex * 0.8) * 10) / 10, 45);
-  const critDmg = Math.round((1.5 + (totalStageIndex * 0.02)) * 100) / 100;
+  // Capped: uncapped crit damage (3.7x by stage 109) let late opponents one-shot the fighter at any odds
+  const critDmg = Math.min(2.2, Math.round((1.5 + (totalStageIndex * 0.02)) * 100) / 100);
   const comboRate = Math.min(Math.round((5 + totalStageIndex * 0.9) * 10) / 10, 50);
   const dodgeRate = Math.min(Math.round((4 + totalStageIndex * 0.6) * 10) / 10, 40);
   const stamina = 100 + totalStageIndex * 10;

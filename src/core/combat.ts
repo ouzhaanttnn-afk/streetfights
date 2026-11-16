@@ -1,6 +1,6 @@
 // Combat numbers shared by the fight loop (BattleCanvas), the difficulty estimate (guidance.ts) and the balance
 // simulation (scripts/balance-sim.ts). Keep this file free of browser APIs.
-import type { BossMechanicId, FighterStats, OpponentProfile, Stage } from '../types/game';
+import type { BossMechanicId, FighterStats, OpponentProfile, Skill, Stage } from '../types/game';
 
 // Fighting styles tune tempo and weight of attacks; average damage per second stays close to equal.
 export const INTERVAL_MULT: Record<OpponentProfile, number> = {
@@ -22,6 +22,8 @@ export const COMBAT = {
   spdMaxFactor: 2.2,
   superMult: 2.2,
   comboShare: 0.35,
+  // Remaining bias of fightOdds against the fight loop (checked with run-balance-sim.mjs CALIB=1)
+  oddsCalibration: 1,
 };
 
 // Attack tempo depends on the speed ratio between the two fighters, so SPD matters at every stage
@@ -113,15 +115,55 @@ function dps(atk: number, interval: number, critRate: number, critDmg: number, t
   return (atk * damageMult(atk, targetDef) * crit * comboF * hit) / (interval / 1000);
 }
 
+/** Average effect of the deck's skill procs, for the fight estimate (the fight loop rolls them one by one) */
+export function skillFactors(skills: Pick<Skill, 'specialProc'>[] = []) {
+  const f = { dmg: 1, incoming: 1, dodge: 0, lifesteal: 0, hp: 1, rage: 1, combo: 1, def: 1, oppHeal: 1, counter: 0 };
+  for (const s of skills) {
+    const sp = s.specialProc;
+    if (!sp) continue;
+    const c = Math.min(100, sp.chance) / 100;
+    if (sp.type === 'double_strike' || sp.type === 'bicycle_kick') f.dmg *= 1 + c * (sp.multiplier - 1);
+    else if (sp.type === 'execute') f.dmg *= 1 + 0.3 * c * (sp.multiplier - 1); // only below 35% HP
+    else if (sp.type === 'vampire') f.lifesteal += c * 30;
+    else if (sp.type === 'iron_chin') f.incoming *= 1 - c * (1 - sp.multiplier);
+    else if (sp.type === 'shadow_dodge') f.dodge += c * 100;
+    else if (sp.type === 'sixth_sense') f.incoming *= 1 - c * 0.3; // about 30% of incoming damage is heavy/crit
+    else if (sp.type === 'counter_strike') f.counter += c * sp.multiplier;
+    else if (sp.type === 'second_wind') f.hp *= 1 + sp.multiplier;
+    else if (sp.type === 'armor_break') f.def *= 1 - Math.min(SKILL_RULES.armorBreakMaxStacks, 5) * sp.multiplier;
+    else if (sp.type === 'chain_combo') f.combo *= 1 + c * (1 + c);
+    else if (sp.type === 'wound') f.oppHeal *= sp.multiplier;
+    else if (sp.type === 'rage_boost') f.rage *= sp.multiplier;
+  }
+  return f;
+}
+
 /**
  * How many times faster the player wins than loses: > 1 means the player should win.
  * Uses time-to-kill instead of power scores, which over-count stats that stop mattering late in the game.
- * `mech` adds the boss's signature mechanic (auto-mode play: auto guard, SUPER fired when full).
+ * Includes SUPER moves and the average effect of skill procs (`skills`), and the boss's signature mechanic
+ * (`mech`, auto-mode play: auto guard, SUPER fired when full). Calibrated against the fight loop with
+ * scripts/run-balance-sim.mjs (CALIB=1).
  */
-export function fightOdds(p: FighterStats, o: FighterStats, profile: OpponentProfile, mech?: BossMechanic): number {
-  let pDps = dps(p.atk, playerInterval(p.spd, o.spd), p.critRate, p.critDmg, o.def, o.dodgeRate, p.comboRate);
-  let oDps = dps(o.atk * DAMAGE_MULT[profile], opponentInterval(o.spd, profile, p.spd), o.critRate, o.critDmg, p.def, p.dodgeRate);
-  const comboPart = (Math.min(75, p.comboRate) / 100) * COMBAT.comboShare;
+export function fightOdds(p: FighterStats, o: FighterStats, profile: OpponentProfile, mech?: BossMechanic, skills?: Pick<Skill, 'specialProc'>[]): number {
+  const k = skillFactors(skills);
+  const pInt = playerInterval(p.spd, o.spd);
+  const oInt = opponentInterval(o.spd, profile, p.spd);
+  const pDodge = Math.min(90, p.dodgeRate + (100 - p.dodgeRate) * (k.dodge / 100));
+  let pDps = dps(p.atk, pInt, p.critRate, p.critDmg, o.def * k.def, o.dodgeRate, p.comboRate * k.combo) * k.dmg;
+  let oDps = dps(o.atk * DAMAGE_MULT[profile], oInt, o.critRate, o.critDmg, p.def, pDodge) * k.incoming;
+  // SUPER: rage from own hits (20), hits taken (8) and dodges (15); one SUPER every `swingsPerSuper` swings
+  const hit = 1 - Math.min(90, o.dodgeRate) / 100;
+  const ragePerSwing = (20 * hit + (pInt / oInt) * (8 * (1 - pDodge / 100) + 15 * (pDodge / 100))) * k.rage;
+  const swingsPerSuper = Math.max(2, 100 / Math.max(1, ragePerSwing) + 1);
+  pDps *= 1 + (COMBAT.superMult - 1) / swingsPerSuper;
+  // Counter Strike after dodges
+  pDps += (k.counter * p.atk * damageMult(p.atk, o.def) * (pDodge / 100)) / (oInt / 1000);
+  // Fighting styles: defensive opponents brace (15%: 60% of the hit soaked), counter fighters answer 20% of the
+  // player's landed hits with an early swing
+  if (profile === 'defensive') pDps *= 1 - 0.15 * 0.6;
+  if (profile === 'counter') oDps *= 1 + (0.2 * hit * oInt) / pInt;
+  const comboPart = (Math.min(75, p.comboRate * k.combo) / 100) * COMBAT.comboShare;
   let oppHp = o.maxHp || o.hp;
   if (mech?.id === 'enrage') oDps *= 1 - MECH.enrage.hpBelow + MECH.enrage.hpBelow / (1 - MECH.enrage.speedUp * mech.strength);
   if (mech?.id === 'charged') {
@@ -136,18 +178,18 @@ export function fightOdds(p: FighterStats, o: FighterStats, profile: OpponentPro
   // Opponent healing (league lifesteal modifier, leech bites) slows the player's damage down
   let oppHeal = oDps * (Math.min(60, o.lifesteal || 0) / 100);
   if (mech?.id === 'leech') oppHeal += (oDps * MECH.leech.heal * mech.strength) / MECH.leech.every;
-  pDps = Math.max(pDps * 0.05, pDps - oppHeal);
+  pDps = Math.max(pDps * 0.05, pDps - oppHeal * k.oppHeal);
   if (mech?.id === 'shell') {
     const cap = shellCapacity(mech, oppHp) / (1 + (MECH.shell.comboBreak - 1) * (comboPart / (1 + comboPart)));
     const ttk0 = oppHp / Math.max(0.001, pDps);
     oppHp += cap * (1 + Math.floor((ttk0 * 1000) / MECH.shell.period));
   }
-  const netIncoming = Math.max(oDps * 0.05, oDps - pDps * (Math.min(60, p.lifesteal) / 100));
+  const netIncoming = Math.max(oDps * 0.05, oDps - pDps * (Math.min(60, p.lifesteal + k.lifesteal) / 100));
   const playerTtk = oppHp / Math.max(0.001, pDps);
-  const oppTtk = (p.maxHp || p.hp) / Math.max(0.001, netIncoming);
-  return oppTtk / playerTtk;
+  const oppTtk = ((p.maxHp || p.hp) * k.hp) / Math.max(0.001, netIncoming);
+  return (oppTtk / playerTtk) * COMBAT.oddsCalibration;
 }
 
 /** fightOdds for a stage, including its boss mechanic */
-export const stageOdds = (p: FighterStats, stage: Pick<Stage, 'opponent' | 'bossMechanic'>) =>
-  fightOdds(p, stage.opponent.stats, stage.opponent.profile, stage.bossMechanic);
+export const stageOdds = (p: FighterStats, stage: Pick<Stage, 'opponent' | 'bossMechanic'>, skills?: Pick<Skill, 'specialProc'>[]) =>
+  fightOdds(p, stage.opponent.stats, stage.opponent.profile, stage.bossMechanic, skills);

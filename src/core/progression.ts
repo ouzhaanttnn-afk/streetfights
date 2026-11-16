@@ -70,8 +70,10 @@ export const GYM_TEMPLATES: GymTraining[] = [
   },
 ];
 
-// Each gym level costs this much more than the previous one (was 1.35: the gym stopped mattering after world 2)
-export const GYM_COST_GROWTH = 1.22;
+// Gym tunables (scripts/balance-sim.ts sweeps them, env GYM='{"costGrowth":1.24}').
+// costGrowth: each level costs this much more than the previous one (was 1.35: the gym stopped mattering after world 2);
+// costMult scales every station's base price.
+export const GYM = { costGrowth: 1.13, costMult: 2.5 };
 // ATK and HP stations also give a percentage of the total stat per level, so they stay useful late in the game
 export const GYM_PERCENT_PER_LEVEL: Partial<Record<keyof StatModifiers, number>> = { atk: 0.015, hp: 0.015 };
 // Stats with a hard cap in calculateTotalStats
@@ -90,7 +92,7 @@ export function gymGainAt(id: string, level: number): number {
 }
 
 export function gymCostAt(id: string, level: number): number {
-  return Math.round((BASE_COST[id] ?? 30) * Math.pow(GYM_COST_GROWTH, Math.max(0, level - 1)));
+  return Math.round((BASE_COST[id] ?? 30) * GYM.costMult * Math.pow(GYM.costGrowth, Math.max(0, level - 1)));
 }
 
 // Flat bonus: every level above 1 adds the station's current gain

@@ -267,6 +267,8 @@ export const SKILL_DATABASE: Skill[] = [
 ];
 
 export const DECK_SIZE = 6;
+/** A draft follows the first clear of these sub-stages (3, 6, 9 and both bosses) */
+export const isDraftStage = (sub: number) => sub % 3 === 0 || sub === 5 || sub === 10;
 
 const RARITY_RANK: Record<string, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5, mythic: 6 };
 const fresh = (base: Skill): Skill => ({ ...base, statBonus: { ...base.statBonus }, specialProc: base.specialProc ? { ...base.specialProc } : undefined });

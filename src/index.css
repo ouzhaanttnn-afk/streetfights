@@ -47,6 +47,12 @@
   .app-shell .battle-viewport {
     height: clamp(180px, 36dvh, 250px);
   }
+  /* The stat sheet drops over the short fight view: scroll inside it rather than being cut off */
+  .app-shell .stats-panel {
+    max-height: calc(clamp(180px, 36dvh, 250px) - 84px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   .app-shell [data-next-step] {
     min-height: 36px;
     margin-top: 8px;

@@ -68,16 +68,16 @@ export const StatBar: React.FC<StatBarProps> = ({ stats, lang }) => {
       </button>
 
       {open && (
-        <div className="absolute left-2 right-2 top-full mt-1 z-40 p-1.5 rounded-2xl bg-[#0b0c13]/95 border border-white/10 shadow-2xl backdrop-blur-md animate-fadeIn">
-          <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] font-black uppercase tracking-wider text-zinc-300">
+        <div className="stats-panel absolute left-2 right-2 top-full mt-0.5 z-40 p-1.5 rounded-2xl bg-[#0b0c13]/95 border border-white/10 shadow-2xl backdrop-blur-md animate-fadeIn">
+          <div className="flex items-center gap-1.5 px-1 pb-1 text-[10px] leading-none font-black uppercase tracking-wider text-zinc-300">
             <Trophy className="w-3 h-3 text-amber-400" />
             {ui(lang, 'power_word')} <span className="font-mono text-amber-300">{stats.powerScore.toLocaleString()}</span>
           </div>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-1">
             {statItems.map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="min-w-0 flex flex-col gap-0.5 px-2 py-1 rounded-xl bg-black/40 border border-white/5 shadow-sm">
+                <div key={item.label} className="min-w-0 flex flex-col gap-0.5 px-2 py-[3px] rounded-lg bg-black/40 border border-white/5 shadow-sm">
                   <div className="min-w-0 flex items-center gap-1 text-[10px] font-bold text-zinc-400 leading-none">
                     <Icon className={`w-3 h-3 shrink-0 ${item.color}`} />
                     <span className="tracking-tight truncate">{item.label}</span>

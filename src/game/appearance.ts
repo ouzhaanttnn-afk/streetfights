@@ -25,14 +25,18 @@ export function opponentAppearance(stage: Stage): FighterAppearance {
   const a = stage.opponent.avatarStyle;
   const rarity = WORLD_RARITY[(stage.world - 1) % WORLD_RARITY.length];
   const boss = stage.isBoss;
+  // Each world boss has its own silhouette element (see FighterRig.buildBossMark); "∞" worlds repeat the five
+  const bossWorld = ((stage.world - 1) % 5) + 1;
+  // Brick's mohawk and Viper's hood replace the crown
+  const crown = boss && bossWorld !== 1 && bossWorld !== 3;
   return {
     skinTone: a.skinTone, hairColor: a.hairColor, hairStyle: a.hairStyle, bodyColor: a.bodyColor,
-    gloveColor: a.gloveColor, shoeColor: a.shoeColor, isBoss: boss,
+    gloveColor: a.gloveColor, shoeColor: a.shoeColor, isBoss: boss, bossWorld: boss ? bossWorld : undefined,
     gear: {
       gloves: { rarity, name: 'Gloves' },
       boots: { rarity, name: 'Boots' },
       belt: boss ? { rarity: 'legendary', name: 'Champion Belt' } : null,
-      head: boss ? { rarity: 'epic', name: 'Golden Champion Crown' } : null,
+      head: crown ? { rarity: 'epic', name: 'Golden Champion Crown' } : null,
       robe: boss ? { rarity: 'legendary', name: 'Champion Robe' } : null,
     },
   };

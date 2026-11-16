@@ -106,7 +106,7 @@ const NOTES = [
   '- There is no online multiplayer, leaderboard, chat or user-generated content; all opponents are fictional AI characters.',
   '- Daily rewards use only free in-game currency; nothing can be bought, sold or cashed out. The lucky wheel from an earlier build was removed, and the age rating says Simulated Gambling: None. New skills are chosen for free from three shown options (the coin-priced "another skill" button was removed).',
   '- Optional local reminders (gold vault full, daily reward) can be enabled from an in-game card shown after a few wins or in Settings > Notifications. They are scheduled on the device only.',
-  '- To see everything quickly: launch and the fight starts automatically (the daily reward card appears after the first win). Tap AUTO (top right of the fight) for manual control; tap the gold SUPER button when the rage bar is full. Fighter / Gym / Arena / Shop tabs are along the bottom; tap the level badge (top left) for the profile.',
+  '- To see everything quickly: launch and the fight starts automatically (the daily reward card appears after the first win). Tap AUTO (top centre of the fight view) for manual control; tap the gold SUPER button when the rage bar is full. Fighter / Gym / Arena / Shop tabs are along the bottom; tap the level badge (top left) for the profile.',
   '- Settings (gear icon, top right): language, sound, haptics, notifications, reduce motion, graphics quality, save backup, reset progress.',
   '- The game language follows the device language (8 languages supported).',
 ].join('\n');

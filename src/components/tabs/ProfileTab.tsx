@@ -3,7 +3,7 @@ import { GameStateData, gameManager } from "../../core/gameState";
 import { PREMIUM_AVATARS, FIGHTER_TITLES } from "../../core/avatarsData";
 import { t } from "../../i18n/translations";
 import { ui } from "../../i18n/ui";
-import { avatarName, titleName } from "../../i18n/content-helpers";
+import { avatarName, stageLabel, titleName } from "../../i18n/content-helpers";
 import { LeagueBadge } from "../LeagueBadge";
 import { 
   User, 
@@ -291,7 +291,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
               {t("highestStage", state.lang)}
             </span>
             <span className="font-mono font-black text-sm text-cyan-300 mt-1">
-              {ui(state.lang, 'stage_short', { w: state.highestWorld, s: state.highestSubStage })}
+              {stageLabel(state.highestWorld, state.highestSubStage, state.lang)}
             </span>
           </div>
 

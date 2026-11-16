@@ -2,25 +2,95 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { ArenaEnvironment } from '../types/game';
 import { battleRig } from '../game/battleRig';
-import { FighterAppearance, FighterRig } from '../game/fighter3d/FighterRig';
-import { buildArena, makeBlobShadow } from '../game/fighter3d/arenas';
+import { FighterAppearance, FighterRig, setRimColor } from '../game/fighter3d/FighterRig';
+import { Arena, buildArena, makeBlobShadow } from '../game/fighter3d/arenas';
 
 interface BattleScene3DProps {
   environment: ArenaEnvironment;
   screenShakeRef: React.RefObject<number>;
   player: FighterAppearance;
   opponent: FighterAppearance;
+  // Pixels at the top of the view covered by the HUD overlay (names + HP bars): the camera frames below it
+  hudTop?: number;
 }
 
 const FIGHT_X = 0.8; // half the distance between the two fighters
 const CANVAS_W = 360;
 const CANVAS_H = 215;
+const FOV = 34;
+// Room the fighters need, in world units: lunges, knock-backs, a boss with a crown, victory arms
+const FIGHT_BOX = { x: 1.62, y0: 0.0, y1: 2.45, z: 0.35 };
+const PITCH = 0.045; // camera height above the look-at point per unit of distance (a slight top-down view)
 
-export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef, player, opponent }) => {
+// Finds the closest camera (distance d, look-at height) that keeps both fighters below the HUD overlay and the arena
+// sign in frame, inside small side and bottom margins. The sign should sit below the HUD too; when that would push
+// the camera back by more than 20% (short screens such as the iPhone SE), it may sit behind the HUD's see-through
+// gradient instead.
+// Runs on resize only.
+function frameCamera(cam: THREE.PerspectiveCamera, w: number, h: number, hudTop: number, sign: Arena['sign']) {
+  const top = 1 - (2 * (hudTop + 4)) / h;
+  const screenTop = 1 - (2 * 3) / h;
+  const bottom = -1 + (2 * 4) / h;
+  const side = 1 - (2 * 6) / w;
+  const fighters: THREE.Vector3[] = [];
+  for (const x of [-FIGHT_BOX.x, FIGHT_BOX.x]) {
+    for (const y of [FIGHT_BOX.y0, FIGHT_BOX.y1]) {
+      for (const z of [-FIGHT_BOX.z, FIGHT_BOX.z]) fighters.push(new THREE.Vector3(x, y, z));
+    }
+  }
+  const signPts = sign
+    ? [new THREE.Vector3(sign.x0, sign.y0, sign.z), new THREE.Vector3(sign.x1, sign.y1, sign.z), new THREE.Vector3(sign.x0, sign.y1, sign.z), new THREE.Vector3(sign.x1, sign.y0, sign.z)]
+    : [];
+  const probe = cam.clone();
+  probe.aspect = w / h;
+  probe.fov = FOV;
+  probe.updateProjectionMatrix();
+  const v = new THREE.Vector3();
+  const inside = (pts: THREE.Vector3[], maxY: number) => {
+    for (const p of pts) {
+      v.copy(p).project(probe);
+      if (v.x < -side || v.x > side || v.y < bottom || v.y > maxY) return false;
+    }
+    return true;
+  };
+  const search = (signTop: number) => {
+    const fits = (d: number, lookY: number) => {
+      probe.position.set(0, lookY + d * PITCH, d);
+      probe.lookAt(0, lookY, 0);
+      probe.updateMatrixWorld();
+      return inside(fighters, top) && inside(signPts, signTop);
+    };
+    let best = { d: 9, lookY: 1.4 };
+    let bestD = Infinity;
+    for (let lookY = 0.9; lookY <= 2.3; lookY += 0.05) {
+      let lo = 3;
+      let hi = 18;
+      if (!fits(hi, lookY)) continue;
+      for (let i = 0; i < 22; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid, lookY)) hi = mid;
+        else lo = mid;
+      }
+      if (hi < bestD) {
+        bestD = hi;
+        best = { d: hi, lookY };
+      }
+    }
+    return best;
+  };
+  const strict = search(top);
+  const loose = search(screenTop);
+  return strict.d <= loose.d * 1.2 ? strict : loose;
+}
+
+export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef, player, opponent, hudTop = 56 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rigsRef = useRef<{ player: FighterRig; opp: FighterRig } | null>(null);
   const appearanceRef = useRef({ player, opponent });
   appearanceRef.current = { player, opponent };
+  const hudTopRef = useRef(hudTop);
+  hudTopRef.current = hudTop;
+  const refitRef = useRef<() => void>(() => {});
   // Bumped after a WebGL context loss so the whole scene is rebuilt
   const [epoch, setEpoch] = useState(0);
 
@@ -34,6 +104,8 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
     rigs.player.setAppearance(appearanceRef.current.player);
     rigs.opp.setAppearance(appearanceRef.current.opponent);
   }, [playerSig, opponentSig]);
+
+  useEffect(() => refitRef.current(), [hudTop]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -60,21 +132,42 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
     scene.background = arena.background;
     scene.fog = arena.fog;
     scene.add(arena.group);
+    setRimColor(arena.rim);
 
-    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 60);
+    const camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 60);
     const camBase = new THREE.Vector3(0, 1.3, 6.0);
     const look = new THREE.Vector3(0, 1.02, 0);
+    const refit = () => {
+      const w = mount.clientWidth || 360;
+      const h = mount.clientHeight || 205;
+      const f = frameCamera(camera, w, h, hudTopRef.current, arena.sign);
+      camBase.set(0, f.lookY + f.d * PITCH, f.d);
+      look.set(0, f.lookY, 0);
+      camera.aspect = w / h;
+      camera.fov = FOV;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    refitRef.current = refit;
+    refit();
 
-    scene.add(new THREE.AmbientLight(arena.ambient.color, arena.ambient.intensity));
+    const ambient = new THREE.AmbientLight(arena.ambient.color, arena.ambient.intensity);
+    scene.add(ambient);
     const key = new THREE.DirectionalLight(0xffffff, 2.4);
     key.position.set(2, 4, 5);
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0x7dd3fc, 1.1);
+    const rim = new THREE.DirectionalLight(arena.rim, 1.1);
     rim.position.set(-4, 3, -3);
     scene.add(rim);
     const warm = new THREE.PointLight(0xfbbf24, 1.6, 12);
     warm.position.set(0, 3.5, 2);
     scene.add(warm);
+
+    // SUPER dim: a dark veil between the arena and the fighters (fighters stay fully lit)
+    const veil = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+    veil.position.set(0, 3, -0.75);
+    veil.visible = false;
+    scene.add(veil);
 
     const pRig = new FighterRig(quality);
     const oRig = new FighterRig(quality);
@@ -91,17 +184,20 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
     const oShadow = makeBlobShadow();
     scene.add(pShadow, oShadow);
 
-    let specialUntil = 0;
+    let push = 0; // SUPER push-in 0..1
+    let orbit = 0; // KO orbit angle (radians)
+    let orbitTarget = 0;
     battleRig.active = true;
     const offCommand = battleRig.onCommand((side, cmd, opts) => {
       (side === 'player' ? pRig : oRig).command(cmd, opts?.instant);
-      if (cmd === 'rage' && side === 'player') specialUntil = performance.now() + 950;
+      // A new fight (instant reset) ends the KO orbit
+      if (opts?.instant) orbitTarget = 0;
     });
 
-    let zoom = 0;
     let animId: number | null = null;
     let last = performance.now();
     const v = new THREE.Vector3();
+    const camPos = new THREE.Vector3();
 
     const project = (rig: FighterRig, part: 'chest' | 'head' | 'feet') => {
       rig.worldPoint(part, v);
@@ -127,23 +223,42 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
 
       const reduced = battleRig.reducedMotion;
       const shake = reduced ? 0 : screenShakeRef.current ?? 0;
-      zoom += ((time < specialUntil ? 1 : 0) - zoom) * Math.min(1, real * 0.012);
+      const cine = battleRig.cine;
+      // SUPER: push in fast, hold, and let go once the hit lands
+      const pushTarget = cine?.kind === 'super' ? 1 : 0;
+      push += (pushTarget - push) * Math.min(1, real * (pushTarget ? 0.012 : 0.006));
+      // KO: orbit a little around the finish and hold the angle while the winner celebrates
+      if (cine?.kind === 'ko') {
+        orbitTarget = (cine.side === 'player' ? 1 : -1) * 0.22;
+      }
+      orbit += (orbitTarget - orbit) * Math.min(1, real * (orbitTarget ? 0.005 : 0.004));
       battleRig.cameraKick *= Math.pow(0.0025, real / 1000);
 
-      const pull = (reduced ? 0.25 : 1) * (zoom * 0.7 + battleRig.cameraKick * 0.35);
-      camera.position.set(
-        camBase.x + Math.sin(time * 0.0007) * 0.07 + (Math.random() - 0.5) * shake * 0.03,
-        camBase.y + Math.cos(time * 0.0009) * 0.04 + (Math.random() - 0.5) * shake * 0.03,
-        camBase.z - pull,
+      const pull = (reduced ? 0.25 : 1) * (push * 0.32 * camBase.z * 0.5 + battleRig.cameraKick * 0.35);
+      const focusX = push * -FIGHT_X * 0.25;
+      // Orbit around the look-at point (y axis)
+      const dist = camBase.z - pull;
+      camPos.set(
+        Math.sin(orbit) * dist + focusX + Math.sin(time * 0.0007) * 0.07 + (Math.random() - 0.5) * shake * 0.03,
+        camBase.y - push * 0.18 + Math.cos(time * 0.0009) * 0.04 + (Math.random() - 0.5) * shake * 0.03,
+        Math.cos(orbit) * dist,
       );
-      camera.lookAt(look.x + zoom * 0.6, look.y, look.z);
-      camera.rotation.z += battleRig.cameraKick * 0.02 * (reduced ? 0 : 1);
+      camera.position.copy(camPos);
+      camera.lookAt(look.x + focusX, look.y - push * 0.12, look.z);
+      camera.rotation.z += battleRig.cameraKick * 0.02 * (reduced ? 0 : 1) + push * 0.03;
       warm.intensity = 1.4 + Math.sin(time * 0.003) * 0.3 + shake * 0.12;
+
+      // Background dim during the SUPER (and a softer one during the KO slow motion)
+      const dim = cine?.kind === 'super' ? 0.7 : cine?.kind === 'ko' ? 0.3 : 0;
+      const veilMat = veil.material as THREE.MeshBasicMaterial;
+      veilMat.opacity += (dim - veilMat.opacity) * Math.min(1, real * 0.015);
+      veil.visible = veilMat.opacity > 0.01;
+      ambient.intensity = arena.ambient.intensity * (1 - veilMat.opacity * 0.4);
 
       pShadow.position.set(pRig.holder.position.x + pRig.ctrl.pose.rz, 0.012, 0);
       oShadow.position.set(oRig.holder.position.x - oRig.ctrl.pose.rz, 0.012, 0);
-      pShadow.scale.setScalar(1 / (1 + Math.max(0, pRig.ctrl.pose.ry) * 1.5));
-      oShadow.scale.setScalar(1 / (1 + Math.max(0, oRig.ctrl.pose.ry) * 1.5));
+      pShadow.scale.setScalar(pRig.holder.scale.x / (1 + Math.max(0, pRig.ctrl.pose.ry) * 1.5));
+      oShadow.scale.setScalar(oRig.holder.scale.x / (1 + Math.max(0, oRig.ctrl.pose.ry) * 1.5));
 
       arena.update(time);
       camera.updateMatrixWorld();
@@ -184,15 +299,8 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
     renderer.domElement.addEventListener('webglcontextlost', onLost);
     renderer.domElement.addEventListener('webglcontextrestored', onRestored);
 
-    const resizeObserver = new ResizeObserver(() => {
-      const w = mount.clientWidth || 360;
-      const h = mount.clientHeight || 205;
-      camera.aspect = w / h;
-      // Keep both fighters framed on narrow screens
-      camera.fov = w / h < 1.6 ? 42 : 36;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    });
+    // Keep both fighters and the sign framed at every aspect ratio
+    const resizeObserver = new ResizeObserver(() => refit());
     resizeObserver.observe(mount);
     const intersectionObserver = new IntersectionObserver(([entry]) => {
       isInView = entry.isIntersecting;
@@ -206,6 +314,7 @@ export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, scree
       battleRig.active = false;
       offCommand();
       rigsRef.current = null;
+      refitRef.current = () => {};
       if (animId !== null) cancelAnimationFrame(animId);
       document.removeEventListener('visibilitychange', onVisibility);
       renderer.domElement.removeEventListener('webglcontextlost', onLost);

@@ -3,6 +3,7 @@ import { GameStateData, gameManager } from '../core/gameState';
 import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { useIslandLayout } from '../core/useIslandLayout';
+import { FitText } from './FitText';
 import { Coins, Gem, Settings, Gift, ChevronRight } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -101,12 +102,12 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ state, onOpenSettings }) =
         data-open-profile
         onClick={() => gameManager.setProfileOpen(true)}
         aria-label={ui(state.lang, 'profile_hint')}
-        className="top-nav-left flex items-center gap-1.5 min-w-0 shrink-0 text-left active:scale-95 transition-transform"
+        className="top-nav-left flex items-center gap-1.5 min-w-0 shrink text-left active:scale-95 transition-transform"
       >
         <LevelRing level={state.playerLevel} pct={xpPct} size={30} />
-        <div className="flex flex-col justify-center min-w-0 leading-none">
-          <span className="text-[10px] font-black text-zinc-100 truncate max-w-[90px]">{state.playerFighter.name}</span>
-          <span className="text-[10px] font-mono font-bold text-amber-400 mt-0.5">XP {xpPct}%</span>
+        <div className="flex flex-col justify-center min-w-0 w-[118px] leading-none">
+          <FitText text={state.playerFighter.name} max={11} oneLineMin={9} min={8.5} className="font-black text-zinc-100" />
+          <span className="text-[10px] font-bold tabular-nums text-amber-400 mt-0.5">XP {xpPct}%</span>
         </div>
         <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
       </button>

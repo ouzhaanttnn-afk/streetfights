@@ -274,6 +274,9 @@ const S: Record<string, string[]> = {
   a_mech: ["{mech} boss'unu yen", 'Beat the {mech} boss', 'Vence al jefe de {mech}', 'Besiege den Boss mit {mech}', 'Bats le boss {mech}', 'Vença o chefe de {mech}', 'Sconfiggi il boss {mech}', '{mech}のボスを倒す'],
   a_block_charged: ['{n} yüklü darbeyi blokla', 'Guard {n} charged strikes', 'Bloquea {n} golpes cargados', 'Blocke {n} Ladeschläge', 'Pare {n} frappes chargées', 'Bloqueie {n} golpes carregados', 'Para {n} colpi caricati', 'チャージ攻撃を{n}回ガード'],
   a_league: ['{league} Ligine yüksel', 'Reach the {league} League', 'Llega a la Liga {league}', 'Erreiche die {league}-Liga', 'Atteins la Ligue {league}', 'Chegue à Liga {league}', 'Raggiungi la Lega {league}', '{league}リーグに到達'],
+  // Build 19 (P0-A): boss intro VS card
+  vs_signature: ['İmza hamlesi', 'Signature move', 'Movimiento estrella', 'Spezialtechnik', 'Coup signature', 'Golpe especial', 'Mossa speciale', '得意技'],
+  tap_skip: ['Geçmek için dokun', 'Tap to skip', 'Toca para saltar', 'Tippen zum Überspringen', 'Touche pour passer', 'Toque para pular', 'Tocca per saltare', 'タップでスキップ'],
 };
 
 export function ui(lang: Language, key: string, vars?: Record<string, string | number>): string {

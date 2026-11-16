@@ -7,6 +7,10 @@ export interface Arena {
   background: THREE.Color;
   fog: THREE.Fog;
   ambient: { color: number; intensity: number };
+  // Key colour of the arena: fighters get a rim light in it
+  rim: number;
+  // World-space box of the main sign; the camera keeps it in frame together with the fighters
+  sign: { x0: number; x1: number; y0: number; y1: number; z: number } | null;
   update: (nowMs: number) => void;
 }
 
@@ -40,7 +44,7 @@ const basic = (color: number, opacity = 1, additive = false) =>
   });
 const std = (color: number, rough = 0.7, metal = 0.1) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 
-// Main signs sit left of centre and below the top edge: the 1X / AUTO pills cover the top-right corner of the view.
+// Main signs sit centred above the fighters; the camera framing in BattleScene3D keeps them in view.
 
 // "Living arena" touches only run on medium/high quality and never with reduced motion.
 const lively = (q: QualityLevel) => q !== 'low' && !battleRig.reducedMotion;
@@ -197,8 +201,8 @@ function buildAlley(q: QualityLevel): Arena {
     grd.addColorStop(0, '#f472b6'); grd.addColorStop(1, '#22d3ee');
     g.fillStyle = grd; g.fillText('STRIKER', 128, 34);
   });
-  const tag = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.05), new THREE.MeshStandardMaterial({ map: graffiti, transparent: true, roughness: 0.9, depthWrite: false }));
-  tag.position.set(-1.05, 2.75, -2.38);
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.85), new THREE.MeshStandardMaterial({ map: graffiti, transparent: true, roughness: 0.9, depthWrite: false }));
+  tag.position.set(0, 2.75, -2.38);
   tag.rotation.z = 0.05;
   group.add(tag);
   [-1, 1].forEach((s) => {
@@ -236,6 +240,8 @@ function buildAlley(q: QualityLevel): Arena {
     background: new THREE.Color(0x0b1226),
     fog: new THREE.Fog(0x0b1226, 7, 16),
     ambient: { color: 0x6b7bb0, intensity: 1.25 },
+    rim: 0x7dd3fc,
+    sign: { x0: -1.55, x1: 1.55, y0: 2.45, y1: 3.1, z: -2.38 },
     update: (t) => {
       // Failing street lamp: steady, with a short stutter every few seconds
       const on = lively(q) ? flicker(t, 1, 4300, 650) : 1;
@@ -305,6 +311,8 @@ function buildCage(q: QualityLevel): Arena {
     background: new THREE.Color(0x050507),
     fog: new THREE.Fog(0x050507, 8, 18),
     ambient: { color: 0x9ca3af, intensity: 1.0 },
+    rim: 0xfb7185,
+    sign: { x0: -1.6, x1: 1.6, y0: 2.6, y1: 3.25, z: -2.3 },
     update: (t) => spots.forEach((s, i) => ((s.material as THREE.MeshBasicMaterial).opacity = 0.09 + Math.sin(t * 0.002 + i) * 0.015)),
   };
 }
@@ -346,8 +354,8 @@ function buildNeon(q: QualityLevel): Arena {
     g.fillStyle = '#f472b6'; g.fillText('NEON NIGHTS', 128, 33);
     g.shadowBlur = 0; g.fillStyle = '#fdf4ff'; g.globalAlpha = 0.55; g.fillText('NEON NIGHTS', 128, 33);
   });
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 0.95), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
-  sign.position.set(-1.0, 2.85, -2.32);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.8), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
+  sign.position.set(0, 2.85, -2.32);
   group.add(sign);
 
   const tubes: { mesh: THREE.Mesh; color: THREE.Color }[] = [];
@@ -384,6 +392,8 @@ function buildNeon(q: QualityLevel): Arena {
     background: new THREE.Color(0x07030f),
     fog: new THREE.Fog(0x07030f, 8, 17),
     ambient: { color: 0x8b5cf6, intensity: 1.05 },
+    rim: 0xe879f9,
+    sign: { x0: -1.5, x1: 1.5, y0: 2.5, y1: 3.2, z: -2.32 },
     update: (t) => {
       beams.forEach((b, i) => {
         b.rotation.z = Math.sin(t * 0.0015 + i * 1.6) * 0.5;
@@ -471,13 +481,16 @@ function buildRing(q: QualityLevel): Arena {
       g.fillStyle = '#fde047'; g.fillText('WORLD TITLE', 128, 34);
     }),
   }));
-  banner.position.set(-1.05, 3.0, -3.0);
+  banner.position.set(0, 3.0, -3.0);
+  banner.scale.setScalar(0.85);
   group.add(banner);
   return {
     group,
     background: new THREE.Color(0x070b16),
     fog: new THREE.Fog(0x070b16, 9, 19),
     ambient: { color: 0xb6c3e8, intensity: 1.15 },
+    rim: 0xfde047,
+    sign: { x0: -1.6, x1: 1.6, y0: 2.6, y1: 3.4, z: -3.0 },
     update: (t) => flashes.forEach((f, i) => (f.visible = Math.sin(t * 0.004 + i * 7.3) > 0.93)),
   };
 }
@@ -537,10 +550,10 @@ function buildStadium(q: QualityLevel): Arena {
       g.fillStyle = '#fbbf24'; g.fillText('CHAMPIONS', 128, 42);
     }),
   }));
-  board.position.set(-1.1, 3.15, -4.1);
+  board.position.set(0, 3.15, -4.1);
   group.add(board);
   const frame = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.26, 0.08), std(0x27272a, 0.4, 0.8));
-  frame.position.set(-1.1, 3.15, -4.15);
+  frame.position.set(0, 3.15, -4.15);
   group.add(frame);
   const confetti: THREE.Mesh[] = [];
   if (q === 'high') {
@@ -557,6 +570,8 @@ function buildStadium(q: QualityLevel): Arena {
     background: new THREE.Color(0x0b1730),
     fog: new THREE.Fog(0x0b1730, 9, 22),
     ambient: { color: 0xdbeafe, intensity: 1.2 },
+    rim: 0x6ee7b7,
+    sign: { x0: -1.7, x1: 1.7, y0: 2.62, y1: 3.68, z: -4.1 },
     update: (t) => {
       confetti.forEach((c, i) => {
         c.position.y -= 0.01;

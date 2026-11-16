@@ -147,10 +147,8 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
                     : 'border-zinc-800/80 bg-neutral-900/50 hover:border-zinc-700'
                 }`}
               >
-                <div className="w-full flex justify-between items-center text-[10px] font-bold text-zinc-400">
-                  <span className="truncate uppercase tracking-wider">{slotName(slot)}</span>
-                  {item && <span className="font-mono text-amber-300 font-black bg-black/60 px-1.5 py-0.2 rounded border border-white/10">Lv.{item.level}</span>}
-                </div>
+                {/* Slot name gets the full width (no "HEAD…" on small phones); the level moved to the bottom chip */}
+                <span className="w-full text-center text-[10px] leading-[1.1] font-bold text-zinc-400 uppercase tracking-wide break-words hyphens-auto">{slotName(slot)}</span>
 
                 <div className="my-auto drop-shadow">
                   {item ? (
@@ -162,8 +160,9 @@ export const GearTab: React.FC<GearTabProps> = ({ state }) => {
 
                 <div className="w-full text-center">
                   {item ? (
-                    <span className="text-[10px] font-black font-mono text-amber-300 truncate block bg-black/60 py-0.5 rounded-lg border border-white/10 shadow-inner">
-                      ⚡ {item.powerScore}
+                    <span className="flex items-center justify-center gap-1 whitespace-nowrap text-[10px] font-black bg-black/60 py-0.5 rounded-lg border border-white/10 shadow-inner">
+                      <span className="text-zinc-300 tabular-nums">Lv.{item.level}</span>
+                      <span className="font-mono text-amber-300">⚡{item.powerScore}</span>
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-wider">

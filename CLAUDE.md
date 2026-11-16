@@ -18,7 +18,7 @@
 
 ## Shipping
 - Bump `CURRENT_PROJECT_VERSION` in `ios/App/App.xcodeproj/project.pbxproj`, push, dispatch `.github/workflows/build-ios.yml`
-  with `upload_to_testflight: true`, confirm "UPLOAD SUCCEEDED" in the job log. Last uploaded build: 18 (version 1.0).
+  with `upload_to_testflight: true`, confirm "UPLOAD SUCCEEDED" in the job log. Last uploaded build: 19 (version 1.0).
 - App Store Connect API: `scripts/asc/asc.mjs` (tasks `check`, `inspect`, `submit:<build>`, `resubmit:<build>`, `finish`), also runnable from
   `.github/workflows/asc.yml` by editing `.github/asc/request.json`. The build key in the GitHub secrets can only read and
   upload builds; edits and submissions need an App Manager key in the secrets `ASC_ADMIN_KEY_ID` + `ASC_ADMIN_PRIVATE_KEY`
@@ -26,11 +26,18 @@
 - Development branch: `claude/stoic-clarke-qjgg6b`. Do not open pull requests unless asked.
 
 ## Next work
-- **`docs/PLAN_BUILD_19.md`** (2026-11-16): the owner asked for a visual + gameplay upgrade and wants the improved
-  build sent to review. Implement its P0 packages in order, then follow its section 7 to upload and submit.
-  Version 1.0 (build 18) was still WAITING_FOR_REVIEW on 2026-11-16.
+- Build 19 (`docs/PLAN_BUILD_19.md` P0-A..D) is done and submitted. Open follow-ups from it: per-league arena palette
+  (C1, visual only), the pacing gap in `docs/BALANCE.md` (early milestones far faster than the plan's time targets;
+  options listed there), then the plan's P1 (Daily Boss Rush, weekly quests, 3D cosmetics).
+- If 1.0 is approved, the next build ships as version 1.1 (`asc.mjs` cannot create versions yet).
 
-## Status (2026-11-04)
+## Status (2026-11-16)
+- 2026-11-16 21:20 UTC: version 1.0 with build 19 resubmitted and WAITING_FOR_REVIEW (the build 18 submission, waiting
+  since 2026-11-04, was cancelled by the owner's decision). 6 captioned screenshots per language (en-US, tr) uploaded.
+- The App Manager key used for the submission was deleted from the session after use; the GitHub secrets
+  `ASC_ADMIN_KEY_ID` / `ASC_ADMIN_PRIVATE_KEY` are still not set, so the robot can only read and upload.
+
+## Earlier status (2026-11-04)
 - 2026-11-04 15:29 UTC: version 1.0 with build 18 is WAITING_FOR_REVIEW. Build 17 had gone to Invalid Binary right after
   submission (`NSPrivacyTracking` true with no tracking domains); build 18 fixes the privacy manifest only.
 - Owner still has to make `https://streetfights.vercel.app/app-ads.txt` live (merge to `main`, which Vercel deploys;

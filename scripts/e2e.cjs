@@ -309,6 +309,179 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('malformed save loads (no white screen, no errors)', await p.locator('nav button').count() === 4 && errs.length === 0, errs.join('|'));
     await b.close();
   }
+  // ---- 13. Build 19 (docs/PLAN_BUILD_19.md B1-B3, C1, C3): draft, boss mechanics, farm until ready, leagues, v6 save
+  const open19 = async (save) => {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+    await p.addInitScript((s) => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify(s)); } },
+      { lang: 'en', lastDailyLoginDate: today(), dailyLoginStreak: 1, claimedDailyDays: [1], tutorialStep: 99, notifAsked: true, ...save });
+    await p.goto(URL); await ready(p); await p.waitForTimeout(1500);
+    return { b, p, errs };
+  };
+  const st = (p) => p.evaluate(() => JSON.parse(JSON.stringify(window.__game.getState())));
+  const until = async (p, fn, arg, ms = 20000) => p.waitForFunction(fn, arg, { timeout: ms, polling: 200 }).then(() => true).catch(() => false);
+  {
+    // B1: skill draft, choose 1 of 3, free; auto pick after 8 s; "Always let me choose"; no reroll anywhere
+    const { b, p, errs } = await open19({ autoBattle: true, autoAdvance: false });
+    await p.evaluate(() => {
+      const g = window.__game; const s = g.getState();
+      // a full deck guarantees a level-up option
+      ['skill_iron_chin', 'skill_shadow_slip', 'skill_vampiric_bite', 'skill_heavy_haymaker', 'skill_counter_sniper'].forEach((id) => { if (!s.playerFighter.equippedSkills.some((k) => k.id === id)) s.playerFighter.equippedSkills.push({ id, name: id, description: '', rarity: 'rare', category: 'strike', level: 1, maxLevel: 5, iconName: 'Zap', bonusText: '', statBonus: { atk: 1 } }); });
+      g.openSkillDraft(true); g.notify();
+    });
+    await p.waitForTimeout(400);
+    const ids = await p.locator('[data-draft-option]').evaluateAll((els) => els.map((e) => e.getAttribute('data-draft-option')));
+    ok('draft: three different skills to choose from', ids.length === 3 && new Set(ids).size === 3, ids.join(','));
+    const lvl = await p.locator('[data-draft-option][data-levelup]').first().innerText().catch(() => '');
+    ok('draft: a level-up of an owned skill is labelled as such', /LEVEL UP → Lv\.2/i.test(lvl), lvl.split('\n').slice(0, 2).join(' / '));
+    ok('draft: one option is highlighted as recommended', await p.locator('[data-draft-option][data-recommended]').count() === 1);
+    const t1 = await p.locator('[data-draft-countdown]').innerText().catch(() => '');
+    await p.waitForTimeout(1300);
+    const t2 = await p.locator('[data-draft-countdown]').innerText().catch(() => '');
+    ok('draft: auto mode shows a running countdown', /Auto pick in [78]s/.test(t1) && t1 !== t2, `${t1.split('\n')[0]} -> ${t2.split('\n')[0]}`);
+    ok('draft: no paid reroll / "another skill" button', await p.getByText(/ANOTHER SKILL|BAŞKA YETENEK|reroll/i).count() === 0);
+    // tapping the card stops the countdown; the player then chooses
+    await p.locator('[data-skill-draft] [role=dialog]').dispatchEvent('pointerdown');
+    await p.waitForTimeout(300);
+    const stopped = await p.locator('[data-draft-countdown]').count() === 0;
+    await p.waitForTimeout(8500);
+    const stillOpen = await p.locator('[data-draft-option]').count() === 3;
+    await p.locator('[data-draft-option]').nth(0).click();
+    await p.waitForTimeout(300);
+    let s = await st(p);
+    ok('draft: a tap cancels the countdown and the player picks', stopped && stillOpen && !s.pendingSkillDraft && s.draftsPicked === 1);
+    // auto pick: the recommended option is taken after 8 s
+    await p.evaluate(() => { const g = window.__game; g.getState().pendingSkillReplacement = null; g.openSkillDraft(true); g.notify(); });
+    const rec = await p.evaluate(() => { const d = window.__game.getState().pendingSkillDraft; return { id: d.options[d.recommended].id, up: d.levelUp[d.recommended] }; });
+    const before = await st(p);
+    await p.waitForTimeout(9000);
+    s = await st(p);
+    const lvBefore = before.playerFighter.equippedSkills.find((k) => k.id === rec.id)?.level || 0;
+    const lvAfter = s.playerFighter.equippedSkills.find((k) => k.id === rec.id)?.level || 0;
+    ok('draft: auto mode picks the recommended option after 8 s', !s.pendingSkillDraft && s.draftsPicked === 2 && (rec.up ? lvAfter === lvBefore + 1 : (s.pendingSkillReplacement?.id === rec.id || lvAfter === 1)), `${rec.id} up=${rec.up} ${lvBefore}->${lvAfter}`);
+    // "Always let me choose": no countdown, nothing picked by itself
+    await p.evaluate(() => { const g = window.__game; g.getState().pendingSkillReplacement = null; g.toggleDraftAlwaysChoose(); g.openSkillDraft(true); g.notify(); });
+    await p.waitForTimeout(9000);
+    s = await st(p);
+    ok('draft: "Always let me choose" turns the countdown off (setting persists)', await p.locator('[data-draft-countdown]').count() === 0 && !!s.pendingSkillDraft && s.draftAlwaysChoose === true);
+    // a new skill with a full deck opens the (translated) swap card; keeping the deck is possible
+    const newOpt = p.locator('[data-draft-option]:not([data-levelup])');
+    const hasNew = await newOpt.count() > 0;
+    await (hasNew ? newOpt.first() : p.locator('[data-draft-option]').first()).click(); await p.waitForTimeout(300);
+    const swapCard = !hasNew || (await p.getByText('KEEP CURRENT DECK').count() === 1 && await p.getByText('CHOOSE A SKILL TO SWAP OUT').count() === 1);
+    await p.evaluate(() => window.__game.dismissSkillReplacement()); await p.waitForTimeout(300);
+    ok('draft: deck full + new skill opens the swap card (keep deck works)', swapCard && (await st(p)).playerFighter.equippedSkills.length === 6);
+    await p.locator('header button[aria-label]').last().click(); await p.waitForTimeout(400);
+    ok('settings has "Always let me choose" and "Return to the boss" switches', await p.locator('[data-draft-choose-toggle]').count() === 1 && await p.locator('[data-auto-return-toggle]').count() === 1);
+    ok('draft: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    // B2: each world boss fires its signature mechanic (fight runs at 4x with a fighter that survives)
+    const { b, p, errs } = await open19({ autoBattle: true, autoAdvance: false, battleSpeed: 4, highestWorld: 6, highestSubStage: 1, currentWorld: 1, currentSubStage: 1 });
+    const expected = { 1: 'enrage', 2: 'bite', 3: 'evade_stance', 4: 'shell_absorb', 5: 'charged' };
+    for (const w of [1, 2, 3, 4, 5]) {
+      const mech = await p.evaluate((w) => {
+        const g = window.__game; const s = g.getState();
+        s.pendingLootDrop = null; s.pendingSkillDraft = null; s.bossBonus = null;
+        window.__mechLog = [];
+        g.selectStage(w, 10);
+        const boss = g.getCurrentStage().opponent.stats;
+        s.playerFighter.baseStats = { ...s.playerFighter.baseStats, hp: 5e7, maxHp: 5e7, atk: Math.round(boss.maxHp / 30), def: boss.atk * 3, spd: boss.spd };
+        g.recalculatePlayerStats(); g.notify();
+        return g.getCurrentStage().bossMechanic;
+      }, w);
+      const fired = await until(p, (e) => { const s = window.__game.getState(); if (s.pendingLootDrop) { s.pendingLootDrop = null; window.__game.notify(); } return (window.__mechLog || []).includes(e); }, expected[w], 30000);
+      const log = await p.evaluate(() => (window.__mechLog || []).slice(0, 8).join(','));
+      ok(`boss mechanic: world ${w} boss (${mech?.id}, strength ${mech?.strength}) fires "${expected[w]}"`, fired && mech?.strength === 1, log);
+    }
+    const subMech = await p.evaluate(() => { const g = window.__game; g.selectStage(7, 5); return g.getCurrentStage().bossMechanic; });
+    ok('boss mechanic: sub-bosses get a weaker version (Silver 2-5: leech at strength 0.5)', subMech?.id === 'leech' && subMech.strength < 1, JSON.stringify(subMech));
+    ok('boss mechanics: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    // B3: boss loss in auto mode -> defeat panel (mechanic tip, farm countdown) -> farm -> "Boss ready" chip -> back
+    const { b, p, errs } = await open19({ autoBattle: true, battleSpeed: 2, currentWorld: 2, currentSubStage: 10, highestWorld: 2, highestSubStage: 10 });
+    const panel = await until(p, () => !!document.querySelector('[data-boss-defeat]'), null, 30000);
+    const farmBtn = await p.locator('[data-farm]').innerText().catch(() => '');
+    const tip = await p.locator('[data-mech-hint]').getAttribute('data-mech-hint').catch(() => null);
+    ok('farm: boss defeat panel keeps Retry / Gym / ad revive and adds the mechanic tip + farm countdown',
+      panel && tip === 'leech' && /FARM UNTIL READY \(\d\)/.test(farmBtn) && await p.locator('[data-retry]').count() === 1 && await p.getByText(/REVIVE/i).count() > 0 && await p.getByText(/GO TO GYM/).count() > 0, `tip=${tip} btn=${farmBtn}`);
+    const farming = await until(p, () => { const s = window.__game.getState(); return !!s.farm && (s.currentWorld - 1) * 10 + s.currentSubStage < 20; }, null, 12000);
+    let s = await st(p);
+    ok('farm: after the countdown the fighter drops to a stage it beats reliably', farming && s.farm.world === 2 && s.farm.sub === 10 && s.highestWorld === 2 && s.highestSubStage === 10, `now ${s.currentWorld}-${s.currentSubStage}`);
+    ok('farm: progress chip is shown while farming', await until(p, () => !!document.querySelector('[data-farm-chip=farming]'), null, 5000));
+    // get strong (as gym/gear would): the chip turns into "Boss ready"; with auto-return off the player taps it
+    await p.evaluate(() => { const g = window.__game; const s = g.getState(); if (s.autoReturnToBoss) g.toggleAutoReturnToBoss(); s.playerFighter.baseStats = { ...s.playerFighter.baseStats, hp: 1e8, maxHp: 1e8, atk: 1e6, def: 1e6 }; g.recalculatePlayerStats(); g.notify(); });
+    const readyChip = await until(p, () => !!document.querySelector('[data-farm-chip=ready]'), null, 5000);
+    const chipText = await p.locator('[data-farm-chip]').innerText().catch(() => '');
+    await p.locator('[data-farm-chip=ready]').click().catch(() => {});
+    await p.waitForTimeout(400);
+    s = await st(p);
+    ok('farm: "Boss ready" chip at odds >= 1.1, one tap returns to the boss', readyChip && /BOSS READY/.test(chipText) && !s.farm && s.currentWorld === 2 && s.currentSubStage === 10, `chip=${chipText} now ${s.currentWorld}-${s.currentSubStage}`);
+    // auto-return setting: farming ends by itself once the boss is beatable
+    await p.evaluate(() => { const g = window.__game; g.toggleAutoReturnToBoss(); g.startFarming({ world: 3, sub: 5 }); });
+    const back = await until(p, () => { const s = window.__game.getState(); if (s.pendingLootDrop || s.pendingSkillDraft) { s.pendingLootDrop = null; s.pendingSkillDraft = null; window.__game.notify(); } return !s.farm && ((s.currentWorld === 3 && s.currentSubStage === 5) || (s.currentWorld - 1) * 10 + s.currentSubStage > 25); }, null, 20000);
+    ok('farm: with "Return to the boss" on, the fighter goes back by itself', back);
+    ok('farm: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    // C1: beating the last boss of a league promotes the fighter (celebration + fixed reward), labels drop the ∞ suffix
+    const { b, p, errs } = await open19({ autoBattle: true, battleSpeed: 4, currentWorld: 5, currentSubStage: 10, highestWorld: 5, highestSubStage: 10, gems: 10,
+      playerFighter: { baseStats: { hp: 1e9, maxHp: 1e9, atk: 5e6, def: 5e6, spd: 500, critRate: 10, critDmg: 1.5, comboRate: 10, dodgeRate: 5, lifesteal: 0, stamina: 100, powerScore: 1 } } });
+    const promoted = await until(p, () => { const s = window.__game.getState(); if (s.pendingSkillDraft) window.__game.pickSkillDraft(0); if (s.pendingLootDrop) { s.pendingLootDrop = null; window.__game.notify(); } return !!document.querySelector('[data-league-promotion]'); }, null, 30000);
+    const card = await p.locator('[data-league-promotion]').innerText().catch(() => '');
+    let s = await st(p);
+    const reward = s.pendingPromotion;
+    await p.locator('[data-league-promotion] button').click().catch(() => {});
+    await p.waitForTimeout(400);
+    const s2 = await st(p);
+    // stop winning (manual mode, no taps) so no draft / loot card covers the next checks
+    await p.evaluate(() => { const g = window.__game; const s = g.getState(); if (s.autoBattle) g.toggleAutoBattle(); s.pendingSkillDraft = null; s.pendingLootDrop = null; s.pendingSkillReplacement = null; g.notify(); });
+    await p.waitForTimeout(400);
+    ok('league: promotion screen after the world-5 boss with a fixed reward', promoted && /PROMOTED/.test(card) && /Silver League/.test(card) && reward?.league === 1 && s2.gems === s.gems + reward.gems && s2.league === 1 && !s2.pendingPromotion, `gems ${s.gems}->${s2.gems} reward=${JSON.stringify(reward)}`);
+    const hud = await p.evaluate(() => document.body.innerText);
+    ok('league: stage label reads "Silver 1-x" instead of a loop suffix', /Silver 1-\d/.test(hud) && !hud.includes('∞'));
+    await p.locator('nav [data-tab=arena]').click(); await p.waitForTimeout(500);
+    const arena = await p.evaluate(() => document.body.innerText);
+    ok('league: Arena shows league tabs, the boss mechanic and the league twist; no ∞ anywhere', await p.locator('[data-league-tabs] button').count() >= 2 && await p.locator('[data-league-mod]').count() === 1 && /Boss: /i.test(arena) && !arena.includes('∞'));
+    await p.locator('[data-open-profile]').click(); await p.waitForTimeout(400);
+    ok('league: badge next to the name in the profile', await p.locator('[data-profile-sheet] [data-league-badge=silver]').count() === 1);
+    ok('league: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    // C3: a version 5 save at stage 80 keeps stage, gear and gym; maps to Silver world 3; the open offer becomes a draft
+    const gym = [['gym_punching_bag', 'atk', 3, 'Flame'], ['gym_bench_press', 'hp', 25, 'Shield'], ['gym_agility_ladder', 'spd', 2, 'Footprints'], ['gym_reflex_ball', 'critRate', 0.8, 'Zap'], ['gym_jump_rope', 'dodgeRate', 0.7, 'Wind']]
+      .map(([id, targetStat, statGain, iconName], i) => ({ id, name: id, description: '', targetStat, statGain, level: 30 + i, cost: 999999, iconName }));
+    const gloves = { id: 'v5_gloves', name: 'EPIC Dragon Fist Gloves', slot: 'gloves', rarity: 'epic', level: 78, stats: { hp: 0, atk: 9000, def: 0, spd: 0, critRate: 6, critDmg: 0, comboRate: 0, dodgeRate: 0, lifesteal: 0, stamina: 0 }, powerScore: 31500, sellPrice: 900, iconName: 'Flame' };
+    const v5 = { saveVersion: 5, coins: 50000, gems: 300, playerLevel: 40, totalFightsWon: 900, bossDefeatedCount: 16, autoBattle: false,
+      currentWorld: 8, currentSubStage: 10, highestWorld: 8, highestSubStage: 10, gymTrainings: gym,
+      playerFighter: { equipped: { head: null, gloves, mouth: null, robe: null, shorts: null, boots: null, belt: null, weapon: null, partner: null } },
+      pendingSkillOffer: { id: 'skill_iron_chin', name: 'Iron Chin', description: '', rarity: 'rare', category: 'defense', level: 1, maxLevel: 5, iconName: 'Shield', bonusText: '', statBonus: { hp: 120, def: 15 } }, offerRerolls: 2 };
+    const { b, p, errs } = await open19(v5);
+    const s = await st(p);
+    ok('v5 -> v6: stage 80 kept (Silver league, world 3), nobody moved backwards', s.saveVersion === 6 && s.highestWorld === 8 && s.highestSubStage === 10 && s.currentWorld === 8 && s.currentSubStage === 10 && s.league === 1 && !s.pendingPromotion, `v=${s.saveVersion} hi=${s.highestWorld}-${s.highestSubStage} cur=${s.currentWorld}-${s.currentSubStage} league=${s.league}`);
+    ok('v5 -> v6: gear and gym levels kept', s.playerFighter.equipped.gloves?.id === 'v5_gloves' && s.gymTrainings.map((g) => g.level).join(',') === '30,31,32,33,34' && s.coins >= 50000);
+    ok('v5 -> v6: open skill offer became a draft, reroll state removed', !!s.pendingSkillDraft && s.pendingSkillDraft.options.length === 3 && !('pendingSkillOffer' in s) && !('offerRerolls' in s));
+    ok('v5 -> v6: bosses already beaten count for the mechanic achievements', ['enrage', 'leech', 'evade', 'shell', 'charged'].every((m) => s.mechWins[m] >= 1));
+    const hud = await p.evaluate(() => document.body.innerText);
+    ok('v5 -> v6: fight label reads "Silver 3-10"', /Silver 3-10/.test(hud), (hud.match(/Silver[^\n]*/) || [''])[0]);
+    await p.evaluate(() => window.__game.pickSkillDraft(0)); await p.waitForTimeout(300);
+    await p.locator('nav [data-tab=arena]').click(); await p.waitForTimeout(400);
+    await p.locator('[data-view=quests]').click(); await p.waitForTimeout(500);
+    const achText = await p.evaluate(() => document.body.innerText);
+    const total = Number((achText.match(/\d+\/(\d+)( •|\n)/) || [])[1] || 0);
+    const gems0 = (await st(p)).gems;
+    await p.evaluate(() => window.__game.claimAchievement('league_1'));
+    const gems1 = (await st(p)).gems;
+    ok('achievements: about 36 with tiers; the Silver league one is claimable after the migration', total >= 36 && await p.locator('[data-tier]').count() >= 4 && gems1 === gems0 + 150, `total=${total} gems ${gems0}->${gems1}`);
+    ok('v5 -> v6: no page errors', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
   // ---- 10. Dynamic Island: header splits left/right of the island, nothing under it; notch phones keep the classic header
   for (const [w, h, top, island] of [[393, 852, 59, true], [402, 874, 62, true], [390, 844, 47, false]]) {
     const b = await chromium.launch({ args: GL });

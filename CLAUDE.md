@@ -2,7 +2,7 @@
 
 ## Project in one screen
 - React 19 + TypeScript + Vite + Tailwind 4, Capacitor 8 iOS (Swift Package Manager), Three.js battle scene.
-- Game logic: `src/core/gameState.ts` singleton (`gameManager`). Save key `street_striker_rpg_save_v2`, `SAVE_VERSION` 4;
+- Game logic: `src/core/gameState.ts` singleton (`gameManager`). Save key `street_striker_rpg_save_v2`, `SAVE_VERSION` 6;
   `loadState` merges defaults over the save and runs migrations. Never break old saves.
 - Strings: `ui(lang, key)` in `src/i18n/ui.ts` (order tr, en, es, de, fr, pt, it, ja) and `t()` in `translations.ts`.
   Every new string in all 8 languages.
@@ -12,7 +12,7 @@
 - Apple rejected build 8 for simulated gambling: no wheels, loot boxes or paid random rewards.
 
 ## How to verify
-- Dev server: `npm run dev -- --port 5199`; e2e: `NODE_PATH=$(npm root -g) node scripts/e2e.cjs` (67 checks, all must pass).
+- Dev server: `npm run dev -- --port 5199`; e2e: `NODE_PATH=$(npm root -g) node scripts/e2e.cjs` (103 checks, all must pass).
 - Balance: `node scripts/run-balance-sim.mjs` (see `docs/BALANCE.md`).
 - Store screenshots: `scripts/store-screenshots.cjs` -> `store/screenshots/<lang>/<65|69>`.
 
@@ -41,7 +41,8 @@
   components use `src/i18n/content-helpers.ts`. New data entries need a content.ts entry in all 8 languages.
 - Progression rules shared by the game and the balance sim: `src/core/progression.ts`, `src/core/combat.ts`.
 - Combat numbers shared by the fight loop and the difficulty label live in `src/core/combat.ts`.
-- No paid random rewards: coins must never be sold for real money, and "another skill" stays a capped, non-dice action.
+- No paid random rewards: coins must never be sold for real money. Skills come from a free 1-of-3 draft; the paid
+  "another skill" reroll was removed in build 19 and must not come back.
 
 ## Pending work the owner asked to keep in mind
 1. **Game Center**: real leaderboards (`highest_stage`, `bosses_defeated`) and achievements, replacing the removed fake

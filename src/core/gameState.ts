@@ -167,7 +167,7 @@ export interface GameStateData {
   draftAlwaysChoose: boolean;
   autoReturnToBoss: boolean;
   // Farm until ready: the stage (usually a boss) the fighter is farming for, or null
-  farm: { world: number; sub: number } | null;
+  farm: { world: number; sub: number; startOdds?: number } | null;
   // Highest league reached (0 = Bronze); a promotion waits for its celebration screen
   league: number;
   pendingPromotion: { league: number; gems: number; coins: number } | null;
@@ -1060,7 +1060,7 @@ class GameManager {
     const t = target || { world: this.state.currentWorld, sub: this.state.currentSubStage };
     if ((t.world - 1) * 10 + t.sub <= 1) return false;
     const spot = this.farmSpot(t.world, t.sub);
-    this.state.farm = { world: t.world, sub: t.sub };
+    this.state.farm = { world: t.world, sub: t.sub, startOdds: stageOdds(this.state.playerFighter.stats, getStageData(t.world, t.sub), this.state.playerFighter.equippedSkills) };
     this.state.currentWorld = spot.world;
     this.state.currentSubStage = spot.sub;
     this.state.lossStreak = 0;

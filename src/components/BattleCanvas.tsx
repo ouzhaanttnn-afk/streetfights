@@ -22,6 +22,14 @@ const BattleScene3D = lazy(() => import('./BattleScene3D').then((module) => ({ d
 
 const SPECIAL_MS = 940;
 
+// Dev builds record boss-mechanic events for the browser tests (scripts/e2e.cjs); they are drawn on the canvas only
+const logMech = (event: string) => {
+  if (!import.meta.env.DEV) return;
+  const w = window as unknown as { __mechLog?: string[] };
+  (w.__mechLog ||= []).push(event);
+  if (w.__mechLog.length > 200) w.__mechLog.shift();
+};
+
 
 interface BattleCanvasProps {
   state: GameStateData;
@@ -303,11 +311,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     const r = hitShell(before, main, combo);
     shellRef.current = r.shell;
     if (r.absorbed > 0) {
+      logMech('shell_absorb');
       const oh = headOf('opp');
       addFloatingText(`🛡 ${r.absorbed}`, oh.x + 18, oh.y - 8, '#67e8f9', 'dodge');
       if (before > 0 && r.shell <= 0) {
         const oc = chestOf('opp');
         addCallout(ui(state.lang, 'c_shell_break'), oc.x, oh.y - 20, '#67e8f9', 3);
+        logMech('shell_break');
         spawnHitParticles(oc.x, oc.y, '#67e8f9', particleCount(14));
       }
     }
@@ -371,6 +381,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     // Viper's evasion stance: normal hits slip past, but SUPER and combo follow-ups still land
     const mech = stageRef.current.bossMechanic;
     if (!isSpecialRage && evadeActive(mech, fightTimeRef.current) && Math.random() < evadeChance()) {
+      logMech('evade_miss');
       soundFx.playDodge();
       battleRig.command('opp', 'dodge');
       addFloatingText(t('missDodge', state.lang), oppHead.x, oppHead.y, '#38bdf8', 'dodge');
@@ -555,6 +566,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       const oc = chestOf('opp');
       const oh = headOf('opp');
       addCallout(ui(state.lang, 'c_charging'), oc.x, oh.y - 18, '#f97316', 3);
+      logMech('charged');
       battleRig.flash('opp', 0.6);
       soundFx.playWindup();
       if (!state.autoBattle) {
@@ -659,7 +671,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       // Heavy hitters push through a guard a little more than regular fighters; a guarded charged strike is stopped
       const guardPass = charged ? MECH.charged.guardPass : profile === 'heavy' || move === 'heavy_slow' ? 0.4 : 0.25;
       finalDmg = Math.max(1, Math.round(finalDmg * guardPass));
-      if (charged) gameManager.recordChargedBlock();
+      if (charged) { gameManager.recordChargedBlock(); logMech('charged_guarded'); }
       guardTimerRef.current = 0;
       isGuardingRef.current = false;
       setIsGuarding(false);
@@ -687,6 +699,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     if (isLeechBite(mech, swing)) {
       const heal = healOpponent(leechHeal(mech!, finalDmg));
       addCallout(ui(state.lang, 'c_bite'), chestOf('opp').x, oh.y - 18, '#f43f5e', 2);
+      logMech('bite');
       if (heal > 0) addFloatingText(`+${heal} HP`, oh.x, oh.y + 14, '#10b981', 'heal');
     }
 
@@ -905,17 +918,19 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           const oc = chestOf('opp');
           const oh = headOf('opp');
           const stance = evadeActive(mech, fightTimeRef.current);
-          if (stance && !evadeShownRef.current) addCallout(ui(state.lang, 'c_evade'), oc.x, oh.y - 18, '#c084fc', 3);
+          if (stance && !evadeShownRef.current) { addCallout(ui(state.lang, 'c_evade'), oc.x, oh.y - 18, '#c084fc', 3); logMech('evade_stance'); }
           evadeShownRef.current = stance;
           if (mech.id === 'shell' && fightTimeRef.current >= shellNextRef.current) {
             shellNextRef.current += MECH.shell.period;
             shellRef.current = shellCapacity(mech, stageNow.opponent.stats.maxHp);
             addCallout(ui(state.lang, 'c_shell'), oc.x, oh.y - 18, '#67e8f9', 2);
+            logMech('shell_up');
           }
           const hpFrac = opponentHpRef.current / Math.max(1, stageNow.opponent.stats.maxHp);
           if (!enrageShownRef.current && enraged(mech, hpFrac)) {
             enrageShownRef.current = true;
             addCallout(ui(state.lang, 'c_enrage'), oc.x, oh.y - 18, '#ef4444', 3);
+            logMech('enrage');
             battleRig.flash('opp', 1);
           }
         }
@@ -1708,48 +1723,48 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           </button>
         )}
 
-        {/* Revive with Ad in Boss Fights */}
-        {/* Boss defeat: why it happened, what to do, and an optional ad revive. Auto mode retries by itself. */}
+        {/* Boss defeat: why it happened (the boss's signature move and its counter), what to do, and an optional ad
+            revive. Auto mode starts farming until ready by itself after the countdown. */}
         {showReviveAd && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1.5 bg-black/70 px-5 text-center" data-boss-defeat>
-            <span className="text-2xl font-black italic text-rose-500 drop-shadow-2xl">{t('knockout', state.lang)}</span>
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-1 bg-black/75 px-4 text-center" data-boss-defeat>
+            <span className="text-xl font-black italic leading-none text-rose-500 drop-shadow-2xl">{t('knockout', state.lang)}</span>
             {currentStageData.bossMechanic ? (
-              <span className="text-[11px] font-bold leading-snug text-zinc-100" data-mech-hint={currentStageData.bossMechanic.id}>
+              <span className="max-w-[340px] text-[11px] font-bold leading-snug text-zinc-100" data-mech-hint={currentStageData.bossMechanic.id}>
                 <span className="text-rose-300 font-black">{ui(state.lang, 'boss_mech_' + currentStageData.bossMechanic.id)}:</span>{' '}
                 {ui(state.lang, 'boss_mech_' + currentStageData.bossMechanic.id + '_hint')}
               </span>
             ) : (
               <span className="text-[11px] font-bold text-zinc-100">{ui(state.lang, 'defeat_hint')}</span>
             )}
-            <button
-              data-farm
-              onClick={() => { if (!gameManager.startFarming()) resetBattle(stageRef.current); }}
-              className="mt-1 min-h-10 px-4 rounded-2xl bg-emerald-950/85 text-emerald-100 font-black text-xs border border-emerald-400/60 active:scale-95"
-            >
-              {ui(state.lang, 'farm_btn')}{retryIn !== null ? ` (${retryIn})` : ''}
-            </button>
-            <div className="flex items-center gap-2">
+            <div className="mt-1 grid w-full max-w-[340px] grid-cols-2 gap-1.5 text-[11px] font-black leading-tight">
+              <button
+                data-farm
+                onClick={() => { if (!gameManager.startFarming()) resetBattle(stageRef.current); }}
+                className="min-h-10 px-2 rounded-xl bg-emerald-950/90 text-emerald-100 border border-emerald-400/60 active:scale-95"
+              >
+                {ui(state.lang, 'farm_btn')}{retryIn !== null ? ` (${retryIn})` : ''}
+              </button>
               <button
                 data-retry
                 onClick={() => resetBattle(stageRef.current)}
-                className="min-h-11 px-4 rounded-2xl game-btn-gold text-black font-black text-xs active:scale-95"
+                className="min-h-10 px-2 rounded-xl game-btn-gold text-black active:scale-95"
               >
                 {ui(state.lang, 'retry')}
               </button>
               <button
                 onClick={() => gameManager.setActiveTab('gym')}
-                className="min-h-11 px-4 rounded-2xl bg-black/80 text-zinc-100 font-black text-xs border border-white/25 active:scale-95"
+                className="min-h-10 px-2 rounded-xl bg-black/80 text-zinc-100 border border-white/25 active:scale-95"
               >
                 {ui(state.lang, 'go_gym')}
               </button>
+              <button
+                onClick={handleReviveWithAd}
+                className="min-h-10 px-2 rounded-xl bg-rose-950/85 text-rose-100 border border-rose-400/60 flex items-center justify-center gap-1 active:scale-95"
+              >
+                <Tv className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('adRevive', state.lang)}</span>
+              </button>
             </div>
-            <button
-              onClick={handleReviveWithAd}
-              className="mt-1 min-h-11 px-4 rounded-2xl bg-rose-950/80 text-rose-100 font-black text-xs border border-rose-400/60 flex items-center gap-1.5 active:scale-95"
-            >
-              <Tv className="w-4 h-4" />
-              <span>{t('adRevive', state.lang)}</span>
-            </button>
           </div>
         )}
 

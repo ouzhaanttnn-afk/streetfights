@@ -1,113 +1,128 @@
-import React from 'react';
-import { Skill } from '../types/game';
+import React, { useEffect, useRef, useState } from 'react';
 import { RARITY_CONFIG } from '../core/lootGenerator';
-import { GameStateData, gameManager } from '../core/gameState';
-import { t } from '../i18n/translations';
+import { GameStateData, SkillDraft, gameManager } from '../core/gameState';
+import { DECK_SIZE } from '../core/skillDatabase';
 import { ui } from '../i18n/ui';
-import { rarityName, skillBonus, skillCategory, skillDescription, skillName, skillQuote } from '../i18n/content-helpers';
-import { 
-  Sparkles, 
-  RefreshCw, 
-  Check, 
-  Zap, 
-  Shield, 
-  Flame, 
-  Wind, 
-  HeartPulse, 
-  Crosshair,
-  Coins
-} from 'lucide-react';
+import { rarityName, skillBonus, skillCategory, skillDescription, skillName } from '../i18n/content-helpers';
+import { SkillIcon } from './SkillIcon';
+import { Sparkles, Star } from 'lucide-react';
 
-interface SkillSelectModalProps {
-  skill: Skill;
+// Skill draft (docs/PLAN_BUILD_19.md B1): three different skills side by side, free, no reroll.
+// Auto mode picks the highlighted option after AUTO_PICK_MS unless the player touches the card or turned
+// "Always let me choose" on in Settings.
+export const AUTO_PICK_MS = 8000;
+
+interface SkillDraftModalProps {
+  draft: SkillDraft;
   state: GameStateData;
 }
 
-export const SkillSelectModal: React.FC<SkillSelectModalProps> = ({ skill, state }) => {
-  const rarity = RARITY_CONFIG[skill.rarity];
-  const rerollCost = gameManager.rerollCost();
-  const canReroll = state.coins >= rerollCost;
+export const SkillDraftModal: React.FC<SkillDraftModalProps> = ({ draft, state }) => {
+  const lang = state.lang;
+  const deck = state.playerFighter.equippedSkills;
+  const countdownOn = state.autoBattle && !state.draftAlwaysChoose;
+  const [left, setLeft] = useState(countdownOn ? AUTO_PICK_MS : -1);
+  const doneRef = useRef(false);
 
-  const renderIcon = () => {
-    switch (skill.iconName) {
-      case 'Zap': return <Zap className="w-8 h-8 text-yellow-400" />;
-      case 'Flame': return <Flame className="w-8 h-8 text-orange-400" />;
-      case 'Shield': return <Shield className="w-8 h-8 text-sky-400" />;
-      case 'Wind': return <Wind className="w-8 h-8 text-cyan-400" />;
-      case 'HeartPulse': return <HeartPulse className="w-8 h-8 text-pink-400" />;
-      case 'Crosshair': return <Crosshair className="w-8 h-8 text-purple-400" />;
-      default: return <Sparkles className="w-8 h-8 text-amber-400" />;
-    }
+  useEffect(() => {
+    if (left < 0) return;
+    const started = performance.now();
+    const startLeft = left;
+    const timer = setInterval(() => {
+      const rest = Math.max(0, startLeft - (performance.now() - started));
+      setLeft(rest);
+      if (rest <= 0 && !doneRef.current) {
+        doneRef.current = true;
+        clearInterval(timer);
+        gameManager.pickSkillDraft(draft.recommended);
+      }
+    }, 100);
+    return () => clearInterval(timer);
+    // the countdown restarts only when it is switched off/on, not on every tick
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [left < 0, draft]);
+
+  const stopCountdown = () => { if (left >= 0) setLeft(-1); };
+  const pick = (i: number) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    gameManager.pickSkillDraft(i);
   };
 
   return (
-    <div className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn select-none">
-      <div className={`relative w-full max-w-sm rounded-3xl border-2 ${rarity.borderColor} ${rarity.bgColor} p-6 shadow-2xl flex flex-col items-center text-center text-white game-card overflow-hidden`}>
-        
-        {/* Header Tag */}
-        <div className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-black/70 border border-white/10 text-[10px] font-black tracking-widest uppercase mb-3 text-amber-300 shadow-sm">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>{t('newRogueliteSkill', state.lang)}</span>
-        </div>
-
-        {/* Skill Icon */}
-        <div className="w-18 h-18 rounded-3xl bg-black/70 border border-white/20 flex items-center justify-center mb-3 shadow-inner">
-          {renderIcon()}
-        </div>
-
-        {/* Skill Name */}
-        <h2 className="text-xl font-black tracking-tight text-white mb-1">
-          {skillName(skill.id, skill.name, state.lang)}
-        </h2>
-
-        {/* Quote */}
-        {skill.quote && (
-          <p className="text-xs text-zinc-400 italic mb-2 font-serif">
-            {skillQuote(skill, state.lang)}
-          </p>
-        )}
-
-        {/* Rarity & Category */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${rarity.color} bg-black/60 border border-white/10`}>
-            {rarityName(skill.rarity, rarity.name, state.lang)}
-          </span>
-          <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-zinc-300 bg-black/60 border border-white/10">
-            {skillCategory(skill.category, state.lang)}
-          </span>
-        </div>
-
-        {/* Skill Effect Box */}
-        <div className="w-full bg-black/60 rounded-2xl p-4 border border-white/10 mb-4 text-center shadow-inner">
-          <div className="text-xs text-zinc-300 font-medium leading-tight">{skillDescription(skill, state.lang)}</div>
-          <div className="text-sm font-black text-amber-300 font-mono mt-2 flex items-center justify-center gap-1.5 bg-black/40 py-1 rounded-xl border border-amber-500/20">
-            ⚡ {skillBonus(skill, state.lang)}
+    <div
+      className="modal-shell fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md animate-fadeIn select-none"
+      onPointerDown={stopCountdown}
+      data-skill-draft
+    >
+      <div className="relative w-full max-w-sm rounded-3xl border-2 border-amber-400/50 game-card p-4 shadow-2xl flex flex-col text-white overflow-hidden" role="dialog" aria-label={ui(lang, 'draft_title')}>
+        <div className="flex flex-col items-center text-center mb-3">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 border border-white/10 text-[11px] font-black tracking-widest uppercase text-amber-300">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{ui(lang, 'draft_title')}</span>
           </div>
+          <span className="mt-1 text-[11px] font-bold text-zinc-400">{ui(lang, 'draft_sub')}</span>
         </div>
 
-        {/* Actions: ROLL AGAIN vs CLAIM */}
-        <div className="grid grid-cols-2 gap-2.5 w-full">
-          <button
-            onClick={() => gameManager.rerollSkill()}
-            disabled={!canReroll}
-            className={`flex items-center justify-center gap-1.5 py-3 px-3 rounded-2xl font-black text-xs border transition-all ${
-              canReroll 
-                ? 'bg-neutral-800 hover:bg-neutral-700 active:scale-95 text-amber-300 border-amber-600/40 shadow-md' 
-                : 'bg-neutral-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
-            }`}
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>{t('rollSkill', state.lang)} ({rerollCost === 0 ? ui(state.lang, 'reroll_free') : `${rerollCost} 🪙`})</span>
-          </button>
-
-          <button
-            onClick={() => gameManager.claimSkill(skill)}
-            className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-2xl game-btn-gold text-black font-black text-xs shadow-xl active:scale-95 transition-all shine-effect"
-          >
-            <Check className="w-4 h-4 text-black" />
-            <span>{t('claimSkill', state.lang)}</span>
-          </button>
+        <div className="flex flex-col gap-2">
+          {draft.options.map((skill, i) => {
+            const rarity = RARITY_CONFIG[skill.rarity];
+            const owned = deck.find((s) => s.id === skill.id);
+            const levelUp = draft.levelUp[i] && !!owned;
+            const recommended = i === draft.recommended;
+            const swap = !levelUp && deck.length >= DECK_SIZE;
+            return (
+              <button
+                key={skill.id}
+                type="button"
+                data-draft-option={skill.id}
+                data-levelup={levelUp ? '1' : undefined}
+                data-recommended={recommended ? '1' : undefined}
+                onClick={() => pick(i)}
+                className={`relative w-full text-left rounded-2xl border-2 p-3 flex gap-3 items-start active:scale-[0.98] transition-transform ${rarity.bgColor} ${
+                  recommended ? 'border-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.35)]' : 'border-white/10'
+                }`}
+              >
+                <div className="shrink-0 w-12 h-12 rounded-2xl bg-black/60 border border-white/15 flex items-center justify-center">
+                  <SkillIcon name={skill.iconName} className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[13px] font-black leading-tight text-white">{skillName(skill.id, skill.name, lang)}</span>
+                    <span className={`px-1.5 py-px rounded-md text-[10px] font-black uppercase ${levelUp ? 'bg-emerald-500 text-black' : 'bg-sky-500 text-black'}`}>
+                      {levelUp ? ui(lang, 'draft_levelup', { n: Math.min(owned!.maxLevel, owned!.level + 1) }) : ui(lang, 'draft_new')}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase">
+                    <span className={rarity.color}>{rarityName(skill.rarity, rarity.name, lang)}</span>
+                    <span className="text-zinc-500">·</span>
+                    <span className="text-zinc-300">{skillCategory(skill.category, lang)}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] font-black text-amber-300 tabular-nums">{skillBonus(levelUp ? owned! : skill, lang)}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-zinc-300">{skillDescription(skill, lang)}</div>
+                  {swap && <div className="mt-1 text-[10px] font-black text-rose-300">{ui(lang, 'draft_swap')}</div>}
+                </div>
+                {recommended && (
+                  <span className="absolute -top-2 right-3 px-2 py-px rounded-full game-btn-gold text-black text-[10px] font-black flex items-center gap-1 shadow">
+                    <Star className="w-3 h-3" /> {ui(lang, 'draft_recommended')}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
+
+        {left >= 0 && (
+          <div className="mt-3" data-draft-countdown>
+            <div className="flex items-center justify-between text-[11px] font-black">
+              <span className="text-amber-300 tabular-nums">{ui(lang, 'draft_auto', { n: Math.ceil(left / 1000) })}</span>
+              <span className="text-zinc-400">{ui(lang, 'draft_auto_stop')}</span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-black/70 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-amber-500 to-yellow-300" style={{ width: `${(left / AUTO_PICK_MS) * 100}%` }} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

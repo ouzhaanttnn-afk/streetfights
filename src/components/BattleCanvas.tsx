@@ -10,7 +10,11 @@ import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { difficultyOf } from '../core/guidance';
 import { opponentName, opponentTitle, skillName, stageLabel } from '../i18n/content-helpers';
-import { DAMAGE_MULT, damageMult, fightOdds, opponentInterval, playerInterval } from '../core/combat';
+import {
+  DAMAGE_MULT, MECH, SKILL_RULES, chargedMult, damageMult, enraged, evadeActive, evadeChance, fightOdds, hitShell, isChargedSwing,
+  isLeechBite, leechHeal, mechIntervalMult, opponentInterval, playerInterval, shellCapacity,
+} from '../core/combat';
+import { FarmChip } from './FarmChip';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
 
@@ -41,7 +45,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const [currentStageData, setCurrentStageData] = useState<Stage>(stageRef.current);
   const [matchStatus, setMatchStatus] = useState<'fighting' | 'victory' | 'defeat'>('fighting');
   const [showReviveAd, setShowReviveAd] = useState<boolean>(false);
-  // Idle game: in auto mode a boss defeat retries by itself after a short countdown
+  // Idle game: in auto mode a boss defeat starts farming by itself after a short countdown
   const [retryIn, setRetryIn] = useState<number | null>(null);
   const [comboStreak, setComboStreak] = useState<number>(0);
   const [bossIntro, setBossIntro] = useState<boolean>(false);
@@ -75,6 +79,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<{ t: number; fn: () => void }[]>([]);
   const oppAttackCountRef = useRef(0);
+  // Boss mechanics and build-19 skill state for the current fight (rules: src/core/combat.ts)
+  const fightTimeRef = useRef(0); // simulation ms since the fight started (evasion stance timing)
+  const shellRef = useRef(0); // Iron Shell: damage the shell can still absorb
+  const shellNextRef = useRef(0);
+  const armorStacksRef = useRef(0); // Armor Breaker stacks on the opponent
+  const secondWindUsedRef = useRef(false);
+  const enrageShownRef = useRef(false);
+  const evadeShownRef = useRef(false);
 
   // Scale particle counts with the quality setting
   const particleCount = (n: number) => (battleRig.quality === 'low' ? Math.ceil(n / 3) : battleRig.quality === 'medium' ? Math.ceil(n * 0.7) : n);
@@ -103,7 +115,8 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         retryRef.current = null;
         setRetryIn(null);
         clearInterval(timer);
-        resetBattle(stageRef.current);
+        // Farm until ready (B3): drop to a stage the fighter beats reliably; the "Boss ready" chip brings it back
+        if (!gameManager.startFarming()) resetBattle(stageRef.current);
       } else {
         setRetryIn(retryRef.current);
       }
@@ -169,6 +182,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     opponentCooldownRef.current = 400;
     pendingRef.current = [];
     oppAttackCountRef.current = 0;
+    fightTimeRef.current = 0;
+    shellRef.current = shellCapacity(stage.bossMechanic, stage.opponent.stats.maxHp);
+    shellNextRef.current = MECH.shell.period;
+    armorStacksRef.current = 0;
+    secondWindUsedRef.current = false;
+    enrageShownRef.current = false;
+    evadeShownRef.current = false;
     battleRig.command('player', 'idle', { instant: true });
     battleRig.command('opp', 'idle', { instant: true });
 
@@ -260,6 +280,43 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const chestOf = (side: 'player' | 'opp') => (battleRig.active ? battleRig.anchors[side].chest : side === 'opp' ? { x: 235, y: 110 } : { x: 85, y: 110 });
   const headOf = (side: 'player' | 'opp') => (battleRig.active ? battleRig.anchors[side].head : side === 'opp' ? { x: 235, y: 78 } : { x: 85, y: 78 });
 
+  // Skill with this mechanic in the deck (no chance roll)
+  const skillWith = (type: string) => state.playerFighter.equippedSkills.find((x) => x.specialProc?.type === type);
+  // Rage gains go through here so Fury Engine can speed them up
+  const addRage = (n: number) => {
+    const fury = skillWith('rage_boost');
+    playerRageRef.current = Math.min(100, playerRageRef.current + n * (fury?.specialProc?.multiplier || 1));
+    setPlayerRageDisplay(playerRageRef.current);
+  };
+  // Opponent healing (league lifesteal, leech bites); Grievous Strikes halves it
+  const healOpponent = (amount: number) => {
+    const wound = skillWith('wound');
+    const heal = Math.round(amount * (wound ? wound.specialProc?.multiplier ?? 0.5 : 1));
+    if (heal <= 0) return 0;
+    opponentHpRef.current = Math.min(stageRef.current.opponent.stats.maxHp, opponentHpRef.current + heal);
+    setOpponentHpDisplay(opponentHpRef.current);
+    return heal;
+  };
+  // Damage to the opponent passes the Iron Shell first (combo follow-ups break it faster). Returns damage dealt.
+  const damageOpponent = (main: number, combo: number) => {
+    const before = shellRef.current;
+    const r = hitShell(before, main, combo);
+    shellRef.current = r.shell;
+    if (r.absorbed > 0) {
+      const oh = headOf('opp');
+      addFloatingText(`🛡 ${r.absorbed}`, oh.x + 18, oh.y - 8, '#67e8f9', 'dodge');
+      if (before > 0 && r.shell <= 0) {
+        const oc = chestOf('opp');
+        addCallout(ui(state.lang, 'c_shell_break'), oc.x, oh.y - 20, '#67e8f9', 3);
+        spawnHitParticles(oc.x, oc.y, '#67e8f9', particleCount(14));
+      }
+    }
+    const dealt = r.main + r.combo;
+    opponentHpRef.current = Math.max(0, opponentHpRef.current - dealt);
+    setOpponentHpDisplay(opponentHpRef.current);
+    return dealt;
+  };
+
   const pickPlayerMove = (isSpecialRage: boolean, isCrit: boolean): FighterCmd => {
     if (isSpecialRage) return 'rage';
     const r = Math.random();
@@ -305,9 +362,34 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     let baseDmg = pStats.atk * (0.85 + Math.random() * 0.3);
 
-    // Asymptotic Defense Formula (eliminates 1 DMG wall)
-    const defMultiplier = damageMult(pStats.atk, oppStats.def);
+    // Asymptotic Defense Formula (eliminates 1 DMG wall). Armor Breaker stacks lower the target's DEF.
+    const breaker = skillWith('armor_break');
+    const oppDef = oppStats.def * (1 - armorStacksRef.current * (breaker?.specialProc?.multiplier || 0));
+    const defMultiplier = damageMult(pStats.atk, oppDef);
     let finalDmg = Math.max(1, Math.round(baseDmg * defMultiplier));
+
+    // Viper's evasion stance: normal hits slip past, but SUPER and combo follow-ups still land
+    const mech = stageRef.current.bossMechanic;
+    if (!isSpecialRage && evadeActive(mech, fightTimeRef.current) && Math.random() < evadeChance()) {
+      soundFx.playDodge();
+      battleRig.command('opp', 'dodge');
+      addFloatingText(t('missDodge', state.lang), oppHead.x, oppHead.y, '#38bdf8', 'dodge');
+      const comboChance = Math.min(75, pStats.comboRate + Math.min(15, comboStreakRef.current * 2));
+      if (Math.random() * 100 < comboChance) {
+        const dealt = damageOpponent(0, Math.max(1, Math.round(finalDmg * 0.35)));
+        addFloatingText(`${ui(state.lang, 'c_combo')} -${dealt}`, oppChest.x - 12, oppHead.y - 22, '#fde047', 'skill');
+        schedule(150, () => {
+          if (isMatchOverRef.current) return;
+          battleRig.command('player', 'jab');
+          schedule(impactTime('jab'), () => !isMatchOverRef.current && battleRig.command('opp', 'hit'));
+        });
+        if (opponentHpRef.current <= 0) {
+          battleRig.command('opp', 'knockdown');
+          handleVictory();
+        }
+      }
+      return;
+    }
 
     if (isCrit) {
       finalDmg = Math.round(finalDmg * (pStats.critDmg || 1.5));
@@ -338,12 +420,18 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       // iron_chin, shadow_dodge and counter_strike are defensive: handled when the opponent attacks
     });
 
-    // Combo Rate grants a real follow-up strike, with a small streak bonus.
+    // Combo Rate grants a real follow-up strike, with a small streak bonus. Chain Lightning can chain it twice more.
     const comboChance = Math.min(75, pStats.comboRate + Math.min(15, comboStreakRef.current * 2));
+    let comboTotal = 0;
     if (!isSpecialRage && Math.random() * 100 < comboChance) {
       const extraDamage = Math.max(1, Math.round(finalDmg * 0.35));
-      finalDmg += extraDamage;
-      addFloatingText(`${ui(state.lang, 'c_combo')} +${extraDamage}`, oppChest.x - 12, oppHead.y - 22, '#fde047', 'skill');
+      comboTotal = extraDamage;
+      const chain = skillWith('chain_combo');
+      for (let c = 0; chain && c < SKILL_RULES.chainMax && Math.random() * 100 < (chain.specialProc?.chance || 0); c++) {
+        comboTotal += Math.max(1, Math.round(finalDmg * (chain.specialProc?.multiplier || 0.35)));
+        skillProcText = skillName(chain.id, chain.name, state.lang);
+      }
+      addFloatingText(`${ui(state.lang, 'c_combo')} +${comboTotal}`, oppChest.x - 12, oppHead.y - 22, '#fde047', 'skill');
       // The follow-up is shown as a quick second jab landing right after the main hit
       schedule(150, () => {
         if (isMatchOverRef.current) return;
@@ -365,13 +453,13 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       blocked = true;
     }
 
-    opponentHpRef.current = Math.max(0, opponentHpRef.current - finalDmg);
-    setOpponentHpDisplay(opponentHpRef.current);
+    // Iron Shell soaks damage first; what is left hits HP
+    finalDmg = damageOpponent(finalDmg, comboTotal);
+    if (breaker) armorStacksRef.current = Math.min(SKILL_RULES.armorBreakMaxStacks, armorStacksRef.current + 1);
 
-    playerRageRef.current = Math.min(100, playerRageRef.current + 20);
-    setPlayerRageDisplay(playerRageRef.current);
+    addRage(20);
 
-    if (pStats.lifesteal > 0 || vampireProc) {
+    if (finalDmg > 0 && (pStats.lifesteal > 0 || vampireProc)) {
       const healAmount = Math.max(1, Math.round(finalDmg * ((pStats.lifesteal + (vampireProc ? 30 : 0)) / 100)));
       playerHpRef.current = Math.min(pStats.maxHp, playerHpRef.current + healAmount);
       setPlayerHpDisplay(playerHpRef.current);
@@ -447,15 +535,49 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     const isCrit = Math.random() * 100 < oppStats.critRate;
     const r = Math.random();
+    const swing = oppAttackCountRef.current;
+    const mech = stageRef.current.bossMechanic;
+    // Apex's charged strike: every 5th swing, long wind-up, guard it (auto mode guards with a fixed chance)
+    const charged = isChargedSwing(mech, swing);
     let move: FighterCmd;
     let dmgMult = DAMAGE_MULT[profile];
-    if (profile === 'heavy') move = 'heavy_slow';
-    else if (profile === 'boss' && oppAttackCountRef.current % 4 === 0) {
+    if (charged) {
       move = 'heavy_slow';
-      dmgMult = 1.5; // telegraphed power strike: guard it!
-    } else if (profile === 'fast') move = r < 0.8 ? 'jab' : 'kick';
+      dmgMult *= chargedMult(mech!);
+    } else if (profile === 'heavy') move = 'heavy_slow';
+    else if (profile === 'fast') move = r < 0.8 ? 'jab' : 'kick';
     else if (isCrit) move = r < 0.6 ? 'heavy' : 'kick';
     else move = r < 0.55 ? 'jab' : r < 0.8 ? 'kick' : 'heavy';
+
+    if (charged) {
+      const windup = MECH.charged.windupMs;
+      opponentCooldownRef.current += windup;
+      const oc = chestOf('opp');
+      const oh = headOf('opp');
+      addCallout(ui(state.lang, 'c_charging'), oc.x, oh.y - 18, '#f97316', 3);
+      battleRig.flash('opp', 0.6);
+      soundFx.playWindup();
+      if (!state.autoBattle) {
+        const ph = headOf('player');
+        addFloatingText(ui(state.lang, 'c_guard_now'), ph.x, ph.y - 18, '#67e8f9', 'skill');
+      } else if (Math.random() < MECH.charged.autoGuard) {
+        // Auto guard reacts to the wind-up (fixed chance so idle players are not locked out)
+        schedule(Math.max(0, windup - 150), () => {
+          if (isMatchOverRef.current) return;
+          guardTimerRef.current = impactTime('heavy_slow') + 400;
+          isGuardingRef.current = true;
+          setIsGuarding(true);
+          battleRig.command('player', 'guard');
+        });
+      }
+      schedule(windup, () => {
+        if (isMatchOverRef.current) return;
+        opponentPoseRef.current = { xOffset: -48, animState: 'attacking', stateTimer: 180, attackType: 'punch' };
+        battleRig.command('opp', move);
+        schedule(impactTime(move), () => resolveOpponentAttack(isCrit, move, dmgMult, swing, true));
+      });
+      return;
+    }
 
     opponentPoseRef.current = {
       xOffset: -48,
@@ -465,10 +587,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     };
     battleRig.command('opp', move);
     if (move === 'heavy_slow') soundFx.playWindup();
-    schedule(impactTime(move), () => resolveOpponentAttack(isCrit, move, dmgMult));
+    schedule(impactTime(move), () => resolveOpponentAttack(isCrit, move, dmgMult, swing, false));
   };
 
-  const resolveOpponentAttack = (isCrit: boolean, move: FighterCmd, dmgMult: number) => {
+  const resolveOpponentAttack = (isCrit: boolean, move: FighterCmd, dmgMult: number, swing = 0, charged = false) => {
     if (isMatchOverRef.current) return;
     const pStats = state.playerFighter.stats;
     const oppStats = stageRef.current.opponent.stats;
@@ -481,24 +603,24 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       return sk && Math.random() * 100 < (sk.specialProc?.chance || 0) ? sk : null;
     };
     const shadow = procOf('shadow_dodge');
+    // Sixth Sense slips heavy, critical and charged strikes
+    const sixth = (charged || isCrit || move === 'heavy' || move === 'heavy_slow') ? procOf('sixth_sense') : null;
+    const slip = shadow || sixth;
     const dodgeRoll = Math.random() * 100;
-    if (shadow || dodgeRoll < pStats.dodgeRate) {
+    if (slip || dodgeRoll < pStats.dodgeRate) {
       soundFx.playDodge();
       battleRig.command('player', 'dodge');
       // Clutch evasion generates +15 rage
-      playerRageRef.current = Math.min(100, playerRageRef.current + 15);
-      setPlayerRageDisplay(playerRageRef.current);
-      addFloatingText(shadow ? `★ ${skillName(shadow.id, shadow.name, state.lang)}!` : t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
+      addRage(15);
+      addFloatingText(slip ? `★ ${skillName(slip.id, slip.name, state.lang)}!` : t('dodge', state.lang), playerHead.x, playerHead.y, '#38bdf8', 'dodge');
       // Counter skill: strike back right after a dodge
       const counter = procOf('counter_strike');
       if (counter) {
         schedule(160, () => {
           if (isMatchOverRef.current) return;
           const opp = stageRef.current.opponent.stats;
-          const dmg = Math.max(1, Math.round(pStats.atk * (counter.specialProc?.multiplier || 1.5) * damageMult(pStats.atk, opp.def)));
+          const dmg = damageOpponent(Math.max(1, Math.round(pStats.atk * (counter.specialProc?.multiplier || 1.5) * damageMult(pStats.atk, opp.def))), 0);
           battleRig.command('player', 'jab');
-          opponentHpRef.current = Math.max(0, opponentHpRef.current - dmg);
-          setOpponentHpDisplay(opponentHpRef.current);
           const oc = chestOf('opp');
           const oh = headOf('opp');
           spawnHitParticles(oc.x, oc.y, '#fb923c', particleCount(8));
@@ -534,14 +656,14 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
 
     const guarded = guardTimerRef.current > 0;
     if (guarded) {
-      // Heavy hitters push through a guard a little more than regular fighters
-      const guardPass = profile === 'heavy' || move === 'heavy_slow' ? 0.4 : 0.25;
+      // Heavy hitters push through a guard a little more than regular fighters; a guarded charged strike is stopped
+      const guardPass = charged ? MECH.charged.guardPass : profile === 'heavy' || move === 'heavy_slow' ? 0.4 : 0.25;
       finalDmg = Math.max(1, Math.round(finalDmg * guardPass));
+      if (charged) gameManager.recordChargedBlock();
       guardTimerRef.current = 0;
       isGuardingRef.current = false;
       setIsGuarding(false);
-      playerRageRef.current = Math.min(100, playerRageRef.current + 20);
-      setPlayerRageDisplay(playerRageRef.current);
+      addRage(20);
       addCallout(ui(state.lang, 'c_block'), playerChest.x, playerHead.y - 15, '#67e8f9');
       spawnHitParticles(playerChest.x, playerChest.y, '#67e8f9', particleCount(8));
     } else {
@@ -553,8 +675,30 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     setPlayerHpDisplay(playerHpRef.current);
 
     // Taking damage builds +8 rage (comeback mechanics)
-    playerRageRef.current = Math.min(100, playerRageRef.current + 8);
-    setPlayerRageDisplay(playerRageRef.current);
+    addRage(8);
+
+    // Opponent healing: league lifesteal on every hit, Razor's leech bite on every 3rd swing
+    const mech = stageRef.current.bossMechanic;
+    const oh = headOf('opp');
+    if (oppStats.lifesteal > 0) {
+      const heal = healOpponent((finalDmg * oppStats.lifesteal) / 100);
+      if (heal > 0) addFloatingText(`+${heal}`, oh.x + 16, oh.y + 14, '#10b981', 'heal');
+    }
+    if (isLeechBite(mech, swing)) {
+      const heal = healOpponent(leechHeal(mech!, finalDmg));
+      addCallout(ui(state.lang, 'c_bite'), chestOf('opp').x, oh.y - 18, '#f43f5e', 2);
+      if (heal > 0) addFloatingText(`+${heal} HP`, oh.x, oh.y + 14, '#10b981', 'heal');
+    }
+
+    // Second Wind: once per fight below 25% HP
+    const wind = skillWith('second_wind');
+    if (wind && !secondWindUsedRef.current && playerHpRef.current > 0 && playerHpRef.current < pStats.maxHp * SKILL_RULES.secondWindBelow) {
+      secondWindUsedRef.current = true;
+      const heal = Math.round(pStats.maxHp * (wind.specialProc?.multiplier || 0.35));
+      playerHpRef.current = Math.min(pStats.maxHp, playerHpRef.current + heal);
+      setPlayerHpDisplay(playerHpRef.current);
+      addFloatingText(`★ ${skillName(wind.id, wind.name, state.lang)} +${heal}`, playerHead.x, playerHead.y - 24, '#10b981', 'heal');
+    }
 
     const killed = playerHpRef.current <= 0;
     if (guarded) {
@@ -753,8 +897,32 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           setManualAttackReady(true);
         }
 
+        // Boss mechanics on the fight clock: evasion stance, shell refresh, enrage tempo (telegraphed with callouts)
+        fightTimeRef.current += simDt;
+        const stageNow = stageRef.current;
+        const mech = stageNow.bossMechanic;
+        if (mech) {
+          const oc = chestOf('opp');
+          const oh = headOf('opp');
+          const stance = evadeActive(mech, fightTimeRef.current);
+          if (stance && !evadeShownRef.current) addCallout(ui(state.lang, 'c_evade'), oc.x, oh.y - 18, '#c084fc', 3);
+          evadeShownRef.current = stance;
+          if (mech.id === 'shell' && fightTimeRef.current >= shellNextRef.current) {
+            shellNextRef.current += MECH.shell.period;
+            shellRef.current = shellCapacity(mech, stageNow.opponent.stats.maxHp);
+            addCallout(ui(state.lang, 'c_shell'), oc.x, oh.y - 18, '#67e8f9', 2);
+          }
+          const hpFrac = opponentHpRef.current / Math.max(1, stageNow.opponent.stats.maxHp);
+          if (!enrageShownRef.current && enraged(mech, hpFrac)) {
+            enrageShownRef.current = true;
+            addCallout(ui(state.lang, 'c_enrage'), oc.x, oh.y - 18, '#ef4444', 3);
+            battleRig.flash('opp', 1);
+          }
+        }
+
         const pInterval = playerInterval(state.playerFighter.stats.spd, stageRef.current.opponent.stats.spd);
-        const oppInterval = opponentInterval(stageRef.current.opponent.stats.spd, stageRef.current.opponent.profile, state.playerFighter.stats.spd);
+        const oppInterval = opponentInterval(stageRef.current.opponent.stats.spd, stageRef.current.opponent.profile, state.playerFighter.stats.spd)
+          * mechIntervalMult(mech, opponentHpRef.current / Math.max(1, stageNow.opponent.stats.maxHp));
 
         if (state.autoBattle && playerCooldownRef.current <= 0) {
           playerCooldownRef.current = pInterval;
@@ -1479,6 +1647,9 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           </button>
         </div>
 
+        {/* Farm until ready: progress chip, then "Boss ready" (tap to go back) */}
+        {state.farm && matchStatus === 'fighting' && <FarmChip state={state} className="absolute top-11 right-2 z-30" />}
+
         {isGuarding && !state.autoBattle && (
           <div className="pointer-events-none absolute inset-0 z-20 border-2 border-cyan-300/70 bg-cyan-300/5 shadow-[inset_0_0_35px_rgba(34,211,238,0.22)]" />
         )}
@@ -1510,6 +1681,11 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             <span className="text-[11px] font-black tracking-[0.35em] text-rose-300">{ui(state.lang, 'boss_fight')}</span>
             <span className="mt-1 text-2xl font-black italic text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">{opponentName(currentStageData.opponent.name, state.lang)}</span>
             <span className="text-[11px] font-bold text-amber-300">{opponentTitle(currentStageData.opponent.name, currentStageData.opponent.title, state.lang)}</span>
+            {currentStageData.bossMechanic && (
+              <span data-boss-mech={currentStageData.bossMechanic.id} className="mt-1 px-2 py-0.5 rounded-md bg-black/60 border border-rose-400/50 text-[10px] font-black uppercase tracking-wider text-rose-200">
+                {ui(state.lang, 'boss_signature')}: {ui(state.lang, 'boss_mech_' + currentStageData.bossMechanic.id)}
+              </span>
+            )}
           </div>
         )}
 
@@ -1535,16 +1711,30 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         {/* Revive with Ad in Boss Fights */}
         {/* Boss defeat: why it happened, what to do, and an optional ad revive. Auto mode retries by itself. */}
         {showReviveAd && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/60 px-6 text-center">
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1.5 bg-black/70 px-5 text-center" data-boss-defeat>
             <span className="text-2xl font-black italic text-rose-500 drop-shadow-2xl">{t('knockout', state.lang)}</span>
-            <span className="text-[11px] font-bold text-zinc-100">{ui(state.lang, 'defeat_hint')}</span>
-            <div className="flex items-center gap-2 mt-1">
+            {currentStageData.bossMechanic ? (
+              <span className="text-[11px] font-bold leading-snug text-zinc-100" data-mech-hint={currentStageData.bossMechanic.id}>
+                <span className="text-rose-300 font-black">{ui(state.lang, 'boss_mech_' + currentStageData.bossMechanic.id)}:</span>{' '}
+                {ui(state.lang, 'boss_mech_' + currentStageData.bossMechanic.id + '_hint')}
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold text-zinc-100">{ui(state.lang, 'defeat_hint')}</span>
+            )}
+            <button
+              data-farm
+              onClick={() => { if (!gameManager.startFarming()) resetBattle(stageRef.current); }}
+              className="mt-1 min-h-10 px-4 rounded-2xl bg-emerald-950/85 text-emerald-100 font-black text-xs border border-emerald-400/60 active:scale-95"
+            >
+              {ui(state.lang, 'farm_btn')}{retryIn !== null ? ` (${retryIn})` : ''}
+            </button>
+            <div className="flex items-center gap-2">
               <button
                 data-retry
                 onClick={() => resetBattle(stageRef.current)}
                 className="min-h-11 px-4 rounded-2xl game-btn-gold text-black font-black text-xs active:scale-95"
               >
-                {ui(state.lang, 'retry')}{retryIn !== null ? ` (${retryIn})` : ''}
+                {ui(state.lang, 'retry')}
               </button>
               <button
                 onClick={() => gameManager.setActiveTab('gym')}

@@ -1,13 +1,14 @@
-import { EquipmentItem, EquipmentSlot, Fighter, FighterStats, GymTraining, Rarity, Skill, Stage, TabType } from '../types/game';
+import { BossMechanicId, EquipmentItem, EquipmentSlot, Fighter, FighterStats, GymTraining, Rarity, Skill, Stage, TabType } from '../types/game';
 import { ACTIVE_SLOTS, calculateTotalStats, generateEquipment, normalizeItemRates, upgradeLegacyItem } from './lootGenerator';
 import { pushToast } from './toast';
-import { GYM_TEMPLATES, INITIAL_BASE_STATS, applyGymPercent, gymCostAt, gymGainAt, gymStatCapped } from './progression';
+import { GYM_TEMPLATES, INITIAL_BASE_STATS, applyGymPercent, gymCostAt, gymGainAt, gymStatCapped, offlineCoinsPerMin } from './progression';
 import { cancelReminders, OFFLINE_CAP_MINUTES, requestNotificationPermission, scheduleReminders } from './notifications';
 import { ui } from '../i18n/ui';
-import { fightOdds } from './combat';
+import { WORLD_MECHANICS, fightOdds, stageOdds } from './combat';
 import { skillName } from '../i18n/content-helpers';
 import { getStageData } from './stageDatabase';
-import { getRandomSkill, SKILL_DATABASE } from './skillDatabase';
+import { DECK_SIZE, makeDraft, recommendedDraftIndex, SKILL_DATABASE } from './skillDatabase';
+import { leagueOfWorld, promotionReward, WORLDS_PER_LEAGUE } from './leagues';
 import { COSMETICS_LIST, CosmeticItem } from './cosmeticsData';
 import { Language } from '../i18n/translations';
 import { soundFx } from './audio';
@@ -17,10 +18,12 @@ import { battleRig, QualityLevel } from '../game/battleRig';
 import { ACHIEVEMENTS } from './achievements';
 
 const STORAGE_KEY = 'street_striker_rpg_save_v2';
-const SAVE_VERSION = 5; // v4: 6 equipment slots, v5: rarity-based percentage stats on items
+const SAVE_VERSION = 6; // v4: 6 equipment slots, v5: rarity-based percentage stats on items, v6: leagues + skill draft
 const BUFF_DURATION_MS = 10 * 60 * 1000;
 const LOSSES_BEFORE_RETREAT = 3;
-const BOSS_LOSSES_BEFORE_RETREAT = 2;
+// Farm until ready (PLAN_BUILD_19.md B3): farm on the highest stage with at least these odds, come back at READY_ODDS
+export const FARM_RELIABLE_ODDS = 1.6;
+export const READY_ODDS = 1.1;
 
 export type QuestId = 'win_fights' | 'beat_boss' | 'train_gym' | 'use_super';
 
@@ -82,6 +85,12 @@ export function questCoins(base: number, highestStage: number): number {
   return Math.round(base * (1 + Math.max(0, highestStage - 1) / 6));
 }
 
+export interface SkillDraft {
+  options: Skill[];
+  levelUp: boolean[];
+  recommended: number;
+}
+
 export interface GameStateData {
   lang: Language;
   coins: number;
@@ -99,7 +108,8 @@ export interface GameStateData {
   inventory: EquipmentItem[];
   maxInventorySlots: number;
   pendingLootDrop: EquipmentItem | null;
-  pendingSkillOffer: Skill | null;
+  // Skill draft: choose 1 of 3 (levelUp[i]: the deck already has options[i]); recommended = highlighted / auto pick
+  pendingSkillDraft: SkillDraft | null;
   pendingSkillReplacement: Skill | null;
   activeTab: TabType;
   // Sub-pages of the merged tabs: Fighter = gear + skills, Arena = stages + quests/achievements
@@ -153,8 +163,18 @@ export interface GameStateData {
   notifAsked: boolean;
   // Optional rewarded ad after a boss win: get the boss payout again
   bossBonus: { coins: number; gems: number; expiresAt: number } | null;
-  // Rerolls used on the current skill offer (first one is free)
-  offerRerolls: number;
+  // Settings: no auto-pick countdown on the skill draft; go back to the boss by itself once it is beatable
+  draftAlwaysChoose: boolean;
+  autoReturnToBoss: boolean;
+  // Farm until ready: the stage (usually a boss) the fighter is farming for, or null
+  farm: { world: number; sub: number } | null;
+  // Highest league reached (0 = Bronze); a promotion waits for its celebration screen
+  league: number;
+  pendingPromotion: { league: number; gems: number; coins: number } | null;
+  // Counters for achievements
+  draftsPicked: number;
+  mechWins: Partial<Record<BossMechanicId, number>>;
+  chargedBlocked: number;
   // After a loss on a hard stage: optional 2x damage ad offer (with a cooldown)
   buffOffer: { expiresAt: number } | null;
   lastBuffOfferAt: number;
@@ -249,7 +269,7 @@ function createDefaultState(): GameStateData {
     inventory: [],
     maxInventorySlots: 20,
     pendingLootDrop: null,
-    pendingSkillOffer: null,
+    pendingSkillDraft: null,
     pendingSkillReplacement: null,
     activeTab: 'gear',
     fighterView: 'gear',
@@ -288,7 +308,14 @@ function createDefaultState(): GameStateData {
     notificationsEnabled: false,
     notifAsked: false,
     bossBonus: null,
-    offerRerolls: 0,
+    draftAlwaysChoose: false,
+    autoReturnToBoss: true,
+    farm: null,
+    league: 0,
+    pendingPromotion: null,
+    draftsPicked: 0,
+    mechWins: {},
+    chargedBlocked: 0,
     buffOffer: null,
     lastBuffOfferAt: 0,
     gymFreeReadyAt: 0,
@@ -332,7 +359,9 @@ function sanitizeSave(raw: unknown): Record<string, any> {
     p.playerFighter = fighter;
   }
   if (p.pendingLootDrop && !(obj(p.pendingLootDrop) && p.pendingLootDrop.stats)) p.pendingLootDrop = null;
-  if (p.pendingSkillOffer && !obj(p.pendingSkillOffer)) p.pendingSkillOffer = null;
+  if (p.pendingSkillDraft && !(obj(p.pendingSkillDraft) && Array.isArray(p.pendingSkillDraft.options) && p.pendingSkillDraft.options.length)) p.pendingSkillDraft = null;
+  if (p.farm && !(obj(p.farm) && num(p.farm.world) && num(p.farm.sub))) p.farm = null;
+  if (p.mechWins !== undefined && !obj(p.mechWins)) delete p.mechWins;
   if (p.pendingSkillReplacement && !obj(p.pendingSkillReplacement)) p.pendingSkillReplacement = null;
   return p;
 }
@@ -361,6 +390,7 @@ class GameManager {
       this.applyCosmeticsToPlayer();
       this.recalculatePlayerStats();
     }
+    if (this.openDraftAfterLoad && !this.state.pendingSkillDraft) this.openSkillDraft(true);
     this.refreshSession();
   }
 
@@ -375,6 +405,8 @@ class GameManager {
 
   // Blocks saving while an imported save is being applied by a reload
   private savingBlocked = false;
+  // A v5 save had an open skill offer: offer a draft instead once the game is up
+  private openDraftAfterLoad = false;
 
   public importSave(json: string): boolean {
     try {
@@ -515,7 +547,7 @@ class GameManager {
     const unclaimed = !this.state.claimedDailyDays.includes(this.state.dailyLoginStreak);
     if (!unclaimed || this.state.lastDailyLoginDate !== dateKey()) return;
     if (this.state.tutorialStep < 4 || this.state.totalFightsWon < 1 || this.state.isOfflineRewardOpen) return;
-    if (this.state.pendingLootDrop || this.state.pendingSkillOffer || this.state.pendingSkillReplacement || this.state.activeAdModal) return;
+    if (this.state.pendingLootDrop || this.state.pendingSkillDraft || this.state.pendingSkillReplacement || this.state.activeAdModal || this.state.pendingPromotion) return;
     if (this.state.dailyPopupShownDate === dateKey()) return;
     this.state.dailyPopupShownDate = dateKey();
     this.state.isDailyLoginOpen = true;
@@ -564,8 +596,7 @@ class GameManager {
       const cappedMins = Math.min(OFFLINE_CAP_MINUTES, prevMins + elapsedMinutes);
       const gymLevelSum = this.state.gymTrainings.reduce((sum, g) => sum + g.level, 0);
       const bestStage = (this.state.highestWorld - 1) * 10 + this.state.highestSubStage;
-      // About a fifth of what active play earns at the best stage (it used to be ~1%)
-      const coinsPerMin = Math.max(5, Math.round(getStageData(this.state.highestWorld, this.state.highestSubStage).coinReward * 0.5 + gymLevelSum * 0.5 + bestStage));
+      const coinsPerMin = offlineCoinsPerMin(getStageData(this.state.highestWorld, this.state.highestSubStage).coinReward, gymLevelSum, bestStage);
       const totalOfflineCoins = cappedMins * coinsPerMin;
 
       this.state.offlineGoldAccumulated = totalOfflineCoins;
@@ -593,6 +624,20 @@ class GameManager {
           if (fighter.equipped) Object.keys(fighter.equipped).forEach((k) => (fighter.equipped[k] = up(fighter.equipped[k])));
           if (Array.isArray(parsed.inventory)) parsed.inventory = parsed.inventory.map(up);
         }
+        let openDraftAfterLoad = false;
+        if ((parsed.saveVersion || 0) < 6) {
+          // v6: the single skill offer became a 1-of-3 draft (an open offer becomes a draft), the paid reroll is gone,
+          // the world loop became leagues. Stage numbers are unchanged, so nobody moves backwards; past leagues are
+          // granted silently (no celebration screens) and bosses already beaten count for the mechanic achievements.
+          openDraftAfterLoad = !!parsed.pendingSkillOffer;
+          delete parsed.pendingSkillOffer;
+          delete parsed.offerRerolls;
+          const best = ((parsed.highestWorld || 1) - 1) * 10 + (parsed.highestSubStage || 1);
+          const mech: Partial<Record<BossMechanicId, number>> = {};
+          WORLD_MECHANICS.forEach((id, i) => { if (best > (i + 1) * 10) mech[id] = 1; });
+          parsed.mechWins = { ...mech, ...(parsed.mechWins || {}) };
+        }
+        this.openDraftAfterLoad = openDraftAfterLoad;
         return {
           ...defaults,
           ...parsed,
@@ -628,6 +673,9 @@ class GameManager {
           // Existing players have already played: skip the tutorial for them
           tutorialStep: parsed.tutorialStep ?? (parsed.totalFightsWon > 0 ? 99 : 0),
           claimedAchievements: parsed.claimedAchievements || [],
+          // The league follows the furthest world ever reached (never lower than a saved one)
+          league: Math.max(parsed.league || 0, leagueOfWorld(parsed.highestWorld || 1)),
+          mechWins: parsed.mechWins || {},
           saveVersion: SAVE_VERSION,
         };
       }
@@ -865,6 +913,8 @@ class GameManager {
     this.state.totalFightsWon += 1;
     if (stage.isBoss) {
       this.state.bossDefeatedCount += 1;
+      const mech = stage.bossMechanic;
+      if (mech && mech.strength >= 1) this.state.mechWins = { ...this.state.mechWins, [mech.id]: (this.state.mechWins?.[mech.id] || 0) + 1 };
       // Optional: watch an ad to get the boss payout once more (offer expires on its own)
       this.state.bossBonus = { coins: Math.round(stage.coinReward * coinMult), gems: stage.gemReward, expiresAt: Date.now() + 45000 };
     }
@@ -885,8 +935,22 @@ class GameManager {
       nextWorld += 1;
     }
 
-    // In farm mode the fighter keeps replaying the same stage
-    if (this.state.autoAdvance) {
+    const wasFarm = this.state.farm;
+    if (wasFarm && this.isFarmTarget(stage)) {
+      // The wall is down: farming is over
+      this.state.farm = null;
+    }
+    if (this.state.farm) {
+      // Farm until ready: stay below the wall; go back by itself once the wall is beatable (setting)
+      if (this.farmReady() && this.state.autoReturnToBoss && this.state.autoBattle) {
+        this.returnToFarmTarget(true);
+      } else {
+        const spot = this.farmSpot(this.state.farm.world, this.state.farm.sub);
+        this.state.currentWorld = spot.world;
+        this.state.currentSubStage = spot.sub;
+      }
+    } else if (this.state.autoAdvance) {
+      // In farm mode (setting) the fighter keeps replaying the same stage
       this.state.currentWorld = nextWorld;
       this.state.currentSubStage = nextSub;
     }
@@ -897,6 +961,14 @@ class GameManager {
     if (currentTotal > highestTotal) {
       this.state.highestWorld = nextWorld;
       this.state.highestSubStage = nextSub;
+      // Beating the last boss of a league promotes the fighter (celebration screen with a fixed reward)
+      const reached = leagueOfWorld(nextWorld);
+      if (reached > (this.state.league || 0)) {
+        this.state.league = reached;
+        const firstStage = getStageData((reached * WORLDS_PER_LEAGUE) + 1, 1);
+        this.state.pendingPromotion = { league: reached, ...promotionReward(reached, firstStage.coinReward) };
+        soundFx.playVictoryFanfare();
+      }
     }
 
     // Roll Equipment Loot Drop (High chance)
@@ -907,28 +979,9 @@ class GameManager {
       this.handleLootDrop(generateEquipment(undefined, undefined, stageLvl));
     }
 
-    // Roll Roguelite Skill every 3 stages or after boss
-    if (stage.subStage % 3 === 0 || stage.isBoss) {
-      if (!this.state.pendingSkillOffer && Math.random() < 0.8) {
-        const offer = getRandomSkill();
-        const deck = this.state.playerFighter.equippedSkills;
-        const owned = deck.find((sk) => sk.id === offer.id);
-        if (this.state.autoBattle && owned) {
-          // Idle play: duplicates level up without stopping the fight
-          if (owned.level < owned.maxLevel) {
-            this.levelUpSkill(owned);
-            pushToast(ui(this.state.lang, 'toast_skill_up', { name: skillName(owned.id, owned.name, this.state.lang), n: owned.level }), 'good');
-          }
-        } else if (this.state.autoBattle && deck.length < 6) {
-          deck.push(cloneSkill(offer));
-          pushToast(ui(this.state.lang, 'toast_skill_new', { name: skillName(offer.id, offer.name, this.state.lang) }), 'good');
-        } else if (!this.state.autoBattle) {
-          // Manual players choose (and may ask for another skill)
-          this.state.pendingSkillOffer = offer;
-          this.state.offerRerolls = 0;
-        }
-        // auto mode with a full deck: the offer is skipped instead of pausing the fight
-      }
+    // Skill draft every 3 stages or after a boss (choose 1 of 3)
+    if ((stage.subStage % 3 === 0 || stage.isBoss) && !this.state.pendingSkillDraft && Math.random() < 0.8) {
+      this.openSkillDraft();
     }
 
     this.maybeOpenDailyLogin();
@@ -936,7 +989,8 @@ class GameManager {
     this.notify();
   }
 
-  // Returns true when the fighter was moved back a stage to farm up
+  // Returns true when the fighter was moved back to farm up. Boss losses never move the fighter here: the defeat
+  // panel offers Retry / Gym / ad revive / Farm, and auto mode starts farming after its countdown (startFarming).
   public onStageDefeat(stage: Stage): boolean {
     this.state.lossStreak += 1;
     // Struggling on a normal stage: offer the 2x damage ad (optional, with a cooldown and the daily cap)
@@ -947,18 +1001,115 @@ class GameManager {
       this.state.lastBuffOfferAt = now;
     }
     let retreated = false;
-    if (this.state.lossStreak >= (stage.isBoss ? BOSS_LOSSES_BEFORE_RETREAT : LOSSES_BEFORE_RETREAT)) {
-      const total = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
-      if (total > 1) {
-        const prev = total - 1;
-        this.state.currentWorld = Math.floor((prev - 1) / 10) + 1;
-        this.state.currentSubStage = ((prev - 1) % 10) + 1;
-        retreated = true;
+    if (!stage.isBoss && this.state.lossStreak >= LOSSES_BEFORE_RETREAT) {
+      if (this.state.autoBattle && this.state.farm) {
+        // Already farming and still losing: step further down, keep the same target
+        const spot = this.farmSpot(this.state.currentWorld, this.state.currentSubStage);
+        retreated = spot.world !== this.state.currentWorld || spot.sub !== this.state.currentSubStage;
+        this.state.currentWorld = spot.world;
+        this.state.currentSubStage = spot.sub;
+      } else if (this.state.autoBattle) {
+        // Auto mode: a normal stage that keeps beating the fighter becomes a farm target too
+        retreated = this.startFarming({ world: this.state.currentWorld, sub: this.state.currentSubStage }, true);
+      } else {
+        const total = (this.state.currentWorld - 1) * 10 + this.state.currentSubStage;
+        if (total > 1) {
+          const prev = total - 1;
+          this.state.currentWorld = Math.floor((prev - 1) / 10) + 1;
+          this.state.currentSubStage = ((prev - 1) % 10) + 1;
+          retreated = true;
+        }
       }
       this.state.lossStreak = 0;
     }
     this.notify();
     return retreated;
+  }
+
+  // ---- Farm until ready (PLAN_BUILD_19.md B3) ----
+  private isFarmTarget(stage: Pick<Stage, 'world' | 'subStage'>) {
+    return !!this.state.farm && this.state.farm.world === stage.world && this.state.farm.sub === stage.subStage;
+  }
+
+  /** Highest stage below the target that the fighter beats reliably (stage 1 if none) */
+  public farmSpot(world: number, sub: number): { world: number; sub: number } {
+    const target = (world - 1) * 10 + sub;
+    const p = this.state.playerFighter.stats;
+    for (let i = target - 1; i >= 1; i--) {
+      const w = Math.floor((i - 1) / 10) + 1;
+      const s = ((i - 1) % 10) + 1;
+      if (stageOdds(p, getStageData(w, s)) >= FARM_RELIABLE_ODDS) return { world: w, sub: s };
+    }
+    return { world: 1, sub: 1 };
+  }
+
+  /** Odds against the farm target (null when not farming) */
+  public farmOdds(): number | null {
+    if (!this.state.farm) return null;
+    return stageOdds(this.state.playerFighter.stats, getStageData(this.state.farm.world, this.state.farm.sub));
+  }
+
+  public farmReady(): boolean {
+    const o = this.farmOdds();
+    return o !== null && o >= READY_ODDS;
+  }
+
+  /** Drop to the highest reliable stage and keep fighting there. Returns false if there is nowhere lower to go. */
+  public startFarming(target?: { world: number; sub: number }, silent = false): boolean {
+    const t = target || { world: this.state.currentWorld, sub: this.state.currentSubStage };
+    if ((t.world - 1) * 10 + t.sub <= 1) return false;
+    const spot = this.farmSpot(t.world, t.sub);
+    this.state.farm = { world: t.world, sub: t.sub };
+    this.state.currentWorld = spot.world;
+    this.state.currentSubStage = spot.sub;
+    this.state.lossStreak = 0;
+    this.state.battleNonce += 1;
+    if (!silent) this.notify();
+    return true;
+  }
+
+  /** Back to the stage the fighter was farming for (the "Boss ready" chip, or by itself with the setting) */
+  public returnToFarmTarget(silent = false) {
+    const f = this.state.farm;
+    if (!f) return;
+    this.state.farm = null;
+    this.state.currentWorld = f.world;
+    this.state.currentSubStage = f.sub;
+    this.state.lossStreak = 0;
+    this.state.battleNonce += 1;
+    pushToast(ui(this.state.lang, 'farm_back'), 'good', 2600);
+    if (!silent) this.notify();
+  }
+
+  public stopFarming() {
+    this.state.farm = null;
+    this.notify();
+  }
+
+  public toggleAutoReturnToBoss() {
+    this.state.autoReturnToBoss = !this.state.autoReturnToBoss;
+    this.notify();
+  }
+
+  public toggleDraftAlwaysChoose() {
+    this.state.draftAlwaysChoose = !this.state.draftAlwaysChoose;
+    this.notify();
+  }
+
+  public recordChargedBlock() {
+    this.state.chargedBlocked = (this.state.chargedBlocked || 0) + 1;
+  }
+
+  public claimPromotion() {
+    const p = this.state.pendingPromotion;
+    if (!p) return;
+    this.state.gems += p.gems;
+    this.state.coins += p.coins;
+    this.state.pendingPromotion = null;
+    soundFx.playCoin();
+    haptics.trigger('success');
+    this.maybeOpenDailyLogin();
+    this.notify();
   }
 
   public toggleAutoAdvance() {
@@ -1150,26 +1301,41 @@ class GameManager {
   }
 
   // SKILL ACTIONS
-  public claimSkill(skill: Skill) {
-    const existingIdx = this.state.playerFighter.equippedSkills.findIndex((s) => s.id === skill.id);
-    if (existingIdx >= 0) {
-      const existing = this.state.playerFighter.equippedSkills[existingIdx];
-      if (existing.level < existing.maxLevel) this.levelUpSkill(existing);
-      this.state.pendingSkillOffer = null;
-    } else {
-      if (this.state.playerFighter.equippedSkills.length < 6) {
-        this.state.playerFighter.equippedSkills.push(cloneSkill(skill));
-        this.state.pendingSkillOffer = null;
-      } else {
-        // Deck full! Open safe replacement modal instead of silent purge
-        this.state.pendingSkillReplacement = skill;
-        this.state.pendingSkillOffer = null;
-      }
-    }
+  // Skill draft (PLAN_BUILD_19.md B1): three different skills, free, no paid reroll. `force` skips the auto-mode check.
+  public openSkillDraft(force = false) {
+    const deck = this.state.playerFighter.equippedSkills;
+    const drafted = makeDraft(deck);
+    if (!drafted.length) return;
+    // Auto mode with a full deck and nothing to level up: skip instead of stopping the fight for a swap
+    if (!force && this.state.autoBattle && deck.length >= DECK_SIZE && !drafted.some((d) => d.levelUp)) return;
+    this.state.pendingSkillDraft = {
+      options: drafted.map((d) => d.skill),
+      levelUp: drafted.map((d) => d.levelUp),
+      recommended: recommendedDraftIndex(drafted, deck),
+    };
+  }
 
+  public pickSkillDraft(index: number) {
+    const draft = this.state.pendingSkillDraft;
+    const skill = draft?.options[index];
+    if (!draft || !skill) return;
+    this.state.pendingSkillDraft = null;
+    this.state.draftsPicked = (this.state.draftsPicked || 0) + 1;
+    const lang = this.state.lang;
+    const deck = this.state.playerFighter.equippedSkills;
+    const existing = deck.find((s) => s.id === skill.id);
+    if (existing) {
+      if (existing.level < existing.maxLevel) this.levelUpSkill(existing);
+      pushToast(ui(lang, 'toast_skill_up', { name: skillName(existing.id, existing.name, lang), n: existing.level }), 'good');
+    } else if (deck.length < DECK_SIZE) {
+      deck.push(cloneSkill(skill));
+      pushToast(ui(lang, 'toast_skill_new', { name: skillName(skill.id, skill.name, lang) }), 'good');
+    } else {
+      // Deck full: the replacement card lets the player pick which skill to swap out (or keep the deck)
+      this.state.pendingSkillReplacement = cloneSkill(skill);
+    }
     soundFx.playEquip();
     this.recalculatePlayerStats();
-    this.saveState();
     this.notify();
   }
 
@@ -1191,7 +1357,6 @@ class GameManager {
       this.state.playerFighter.equippedSkills[idx] = cloneSkill(newSkill);
     }
     this.state.pendingSkillReplacement = null;
-    this.state.pendingSkillOffer = null;
     soundFx.playEquip();
     this.recalculatePlayerStats();
     this.saveState();
@@ -1200,29 +1365,6 @@ class GameManager {
 
   public dismissSkillReplacement() {
     this.state.pendingSkillReplacement = null;
-    this.notify();
-  }
-
-  public rerollCost(): number {
-    const n = this.state.offerRerolls || 0;
-    return n === 0 ? 0 : 25 * 2 ** (n - 1);
-  }
-
-  // "Show another skill": only for an open offer; the first one is free, then the price doubles
-  public rerollSkill(): boolean {
-    if (!this.state.pendingSkillOffer) return false;
-    const cost = this.rerollCost();
-    if (this.state.coins < cost) return false;
-    this.state.coins -= cost;
-    this.state.offerRerolls = (this.state.offerRerolls || 0) + 1;
-    this.state.pendingSkillOffer = getRandomSkill();
-    soundFx.playCoin();
-    this.notify();
-    return true;
-  }
-
-  public dismissSkillOffer() {
-    this.state.pendingSkillOffer = null;
     this.notify();
   }
 
@@ -1349,6 +1491,8 @@ class GameManager {
 
   // STAGE SELECT
   public selectStage(world: number, subStage: number) {
+    // Choosing a stage by hand ends farm-until-ready
+    this.state.farm = null;
     this.state.currentWorld = world;
     this.state.currentSubStage = subStage;
     this.state.lossStreak = 0;

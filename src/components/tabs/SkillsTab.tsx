@@ -4,6 +4,7 @@ import { RARITY_CONFIG, skillSynergies } from '../../core/lootGenerator';
 import { ui } from '../../i18n/ui';
 import { skillBonus, skillDescription, skillName, skillQuote, rarityName } from '../../i18n/content-helpers';
 import { t } from '../../i18n/translations';
+import { skillIconComponent } from '../SkillIcon';
 import { 
   Zap, 
   Sparkles, 
@@ -21,19 +22,7 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ state }) => {
-  const getSkillIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Zap': return Zap;
-      case 'Flame': return Flame;
-      case 'Shield': return Shield;
-      case 'Wind': return Wind;
-      case 'HeartPulse': return HeartPulse;
-      case 'Crosshair': return Crosshair;
-      case 'CircleDot': return CircleDot;
-      case 'Skull': return Skull;
-      default: return Sparkles;
-    }
-  };
+  const getSkillIcon = skillIconComponent;
 
   return (
     <div className="w-full flex flex-col p-3 bg-[#06070a] space-y-3.5 pb-16">

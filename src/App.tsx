@@ -10,7 +10,8 @@ import { ShopTab } from './components/tabs/ShopTab';
 import { ArenaTab } from './components/tabs/ArenaTab';
 import { ProfileTab } from './components/tabs/ProfileTab';
 import { LootCardModal } from './components/LootCardModal';
-import { SkillSelectModal } from './components/SkillSelectModal';
+import { SkillDraftModal } from './components/SkillSelectModal';
+import { LeaguePromotionModal } from './components/LeaguePromotionModal';
 import { RewardedAdModal } from './components/RewardedAdModal';
 import { SettingsModal } from './components/SettingsModal';
 import { DailyLoginModal } from './components/DailyLoginModal';
@@ -21,7 +22,7 @@ import { NextStepCard } from './components/NextStepCard';
 import { BossBonusCard, BuffOfferCard, NotifyAskCard } from './components/OfferCards';
 import { ToastStack } from './components/ToastStack';
 import { getStageData } from './core/stageDatabase';
-import { fightOdds } from './core/combat';
+import { stageOdds } from './core/combat';
 import { ui } from './i18n/ui';
 import { Stage } from './types/game';
 
@@ -79,7 +80,7 @@ export function App() {
 
   // The boss bonus offer keeps its time while a loot/skill card or another modal covers it
   const bonusCovered = Boolean(
-    state.bossBonus && (state.pendingLootDrop || state.pendingSkillOffer || state.pendingSkillReplacement ||
+    state.bossBonus && (state.pendingLootDrop || state.pendingSkillDraft || state.pendingSkillReplacement || state.pendingPromotion ||
       state.isDailyLoginOpen || state.isOfflineRewardOpen || state.activeAdModal || isSettingsOpen || state.isProfileOpen)
   );
   useEffect(() => {
@@ -89,7 +90,7 @@ export function App() {
   }, [bonusCovered]);
 
   const isBattlePaused = Boolean(
-    state.pendingLootDrop || state.pendingSkillOffer || state.pendingSkillReplacement ||
+    state.pendingLootDrop || state.pendingSkillDraft || state.pendingSkillReplacement || state.pendingPromotion ||
     state.isDailyLoginOpen || state.isOfflineRewardOpen ||
     state.activeAdModal || isSettingsOpen || state.isProfileOpen
   );
@@ -128,10 +129,7 @@ export function App() {
           <StatBar
             stats={state.playerFighter.stats}
             lang={state.lang}
-            odds={(() => {
-              const opp = getStageData(state.currentWorld, state.currentSubStage).opponent;
-              return fightOdds(state.playerFighter.stats, opp.stats, opp.profile);
-            })()}
+            odds={stageOdds(state.playerFighter.stats, getStageData(state.currentWorld, state.currentSubStage))}
           />
         </div>
 
@@ -172,10 +170,13 @@ export function App() {
           <LootCardModal item={state.pendingLootDrop} state={state} />
         )}
 
-        {/* 7. Roguelite Skill Decision Modal (ROLL AGAIN vs CLAIM) */}
-        {state.pendingSkillOffer && (
-          <SkillSelectModal skill={state.pendingSkillOffer} state={state} />
+        {/* 7. Skill draft: choose 1 of 3 (free, no reroll) */}
+        {state.pendingSkillDraft && (
+          <SkillDraftModal key={`${state.draftsPicked}:${state.pendingSkillDraft.options.map((o) => o.id).join('|')}`} draft={state.pendingSkillDraft} state={state} />
         )}
+
+        {/* 7b. League promotion celebration */}
+        {state.pendingPromotion && !state.pendingSkillDraft && <LeaguePromotionModal state={state} />}
 
         {/* 8. Safe Skill Deck Replacement Modal (When Deck is 6/6) */}
         {state.pendingSkillReplacement && (

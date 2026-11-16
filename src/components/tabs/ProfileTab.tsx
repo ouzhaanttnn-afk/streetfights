@@ -4,6 +4,7 @@ import { PREMIUM_AVATARS, FIGHTER_TITLES } from "../../core/avatarsData";
 import { t } from "../../i18n/translations";
 import { ui } from "../../i18n/ui";
 import { avatarName, titleName } from "../../i18n/content-helpers";
+import { LeagueBadge } from "../LeagueBadge";
 import { 
   User, 
   Edit3, 
@@ -127,6 +128,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ state, onClose }) => {
                 <h2 className="text-lg font-black text-white truncate tracking-tight">
                   {state.playerFighter.name}
                 </h2>
+                <LeagueBadge league={state.league || 0} lang={state.lang} />
                 <button
                   onClick={() => setIsEditingName(true)}
                   className="p-1 text-zinc-400 hover:text-amber-400 active:scale-95 transition-colors"

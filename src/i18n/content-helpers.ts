@@ -2,6 +2,8 @@
 // translations live in content.ts. Every helper falls back to the English data string.
 import type { Language } from './translations';
 import type { EquipmentItem, Skill } from '../types/game';
+import { ui } from './ui';
+import { leagueId, leagueOfWorld, legendRank, roman, worldInLeague } from '../core/leagues';
 import {
   AVATAR_TEXT, COSMETIC_TEXT, ITEM_TEXT, OPPONENT_TEXT, RARITY_NAME, SKILL_BONUS_TEMPLATE, SKILL_CATEGORY, SKILL_TEXT,
   STAGE_LABEL, SUB_BOSS_LABEL, SUB_BOSS_TITLE, TITLE_TEXT, WORLD_NAME, fill, tc,
@@ -44,14 +46,31 @@ export function rarityName(rarity: string, fallback: string, lang: Language): st
   return tc(lang, RARITY_NAME[rarity], fallback);
 }
 
+// World names are the same in every league; the league is shown next to them (src/core/leagues.ts)
 export function worldName(world: number, fallback: string, lang: Language): string {
-  const base = ((Math.max(world, 1) - 1) % 5) + 1;
-  const loop = Math.floor((Math.max(world, 1) - 1) / 5);
-  const name = tc(lang, WORLD_NAME[base], fallback.replace(/\s*∞\d+$/, ''));
-  return loop > 0 ? `${name} ∞${loop}` : name;
+  return tc(lang, WORLD_NAME[worldInLeague(world)], fallback.replace(/\s*∞\d+$/, ''));
 }
+/** "Silver", "Legend", "Legend II" ... */
+export function leagueName(league: number, lang: Language): string {
+  const base = ui(lang, 'league_' + leagueId(league));
+  const rank = legendRank(league);
+  return rank > 1 ? `${base} ${roman(rank)}` : base;
+}
+/** "Silver League" */
+export function leagueLabel(league: number, lang: Language): string {
+  return ui(lang, 'league_name', { league: leagueName(league, lang) });
+}
+/** Bronze keeps "Stage 2-4"; later leagues read "Silver 2-4" (world inside the league) */
 export function stageLabel(world: number, sub: number, lang: Language): string {
+  const league = leagueOfWorld(world);
+  if (league > 0) return `${leagueName(league, lang)} ${worldInLeague(world)}-${sub}`;
   return fill(tc(lang, STAGE_LABEL, 'Stage {w}-{s}'), { w: world, s: sub });
+}
+/** One-line description of a league modifier ("Opponents +8% dodge") */
+export function leagueModText(mod: { id: string; value: number } | undefined, lang: Language): string {
+  if (!mod) return '';
+  const n = mod.id === 'armor' || mod.id === 'haste' ? Math.round(mod.value * 100) : mod.value;
+  return ui(lang, 'lmod_' + mod.id, { n });
 }
 
 const SUB_BOSS_SUFFIX = ' (Sub-Boss)';

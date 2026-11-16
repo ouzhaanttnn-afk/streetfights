@@ -1,4 +1,6 @@
 import { ArenaEnvironment, OpponentProfile, Stage } from '../types/game';
+import { WORLD_MECHANICS } from './combat';
+import { leagueModifier, leagueOfWorld, leagueRewardMult } from './leagues';
 
 interface WorldConfig {
   world: number;
@@ -73,24 +75,27 @@ const WORLDS: WorldConfig[] = [
 // Fighting styles rotate across the roster so neighbouring stages feel different.
 const NORMAL_PROFILES: OpponentProfile[] = ['aggressive', 'defensive', 'counter', 'fast', 'heavy'];
 
-// Tuned with scripts/run-balance-sim.mjs (docs/BALANCE.md): ~15-25% losses on normal stages up to 100, bosses 20-60%,
-// fights 6-10 s at 1x, a soft wall after stage ~100. Growth was 1.03, which made late opponents outscale everything.
-export const BALANCE = { linear: 0.34, growth: 1.008, boss: 1.05, subBoss: 1.0, firstWorldBoss: 0.9 };
+// Tuned with scripts/run-balance-sim.mjs (docs/BALANCE.md). Growth was 1.03, which made late opponents outscale everything.
+// subBossMech: strength of the sub-boss version of the world's boss mechanic (the boss has 1).
+// coinBase/coinPerStage/coinBoss: coin reward per win; xp*: XP per win.
+export const BALANCE = {
+  linear: 0.34, growth: 1.008, boss: 1.05, subBoss: 1.0, firstWorldBoss: 0.9, subBossMech: 0.5,
+  coinBase: 40, coinPerStage: 25, coinBoss: 2.5, xpBase: 25, xpPerStage: 15,
+};
 
 export const WORLD_COUNT = WORLDS.length;
 
+// World names no longer carry a loop suffix: the league (src/core/leagues.ts) says which round it is.
 export function getWorldName(worldNum: number): string {
-  const idx = (Math.max(worldNum, 1) - 1) % WORLDS.length;
-  const loop = Math.floor((Math.max(worldNum, 1) - 1) / WORLDS.length);
-  return loop > 0 ? `${WORLDS[idx].worldName} ∞${loop}` : WORLDS[idx].worldName;
+  return WORLDS[(Math.max(worldNum, 1) - 1) % WORLDS.length].worldName;
 }
 
 export function getStageData(worldNum: number, subNum: number): Stage {
-  // Worlds loop after the last arena, with stats continuing to scale (endless mode)
+  // Worlds repeat once per league after the last arena, with stats continuing to scale
   const worldIdx = (Math.max(worldNum, 1) - 1) % WORLDS.length;
-  const loop = Math.floor((Math.max(worldNum, 1) - 1) / WORLDS.length);
+  const league = leagueOfWorld(worldNum);
   const w = WORLDS[worldIdx];
-  const worldName = loop > 0 ? `${w.worldName} ∞${loop}` : w.worldName;
+  const worldName = w.worldName;
   const isBoss = subNum === 10 || subNum === 5;
   const isFinalBoss = subNum === 10;
 
@@ -114,12 +119,20 @@ export function getStageData(worldNum: number, subNum: number): Stage {
   const critDmg = Math.round((1.5 + (totalStageIndex * 0.02)) * 100) / 100;
   const comboRate = Math.min(Math.round((5 + totalStageIndex * 0.9) * 10) / 10, 50);
   const dodgeRate = Math.min(Math.round((4 + totalStageIndex * 0.6) * 10) / 10, 40);
-  const lifesteal = isBoss ? 4.0 : 0.0;
   const stamina = 100 + totalStageIndex * 10;
+  // League modifier: one extra trait per world after Bronze (bosses keep their signature mechanic on top)
+  const mod = leagueModifier(worldNum);
+  const stats = { maxHp, atk, def, spd, critRate, comboRate, dodgeRate, lifesteal: 0 };
+  if (mod?.id === 'dodge') stats.dodgeRate = Math.min(60, stats.dodgeRate + mod.value);
+  else if (mod?.id === 'lifesteal') stats.lifesteal = mod.value;
+  else if (mod?.id === 'crit') stats.critRate = Math.min(70, stats.critRate + mod.value);
+  else if (mod?.id === 'armor') stats.def = Math.round(stats.def * (1 + mod.value));
+  else if (mod?.id === 'haste') stats.spd = Math.round(stats.spd * (1 + mod.value));
 
   const powerScore = Math.round(
-    maxHp * 0.4 + atk * 3.5 + def * 2.8 + spd * 2.5 + critRate * 8 + comboRate * 7 + dodgeRate * 7
+    stats.maxHp * 0.4 + stats.atk * 3.5 + stats.def * 2.8 + stats.spd * 2.5 + stats.critRate * 8 + stats.comboRate * 7 + stats.dodgeRate * 7
   );
+  const rewardMult = leagueRewardMult(league);
 
   return {
     id: `stage_${worldNum}_${subNum}`,
@@ -144,22 +157,26 @@ export function getStageData(worldNum: number, subNum: number): Stage {
         shoeColor: opponentTemplate.shoeColor,
       },
       stats: {
-        hp: maxHp,
-        maxHp: maxHp,
-        atk,
-        def,
-        spd,
-        critRate,
+        hp: stats.maxHp,
+        maxHp: stats.maxHp,
+        atk: stats.atk,
+        def: stats.def,
+        spd: stats.spd,
+        critRate: stats.critRate,
         critDmg,
-        comboRate,
-        dodgeRate,
-        lifesteal,
+        comboRate: stats.comboRate,
+        dodgeRate: stats.dodgeRate,
+        lifesteal: stats.lifesteal,
         stamina,
         powerScore,
       },
     },
-    coinReward: Math.round((40 + totalStageIndex * 25) * (isBoss ? 2.5 : 1.0)),
+    coinReward: Math.round((BALANCE.coinBase + totalStageIndex * BALANCE.coinPerStage) * (isBoss ? BALANCE.coinBoss : 1.0) * rewardMult),
     gemReward: isBoss ? 15 : 2,
-    xpReward: Math.round((25 + totalStageIndex * 15) * (isBoss ? 2.0 : 1.0)),
+    xpReward: Math.round((BALANCE.xpBase + totalStageIndex * BALANCE.xpPerStage) * (isBoss ? 2.0 : 1.0) * rewardMult),
+    // Every world boss has its world's signature mechanic; the sub-boss gets a weaker version
+    bossMechanic: isBoss ? { id: WORLD_MECHANICS[worldIdx], strength: isFinalBoss ? 1 : BALANCE.subBossMech } : undefined,
+    league,
+    leagueModifier: mod,
   };
 }

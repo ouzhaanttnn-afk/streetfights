@@ -1,9 +1,8 @@
 import React from "react";
 import { Skill } from "../types/game";
 import { GameStateData, gameManager } from "../core/gameState";
-import { t } from "../i18n/translations";
 import { ui } from "../i18n/ui";
-import { skillName } from "../i18n/content-helpers";
+import { skillBonus, skillName } from "../i18n/content-helpers";
 import { 
   Zap, 
   ArrowRight, 
@@ -60,20 +59,20 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
         <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-400/50 mb-3 flex items-center justify-between">
           <div>
             <span className="text-[10px] font-mono font-black text-amber-400 uppercase tracking-wider">
-              NEW SKILL:
+              {ui(state.lang, 'replace_new')}
             </span>
             <div className="text-xs font-black text-white flex items-center gap-1.5 mt-0.5">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>{skillName(newSkill.id, newSkill.name, state.lang)} (Lv.{newSkill.level})</span>
             </div>
             <div className="text-[10px] text-zinc-300 font-medium mt-0.5">
-              {newSkill.bonusText}
+              {skillBonus(newSkill, state.lang)}
             </div>
           </div>
         </div>
 
         <div className="text-[10px] font-black text-zinc-400 mb-2 uppercase tracking-wide">
-          CHOOSE A SKILL TO DISCARD:
+          {ui(state.lang, 'replace_pick')}
         </div>
 
         {/* Equipped Skills Selection List */}
@@ -86,10 +85,10 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
             >
               <div className="min-w-0 pr-2">
                 <div className="text-xs font-black text-zinc-200 group-hover:text-rose-400 transition-colors truncate">
-                  {equipped.name} <span className="text-[10px] text-amber-400 font-mono">Lv.{equipped.level}</span>
+                  {skillName(equipped.id, equipped.name, state.lang)} <span className="text-[10px] text-amber-400 font-mono">Lv.{equipped.level}</span>
                 </div>
                 <div className="text-[10px] text-zinc-400 truncate">
-                  {equipped.bonusText}
+                  {skillBonus(equipped, state.lang)}
                 </div>
               </div>
 
@@ -104,7 +103,7 @@ export const SkillReplaceModal: React.FC<SkillReplaceModalProps> = ({
           onClick={onClose}
           className="mt-3 w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-zinc-300 font-bold text-xs border border-zinc-700 active:scale-95"
         >
-          CANCEL / KEEP CURRENT DECK
+          {ui(state.lang, 'replace_keep')}
         </button>
       </div>
     </div>

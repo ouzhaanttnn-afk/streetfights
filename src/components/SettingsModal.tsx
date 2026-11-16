@@ -18,7 +18,8 @@ import {
   Bell,
   Vibrate,
   Accessibility,
-  MonitorCog
+  MonitorCog,
+  Repeat
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -164,6 +165,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ state, onClose }) 
                 data-notif-toggle
                 className={`w-12 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
                   state.notificationsEnabled ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
+                }`}
+              >
+                <div className="w-5 h-5 rounded-full bg-white shadow-md" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>{ui(state.lang, 'set_always_choose')}</span>
+              </div>
+              <button
+                onClick={() => gameManager.toggleDraftAlwaysChoose()}
+                aria-label={ui(state.lang, 'set_always_choose')}
+                aria-pressed={state.draftAlwaysChoose}
+                data-draft-choose-toggle
+                className={`w-12 h-6 shrink-0 rounded-full transition-colors relative flex items-center p-0.5 ${
+                  state.draftAlwaysChoose ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
+                }`}
+              >
+                <div className="w-5 h-5 rounded-full bg-white shadow-md" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center gap-2 text-xs font-black text-zinc-200">
+                <Repeat className="w-4 h-4 text-emerald-300" />
+                <span>{ui(state.lang, 'set_auto_return')}</span>
+              </div>
+              <button
+                onClick={() => gameManager.toggleAutoReturnToBoss()}
+                aria-label={ui(state.lang, 'set_auto_return')}
+                aria-pressed={state.autoReturnToBoss}
+                data-auto-return-toggle
+                className={`w-12 h-6 shrink-0 rounded-full transition-colors relative flex items-center p-0.5 ${
+                  state.autoReturnToBoss ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'
                 }`}
               >
                 <div className="w-5 h-5 rounded-full bg-white shadow-md" />

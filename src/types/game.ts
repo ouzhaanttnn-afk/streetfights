@@ -50,7 +50,9 @@ export interface Skill {
   bonusText: string;
   statBonus: Partial<StatModifiers>;
   specialProc?: {
-    type: 'double_strike' | 'bicycle_kick' | 'iron_chin' | 'shadow_dodge' | 'vampire' | 'execute' | 'counter_strike';
+    type: 'double_strike' | 'bicycle_kick' | 'iron_chin' | 'shadow_dodge' | 'vampire' | 'execute' | 'counter_strike'
+      // build 19: one new mechanic per family (rules in src/core/combat.ts SKILL_RULES)
+      | 'armor_break' | 'chain_combo' | 'second_wind' | 'sixth_sense' | 'wound' | 'rage_boost';
     chance: number;
     multiplier: number;
   };
@@ -125,6 +127,8 @@ export interface Stage {
   bossMechanic?: { id: BossMechanicId; strength: number };
   /** League index (0 = Bronze) once the world loop is formalised (PLAN_BUILD_19.md C1). */
   league?: number;
+  /** Opponent modifier of this world in leagues after Bronze (src/core/leagues.ts). Strings: ui `lmod_<id>`. */
+  leagueModifier?: { id: 'dodge' | 'lifesteal' | 'crit' | 'armor' | 'haste'; value: number };
 }
 
 export type BossMechanicId = 'enrage' | 'leech' | 'evade' | 'shell' | 'charged';

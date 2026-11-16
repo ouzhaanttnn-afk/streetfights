@@ -1,8 +1,20 @@
 import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../core/gameState';
-import { ACHIEVEMENTS } from '../core/achievements';
+import { ACHIEVEMENTS, Achievement } from '../core/achievements';
+import { leagueName } from '../i18n/content-helpers';
+import { Language } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { Award, Check, Gem } from 'lucide-react';
+
+const TIER_COLOR: Record<Achievement['tier'], string> = { bronze: '#cd7f32', silver: '#cbd5e1', gold: '#fbbf24' };
+
+export function achievementLabel(a: Achievement, lang: Language): string {
+  return ui(lang, a.key, {
+    n: a.n ?? 0,
+    league: a.vars?.league !== undefined ? leagueName(a.vars.league, lang) : '',
+    mech: a.vars?.mech ? ui(lang, 'boss_mech_' + a.vars.mech) : '',
+  });
+}
 
 export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) => {
   const claimed = state.claimedAchievements || [];
@@ -29,7 +41,10 @@ export const AchievementsCard: React.FC<{ state: GameStateData }> = ({ state }) 
           <div key={a.id} className={`flex items-center gap-3 rounded-2xl bg-black/40 border border-white/5 p-2.5 ${done ? 'opacity-55' : ''}`}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between text-[11px] font-black text-zinc-100">
-                <span className="truncate">{ui(state.lang, a.key, { n: a.n ?? 0 })}</span>
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="shrink-0 w-2.5 h-2.5 rounded-full border border-black/50" style={{ background: TIER_COLOR[a.tier] }} data-tier={a.tier} aria-hidden="true" />
+                  <span className="truncate">{achievementLabel(a, state.lang)}</span>
+                </span>
                 <span className="font-mono text-zinc-400 ml-2">{Math.min(value, a.target)}/{a.target}</span>
               </div>
               <div className="h-1.5 mt-1.5 rounded-full bg-black/80 overflow-hidden">

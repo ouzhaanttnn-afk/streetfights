@@ -7,7 +7,7 @@ const ok = (n, c, extra='') => { results.push(`${c ? 'PASS' : 'FAIL'}  ${n} ${ex
 const today = () => new Date().toLocaleDateString('en-CA');
 const URL = process.env.URL || 'http://localhost:5199';
 // Wait until the app has booted and written its save (more reliable than fixed sleeps on a loaded machine)
-const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion === 5; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
+const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')).saveVersion >= 6; } catch { return false; } }, null, { timeout: 20000 }).catch(() => {});
 
 (async () => {
   // ---- 1. Legacy save compatibility (shape written by the ORIGINAL game, before my changes)
@@ -25,7 +25,7 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     const s = await p.evaluate(() => JSON.parse(localStorage.getItem('street_striker_rpg_save_v2')));
     ok('legacy save: level/world/inventory kept', s.playerLevel === 9 && s.currentWorld === 2 && s.inventory.length === 1 && s.totalFightsWon >= 33 && s.bossDefeatedCount === 2, `lvl=${s.playerLevel} inv=${s.inventory.length} fights=${s.totalFightsWon}`);
     ok('legacy save: coins not reset (>=12345)', s.coins >= 12345, `coins=${s.coins}`);
-    ok('legacy save: new fields filled', s.saveVersion === 5 && s.dailyQuests?.length === 4 && s.quality === 'medium');
+    ok('legacy save: new fields filled', s.saveVersion === 6 && s.dailyQuests?.length === 4 && s.quality === 'medium');
     ok('legacy save: daily login opens for old save', await p.getByText(/7-DAY LOGIN REWARDS|7 GÜNLÜK GİRİŞ ÖDÜLÜ/).count() > 0);
     ok('legacy save: no page errors', errs.length === 0, errs.join('|'));
     await b.close();
@@ -267,15 +267,9 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     // speed is locked before the first boss
     await p.evaluate(() => window.__game.cycleBattleSpeed());
     ok('2x speed stays locked before the first boss', (await p.evaluate(() => window.__game.getState().battleSpeed)) === 1);
-    // reroll: only with an open offer, first one free
-    const noOffer = await p.evaluate(() => window.__game.rerollSkill());
-    await p.evaluate(() => { const st = window.__game.getState(); st.pendingSkillOffer = { id:'skill_flurry_master', name:'X', description:'', rarity:'rare', category:'strike', level:1, maxLevel:5, statBonus:{}, iconName:'Zap' }; st.offerRerolls = 0; });
-    const c0 = await p.evaluate(() => window.__game.getState().coins);
-    await p.evaluate(() => window.__game.rerollSkill());
-    const c1 = await p.evaluate(() => window.__game.getState().coins);
-    await p.evaluate(() => window.__game.rerollSkill());
-    const c2 = await p.evaluate(() => window.__game.getState().coins);
-    ok('"another skill": needs an offer, first is free, then costs coins', noOffer === false && c1 === c0 && c2 === c0 - 25, `${c0}->${c1}->${c2}`);
+    // build 19: the paid "another skill" reroll is gone (the draft offers three skills for free)
+    const noReroll = await p.evaluate(() => typeof window.__game.rerollSkill === 'undefined' && typeof window.__game.rerollCost === 'undefined' && !('offerRerolls' in window.__game.getState()));
+    ok('no paid skill reroll left in the game logic', noReroll);
     // import save survives the reload
     await p.evaluate(() => window.__game.importSave(JSON.stringify({ lang:'en', playerLevel: 7, coins: 777777, tutorialStep: 99, lastDailyLoginDate: new Date().toLocaleDateString('en-CA'), dailyLoginStreak:1, claimedDailyDays:[1] })));
     await p.waitForTimeout(4000);

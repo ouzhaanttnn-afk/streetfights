@@ -115,3 +115,10 @@ export function gymStatCapped(stat: keyof StatModifiers, current: FighterStats):
   const cap = STAT_CAPS[stat];
   return cap !== undefined && (current as unknown as Record<string, number>)[stat] >= cap;
 }
+
+// Offline income per minute away (capped at OFFLINE_CAP_MINUTES in notifications.ts). Shared with the balance sim,
+// which models play sessions with breaks in between (docs/BALANCE.md).
+export const OFFLINE = { stageCoinFactor: 0.5, perGymLevel: 0.5, perStage: 1 };
+export function offlineCoinsPerMin(bestStageCoinReward: number, gymLevelSum: number, bestStage: number): number {
+  return Math.max(5, Math.round(bestStageCoinReward * OFFLINE.stageCoinFactor + gymLevelSum * OFFLINE.perGymLevel + bestStage * OFFLINE.perStage));
+}

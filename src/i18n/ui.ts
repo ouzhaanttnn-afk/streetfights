@@ -120,7 +120,6 @@ const S: Record<string, string[]> = {
   crash_reload: ['Yeniden başlat', 'Restart', 'Reiniciar', 'Neu starten', 'Redémarrer', 'Reiniciar', 'Riavvia', '再起動'],
   ads_left: ['Bugün {n} hak kaldı', '{n} left today', 'Quedan {n} hoy', 'Heute noch {n}', 'Encore {n} aujourd’hui', 'Restam {n} hoje', 'Ancora {n} oggi', '本日あと{n}回'],
   ads_done: ['Yarın yine gel', 'Come back tomorrow', 'Vuelve mañana', 'Komm morgen wieder', 'Reviens demain', 'Volte amanhã', 'Torna domani', 'また明日'],
-  reroll_free: ['Ücretsiz', 'Free', 'Gratis', 'Gratis', 'Gratuit', 'Grátis', 'Gratis', '無料'],
   drag_rotate: ['Çevirmek için sürükle', 'Drag to rotate', 'Arrastra para girar', 'Zum Drehen ziehen', 'Glisse pour tourner', 'Arraste para girar', 'Trascina per ruotare', 'ドラッグで回転'],
   deck_full_title: ['Yetenek destesi dolu (6/6)', 'Skill deck full (6/6)', 'Mazo lleno (6/6)', 'Deck voll (6/6)', 'Deck plein (6/6)', 'Deck cheio (6/6)', 'Mazzo pieno (6/6)', 'スキルデッキが満杯 (6/6)'],
   deck_full_hint: ['Yeni yetenek için çıkaracağın yeteneği seç', 'Pick a skill to replace with the new one', 'Elige qué habilidad reemplazar', 'Wähle eine Fähigkeit zum Ersetzen', 'Choisis la compétence à remplacer', 'Escolha a habilidade a substituir', 'Scegli l’abilità da sostituire', '入れ替えるスキルを選択'],
@@ -207,12 +206,80 @@ const S: Record<string, string[]> = {
   off_earn: ['AFK kazancı', 'AFK earnings', 'Ganancias AFK', 'AFK-Gewinn', 'Gains AFK', 'Ganhos AFK', 'Guadagni AFK', '放置報酬'],
   off_claim: ['AL', 'CLAIM', 'COBRAR', 'ABHOLEN', 'PRENDRE', 'PEGAR', 'PRENDI', '受取'],
   off_double: ['REKLAMLA 2X', '2X WITH AD', '2X CON ANUNCIO', '2X MIT WERBUNG', '2X AVEC PUB', '2X COM ANÚNCIO', '2X CON ANNUNCIO', '広告で2倍'],
+  // ---- Build 19 (docs/PLAN_BUILD_19.md B1-B3, C1, C4) ----
+  // Boss signature mechanics: name (VS card, defeat panel) and a one-line counter tip
+  boss_mech_enrage: ['Öfke Patlaması', 'Enrage', 'Furia', 'Raserei', 'Rage', 'Fúria', 'Furia', '激昂'],
+  boss_mech_leech: ['Kan Emici Isırık', 'Leech Bite', 'Mordisco vampírico', 'Blutbiss', 'Morsure vampire', 'Mordida vampírica', 'Morso vampiro', '吸血バイト'],
+  boss_mech_evade: ['Kaçış Duruşu', 'Evasion Stance', 'Postura evasiva', 'Ausweichhaltung', "Posture d'esquive", 'Postura evasiva', 'Postura evasiva', '回避の構え'],
+  boss_mech_shell: ['Demir Kalkan', 'Iron Shell', 'Coraza de hierro', 'Eisenpanzer', 'Carapace de fer', 'Casco de ferro', 'Guscio di ferro', '鉄壁の殻'],
+  boss_mech_charged: ['Yüklü Darbe', 'Charged Strike', 'Golpe cargado', 'Aufgeladener Schlag', 'Frappe chargée', 'Golpe carregado', 'Colpo caricato', 'チャージ攻撃'],
+  boss_mech_enrage_hint: ["Canı %30'un altına inince hızlanır: SÜPER'i bitiriş için sakla.", 'Below 30% HP it swings faster: save your SUPER for the finish.', 'Con menos del 30% de vida golpea más rápido: guarda el SÚPER para el final.', 'Unter 30% LP schlägt er schneller: heb dir den SUPER fürs Finish auf.', 'Sous 30 % de PV il frappe plus vite : garde ton SUPER pour la fin.', 'Abaixo de 30% de vida ele ataca mais rápido: guarde o SUPER para o final.', 'Sotto il 30% di PV colpisce più veloce: tieni la SUPER per il finale.', 'HP30%以下で攻撃が速くなる。スーパーはとどめまで温存しよう。'],
+  boss_mech_leech_hint: ['Her üç vuruşta bir can çalar: kritik ve SÜPER ile hızlı indir.', 'Every third hit heals it: burst it down with crits and SUPER.', 'Cada tercer golpe lo cura: derríbalo rápido con críticos y SÚPER.', 'Jeder dritte Treffer heilt ihn: mit Krits und SUPER schnell umhauen.', 'Un coup sur trois le soigne : achève-le vite avec critiques et SUPER.', 'Cada terceiro golpe o cura: derrube-o rápido com críticos e SUPER.', 'Ogni terzo colpo lo cura: abbattilo in fretta con critici e SUPER.', '3発ごとに回復する。クリティカルとスーパーで一気に倒そう。'],
+  boss_mech_evade_hint: ['12 saniyede bir kısa süre neredeyse her şeyden kaçar: SÜPER ve kombolar yine isabet eder.', 'Every 12 s it dodges almost everything for a moment: SUPER and combos still land.', 'Cada 12 s esquiva casi todo un momento: el SÚPER y los combos sí aciertan.', 'Alle 12 s weicht sie kurz fast allem aus: SUPER und Kombos treffen trotzdem.', 'Toutes les 12 s elle esquive presque tout : le SUPER et les combos touchent quand même.', 'A cada 12 s ela desvia de quase tudo: SUPER e combos ainda acertam.', 'Ogni 12 s schiva quasi tutto per un attimo: SUPER e combo vanno comunque a segno.', '12秒ごとにほぼ全てを回避する。スーパーとコンボは当たる。'],
+  boss_mech_shell_hint: ['10 saniyede bir hasarı emen kalkan açar: kombo vuruşları onu üç kat hızlı kırar.', 'A shell soaks up damage every 10 s: combo hits break it three times faster.', 'Cada 10 s una coraza absorbe daño: los combos la rompen tres veces más rápido.', 'Alle 10 s schluckt ein Panzer Schaden: Kombotreffer brechen ihn dreimal so schnell.', 'Toutes les 10 s une carapace absorbe les dégâts : les combos la brisent trois fois plus vite.', 'A cada 10 s um casco absorve dano: combos o quebram três vezes mais rápido.', 'Ogni 10 s un guscio assorbe i danni: le combo lo rompono tre volte più in fretta.', '10秒ごとにダメージを吸収する殻を張る。コンボは3倍の速さで壊せる。'],
+  boss_mech_charged_hint: ["Her 5. saldırı büyük bir yüklü darbedir: hazırlanırken KORUN'a bas.", 'Every 5th swing is a huge charged strike: tap GUARD during the wind-up.', 'Cada 5.º ataque es un golpe cargado enorme: pulsa GUARDIA durante la carga.', 'Jeder 5. Schlag ist ein riesiger Ladeschlag: tippe beim Ausholen auf BLOCK.', "Une attaque sur cinq est une énorme frappe chargée : touche GARDE pendant l'élan.", 'Cada 5º ataque é um golpe carregado enorme: toque em DEFENDER durante a carga.', 'Ogni 5° attacco è un enorme colpo caricato: tocca GUARDIA durante la carica.', '5回に1回、強力なチャージ攻撃が来る。溜めの間にガードしよう。'],
+  boss_signature: ['İMZA HAMLESİ', 'SIGNATURE MOVE', 'MOVIMIENTO ESTRELLA', 'SPEZIALTECHNIK', 'COUP SIGNATURE', 'GOLPE ASSINATURA', 'MOSSA FIRMA', '必殺技'],
+  // Fight callouts for the mechanics
+  c_enrage: ['ÖFKELENDİ!', 'ENRAGED!', '¡FURIOSO!', 'RASEREI!', 'ENRAGÉ !', 'FURIOSO!', 'FURIOSO!', '激昂!'],
+  c_bite: ['ISIRIK!', 'BITE!', '¡MORDISCO!', 'BISS!', 'MORSURE !', 'MORDIDA!', 'MORSO!', 'バイト!'],
+  c_evade: ['KAÇIŞ DURUŞU!', 'EVASION!', '¡EVASIÓN!', 'AUSWEICHEN!', 'ESQUIVE !', 'EVASÃO!', 'EVASIONE!', '回避の構え!'],
+  c_shell: ['KALKAN!', 'SHELL UP!', '¡CORAZA!', 'PANZER!', 'CARAPACE !', 'CASCO!', 'GUSCIO!', '鉄壁!'],
+  c_shell_break: ['KALKAN KIRILDI!', 'SHELL BROKEN!', '¡CORAZA ROTA!', 'PANZER GEBROCHEN!', 'CARAPACE BRISÉE !', 'CASCO QUEBRADO!', 'GUSCIO ROTTO!', '殻を破った!'],
+  c_charging: ['YÜKLENİYOR!', 'CHARGING!', '¡CARGANDO!', 'LÄDT AUF!', 'CHARGE !', 'CARREGANDO!', 'CARICA!', 'チャージ中!'],
+  c_guard_now: ['ŞİMDİ KORUN!', 'GUARD NOW!', '¡GUARDIA YA!', 'JETZT BLOCKEN!', 'GARDE !', 'DEFENDA JÁ!', 'GUARDIA ORA!', '今ガード!'],
+  // Skill draft (choose 1 of 3, free)
+  draft_title: ['YETENEK SEÇ', 'CHOOSE A SKILL', 'ELIGE UNA HABILIDAD', 'WÄHLE EINE FÄHIGKEIT', 'CHOISIS UNE COMPÉTENCE', 'ESCOLHA UMA HABILIDADE', "SCEGLI UN'ABILITÀ", 'スキルを選ぶ'],
+  draft_sub: ['3 yetenekten birini seç · ücretsiz', 'Pick 1 of 3 · free', 'Elige 1 de 3 · gratis', 'Wähle 1 von 3 · gratis', 'Choisis 1 sur 3 · gratuit', 'Escolha 1 de 3 · grátis', 'Scegline 1 su 3 · gratis', '3つから1つ選ぶ・無料'],
+  draft_new: ['YENİ', 'NEW', 'NUEVA', 'NEU', 'NOUVEAU', 'NOVA', 'NUOVA', '新規'],
+  draft_levelup: ['SEVİYE ATLAR → Lv.{n}', 'LEVEL UP → Lv.{n}', 'SUBE DE NIVEL → Nv.{n}', 'LEVEL-UP → Lv.{n}', 'NIVEAU SUPÉRIEUR → Nv.{n}', 'SOBE DE NÍVEL → Nv.{n}', 'SALE DI LIVELLO → Lv.{n}', 'レベルアップ → Lv.{n}'],
+  draft_recommended: ['ÖNERİLEN', 'RECOMMENDED', 'RECOMENDADA', 'EMPFOHLEN', 'RECOMMANDÉ', 'RECOMENDADA', 'CONSIGLIATA', 'おすすめ'],
+  draft_auto: ['Otomatik seçim: {n} sn', 'Auto pick in {n}s', 'Elección automática en {n} s', 'Automatische Wahl in {n} s', 'Choix auto dans {n} s', 'Escolha automática em {n} s', 'Scelta automatica tra {n} s', '{n}秒後に自動選択'],
+  draft_auto_stop: ['Kendin seçmek için dokun', 'Tap to choose yourself', 'Toca para elegir tú', 'Tippen, um selbst zu wählen', 'Touche pour choisir toi-même', 'Toque para escolher você', 'Tocca per scegliere tu', 'タップで自分で選ぶ'],
+  draft_pick: ['SEÇ', 'CHOOSE', 'ELEGIR', 'WÄHLEN', 'CHOISIR', 'ESCOLHER', 'SCEGLI', '選ぶ'],
+  draft_swap: ['Deste dolu: biriyle değiştir', 'Deck full: swap one out', 'Mazo lleno: cambia una', 'Deck voll: eine tauschen', 'Deck plein : en remplacer une', 'Deck cheio: troque uma', 'Mazzo pieno: sostituiscine una', 'デッキ満杯：入れ替え'],
+  set_always_choose: ['Yetenekleri hep ben seçeyim', 'Always let me choose skills', 'Elegir siempre yo las habilidades', 'Fähigkeiten immer selbst wählen', 'Toujours choisir mes compétences', 'Sempre escolher as habilidades', 'Scegli sempre tu le abilità', 'スキルは常に自分で選ぶ'],
+  set_auto_return: ["Hazır olunca boss'a dön", 'Return to the boss when ready', 'Volver al jefe cuando estés listo', 'Zum Boss zurück, wenn bereit', 'Revenir au boss une fois prêt', 'Voltar ao chefe quando pronto', 'Torna dal boss quando sei pronto', '準備ができたらボスに戻る'],
+  // Deck-full swap card
+  replace_new: ['YENİ YETENEK', 'NEW SKILL', 'NUEVA HABILIDAD', 'NEUE FÄHIGKEIT', 'NOUVELLE COMPÉTENCE', 'NOVA HABILIDADE', 'NUOVA ABILITÀ', '新スキル'],
+  replace_pick: ['DEĞİŞTİRİLECEK YETENEĞİ SEÇ', 'CHOOSE A SKILL TO SWAP OUT', 'ELIGE LA HABILIDAD A CAMBIAR', 'WÄHLE DIE FÄHIGKEIT ZUM TAUSCHEN', 'CHOISIS LA COMPÉTENCE À REMPLACER', 'ESCOLHA A HABILIDADE A TROCAR', "SCEGLI L'ABILITÀ DA SOSTITUIRE", '入れ替えるスキルを選ぶ'],
+  replace_keep: ['MEVCUT DESTEYİ KORU', 'KEEP CURRENT DECK', 'MANTENER EL MAZO', 'DECK BEHALTEN', 'GARDER LE DECK', 'MANTER O DECK', 'TIENI IL MAZZO', '今のデッキのままにする'],
+  // Farm until ready
+  farm_btn: ['⟳ HAZIR OLANA KADAR FARM', '⟳ FARM UNTIL READY', '⟳ FARMEAR HASTA ESTAR LISTO', '⟳ FARMEN BIS BEREIT', "⟳ FARMER JUSQU'À ÊTRE PRÊT", '⟳ FARMAR ATÉ ESTAR PRONTO', '⟳ FARMA FINO A ESSERE PRONTO', '⟳ 準備できるまで周回'],
+  farm_chip: ['FARM · %{n}', 'FARMING · {n}%', 'FARMEANDO · {n}%', 'FARMEN · {n}%', 'FARM · {n} %', 'FARMANDO · {n}%', 'FARM · {n}%', '周回中 · {n}%'],
+  farm_ready_boss: ["BOSS'A HAZIRSIN ➜", 'BOSS READY ➜', 'LISTO PARA EL JEFE ➜', 'BEREIT FÜR DEN BOSS ➜', 'PRÊT POUR LE BOSS ➜', 'PRONTO PARA O CHEFE ➜', 'PRONTO PER IL BOSS ➜', 'ボスに挑める ➜'],
+  farm_ready_stage: ['{stage} İÇİN HAZIRSIN ➜', 'READY FOR {stage} ➜', 'LISTO PARA {stage} ➜', 'BEREIT FÜR {stage} ➜', 'PRÊT POUR {stage} ➜', 'PRONTO PARA {stage} ➜', 'PRONTO PER {stage} ➜', '{stage}に挑める ➜'],
+  farm_back: ['Takıldığın dövüşe geri dönüyorsun!', 'Back to the fight that stopped you!', '¡De vuelta al combate que te frenó!', 'Zurück zum Kampf, der dich gestoppt hat!', "Retour au combat qui t'a arrêté !", 'De volta à luta que te parou!', 'Di nuovo allo scontro che ti ha fermato!', '止められた試合に再挑戦！'],
+  farm_hint: ['Otomatik mod daha kolay bir bölümde farm yapar, hazır olunca geri döner.', 'Auto mode farms an easier stage and comes back when you are ready.', 'El modo auto farmea un nivel más fácil y vuelve cuando estés listo.', 'Der Automodus farmt eine leichtere Stufe und kehrt zurück, wenn du bereit bist.', 'Le mode auto farme un niveau plus facile et revient quand tu es prêt.', 'O modo auto farma uma fase mais fácil e volta quando você estiver pronto.', 'La modalità auto farma un livello più facile e torna quando sei pronto.', 'オートは簡単なステージで周回し、準備ができたら戻ります。'],
+  // Leagues
+  league_bronze: ['Bronz', 'Bronze', 'Bronce', 'Bronze', 'Bronze', 'Bronze', 'Bronzo', 'ブロンズ'],
+  league_silver: ['Gümüş', 'Silver', 'Plata', 'Silber', 'Argent', 'Prata', 'Argento', 'シルバー'],
+  league_gold: ['Altın', 'Gold', 'Oro', 'Gold', 'Or', 'Ouro', 'Oro', 'ゴールド'],
+  league_platinum: ['Platin', 'Platinum', 'Platino', 'Platin', 'Platine', 'Platina', 'Platino', 'プラチナ'],
+  league_diamond: ['Elmas', 'Diamond', 'Diamante', 'Diamant', 'Diamant', 'Diamante', 'Diamante', 'ダイヤモンド'],
+  league_legend: ['Efsane', 'Legend', 'Leyenda', 'Legende', 'Légende', 'Lenda', 'Leggenda', 'レジェンド'],
+  league_name: ['{league} Ligi', '{league} League', 'Liga {league}', '{league}-Liga', 'Ligue {league}', 'Liga {league}', 'Lega {league}', '{league}リーグ'],
+  promo_title: ['TERFİ!', 'PROMOTED!', '¡ASCENSO!', 'AUFGESTIEGEN!', 'PROMU !', 'PROMOVIDO!', 'PROMOSSO!', '昇格！'],
+  promo_body: ['Rakipler daha güçlü ve her dünyanın yeni bir özelliği var. Altın ve XP x{n}.', 'Tougher opponents and a new twist in every world. Coins and XP x{n}.', 'Rivales más duros y un giro nuevo en cada mundo. Monedas y XP x{n}.', 'Härtere Gegner und in jeder Welt eine neue Wendung. Münzen und XP x{n}.', 'Des adversaires plus coriaces et une nouveauté dans chaque monde. Pièces et XP x{n}.', 'Rivais mais duros e uma novidade em cada mundo. Moedas e XP x{n}.', 'Avversari più duri e una novità in ogni mondo. Monete e XP x{n}.', '敵が強くなり、各ワールドに新しい特性が加わる。コインとXP x{n}。'],
+  promo_reward: ['Terfi ödülü', 'Promotion reward', 'Premio de ascenso', 'Aufstiegsbelohnung', 'Récompense de promotion', 'Prêmio de promoção', 'Premio promozione', '昇格報酬'],
+  league_twist: ['Lig özelliği', 'League twist', 'Giro de liga', 'Liga-Wendung', 'Particularité de ligue', 'Novidade da liga', 'Novità di lega', 'リーグ特性'],
+  lmod_dodge: ['Rakipler +%{n} kaçınma', 'Opponents +{n}% dodge', 'Rivales +{n}% esquiva', 'Gegner +{n}% Ausweichen', 'Adversaires +{n} % esquive', 'Rivais +{n}% esquiva', 'Avversari +{n}% schivata', '敵の回避+{n}%'],
+  lmod_lifesteal: ['Rakipler +%{n} can çalma', 'Opponents +{n}% lifesteal', 'Rivales +{n}% robo de vida', 'Gegner +{n}% Lebensraub', 'Adversaires +{n} % vol de vie', 'Rivais +{n}% roubo de vida', 'Avversari +{n}% furto vita', '敵の吸血+{n}%'],
+  lmod_crit: ['Rakipler +%{n} kritik', 'Opponents +{n}% crit', 'Rivales +{n}% crítico', 'Gegner +{n}% Krit', 'Adversaires +{n} % critique', 'Rivais +{n}% crítico', 'Avversari +{n}% critico', '敵の会心+{n}%'],
+  lmod_armor: ['Rakipler +%{n} savunma', 'Opponents +{n}% DEF', 'Rivales +{n}% DEF', 'Gegner +{n}% VER', 'Adversaires +{n} % DÉF', 'Rivais +{n}% DEF', 'Avversari +{n}% DIF', '敵の防御+{n}%'],
+  lmod_haste: ['Rakipler +%{n} hız', 'Opponents +{n}% SPD', 'Rivales +{n}% VEL', 'Gegner +{n}% GES', 'Adversaires +{n} % VIT', 'Rivais +{n}% VEL', 'Avversari +{n}% VEL', '敵の素早さ+{n}%'],
+  // Achievements added in build 19
+  a_skill_max: ['Bir yeteneği Lv.5 yap', 'Max out a skill (Lv.5)', 'Sube una habilidad al máximo (Nv.5)', 'Bringe eine Fähigkeit auf Lv.5', 'Monte une compétence au max (Nv.5)', 'Maximize uma habilidade (Nv.5)', "Porta un'abilità al massimo (Lv.5)", 'スキルを最大Lv.5に'],
+  a_families: ['{n} farklı türden yetenek kuşan', 'Equip skills from {n} families', 'Equipa habilidades de {n} familias', 'Rüste Fähigkeiten aus {n} Familien aus', 'Équipe des compétences de {n} familles', 'Equipe habilidades de {n} famílias', 'Equipaggia abilità di {n} famiglie', '{n}系統のスキルを装備'],
+  a_drafts: ['Seçimlerden {n} yetenek al', 'Pick {n} skills in drafts', 'Elige {n} habilidades', 'Wähle {n} Fähigkeiten aus', 'Choisis {n} compétences', 'Escolha {n} habilidades', 'Scegli {n} abilità', 'スキルを{n}回選ぶ'],
+  a_mech: ["{mech} boss'unu yen", 'Beat the {mech} boss', 'Vence al jefe de {mech}', 'Besiege den Boss mit {mech}', 'Bats le boss {mech}', 'Vença o chefe de {mech}', 'Sconfiggi il boss {mech}', '{mech}のボスを倒す'],
+  a_block_charged: ['{n} yüklü darbeyi blokla', 'Guard {n} charged strikes', 'Bloquea {n} golpes cargados', 'Blocke {n} Ladeschläge', 'Pare {n} frappes chargées', 'Bloqueie {n} golpes carregados', 'Para {n} colpi caricati', 'チャージ攻撃を{n}回ガード'],
+  a_league: ['{league} Ligine yüksel', 'Reach the {league} League', 'Llega a la Liga {league}', 'Erreiche die {league}-Liga', 'Atteins la Ligue {league}', 'Chegue à Liga {league}', 'Raggiungi la Lega {league}', '{league}リーグに到達'],
 };
 
 export function ui(lang: Language, key: string, vars?: Record<string, string | number>): string {
   const row = S[key];
   if (!row) return key;
   let text = row[ORDER.indexOf(lang)] ?? row[1];
-  if (vars) for (const [k, v] of Object.entries(vars)) text = text.replace(`{${k}}`, String(v));
+  if (vars) for (const [k, v] of Object.entries(vars)) text = text.split(`{${k}}`).join(String(v));
   return text;
 }

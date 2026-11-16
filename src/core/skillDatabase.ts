@@ -173,10 +173,134 @@ export const SKILL_DATABASE: Skill[] = [
     bonusText: '+12 SPD, +4% Dodge Rate',
     statBonus: { spd: 12, dodgeRate: 4 },
   },
+  // BUILD 19: one new skill per family, each with its own mechanic (rules in src/core/combat.ts SKILL_RULES)
+  {
+    id: 'skill_armor_breaker',
+    name: 'Armor Breaker',
+    description: 'Every landed blow cracks the guard a little more.',
+    quote: '"Walls are just doors you have not hit yet."',
+    rarity: 'rare',
+    category: 'strike',
+    level: 1,
+    maxLevel: 5,
+    iconName: 'Hammer',
+    bonusText: '+16 ATK, +3% Crit Rate, Armor Break',
+    statBonus: { atk: 16, critRate: 3 },
+    // each landed hit removes 5% of the target's DEF for the rest of the fight (max 8 stacks)
+    specialProc: { type: 'armor_break', chance: 100, multiplier: 0.05 },
+  },
+  {
+    id: 'skill_chain_lightning',
+    name: 'Chain Lightning',
+    description: 'A combo that keeps finding another opening.',
+    quote: '"One more. Always one more."',
+    rarity: 'legendary',
+    category: 'combo',
+    level: 1,
+    maxLevel: 5,
+    iconName: 'Zap',
+    bonusText: '+7% Combo Rate, +4 SPD, Chain Combo',
+    statBonus: { comboRate: 7, spd: 4 },
+    // a combo follow-up chains into another one with 45% (at most two extra hits)
+    specialProc: { type: 'chain_combo', chance: 45, multiplier: 0.35 },
+  },
+  {
+    id: 'skill_second_wind',
+    name: 'Second Wind',
+    description: 'Once per fight, refuse to go down and catch your breath.',
+    quote: '"Not yet."',
+    rarity: 'epic',
+    category: 'defense',
+    level: 1,
+    maxLevel: 5,
+    iconName: 'LifeBuoy',
+    bonusText: '+150 HP, +10 DEF, Second Wind',
+    statBonus: { hp: 150, def: 10 },
+    // once per fight below 25% HP: heal 35% of max HP
+    specialProc: { type: 'second_wind', chance: 100, multiplier: 0.35 },
+  },
+  {
+    id: 'skill_sixth_sense',
+    name: 'Sixth Sense',
+    description: 'Feel the big punch coming and slip it.',
+    quote: '"I saw that one yesterday."',
+    rarity: 'epic',
+    category: 'speed',
+    level: 1,
+    maxLevel: 5,
+    iconName: 'Eye',
+    bonusText: '+5% Dodge Rate, +6 SPD, Sixth Sense',
+    statBonus: { dodgeRate: 5, spd: 6 },
+    // 50% to slip heavy, critical and charged strikes completely
+    specialProc: { type: 'sixth_sense', chance: 50, multiplier: 1 },
+  },
+  {
+    id: 'skill_grievous_bite',
+    name: 'Grievous Strikes',
+    description: 'Wounds that do not close: the opponent heals only half as much.',
+    quote: '"Patch that up. I dare you."',
+    rarity: 'rare',
+    category: 'lifesteal',
+    level: 1,
+    maxLevel: 5,
+    iconName: 'Droplet',
+    bonusText: '+4% Lifesteal, +8 ATK, Grievous Wounds',
+    statBonus: { lifesteal: 4, atk: 8 },
+    // halves the opponent's healing (lifesteal, leech bites)
+    specialProc: { type: 'wound', chance: 100, multiplier: 0.5 },
+  },
+  {
+    id: 'skill_fury_engine',
+    name: 'Fury Engine',
+    description: 'Anger burns hotter: the SUPER bar fills much faster.',
+    quote: '"Keep poking. See what happens."',
+    rarity: 'epic',
+    category: 'rage',
+    level: 1,
+    maxLevel: 5,
+    iconName: 'Gauge',
+    bonusText: '+12 ATK, +15% Crit DMG, Fury',
+    statBonus: { atk: 12, critDmg: 0.15 },
+    // rage builds 50% faster
+    specialProc: { type: 'rage_boost', chance: 100, multiplier: 1.5 },
+  },
 ];
 
-export function getRandomSkill(): Skill {
-  const index = Math.floor(Math.random() * SKILL_DATABASE.length);
-  const base = SKILL_DATABASE[index];
-  return { ...base };
+export const DECK_SIZE = 6;
+
+const RARITY_RANK: Record<string, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5, mythic: 6 };
+const fresh = (base: Skill): Skill => ({ ...base, statBonus: { ...base.statBonus }, specialProc: base.specialProc ? { ...base.specialProc } : undefined });
+
+/**
+ * Skill draft (docs/PLAN_BUILD_19.md B1): three different skills to choose from. An owned skill appears as a
+ * level-up; maxed skills never appear. With a full deck at least one option is a level-up when one is possible.
+ * Returns fresh level-1 copies from the database; `levelUp` is true when the deck already has that skill.
+ */
+export function makeDraft(deck: Skill[], rand: () => number = Math.random, size = 3): { skill: Skill; levelUp: boolean }[] {
+  const owned = new Map(deck.map((s) => [s.id, s]));
+  const pool = SKILL_DATABASE.filter((s) => { const o = owned.get(s.id); return !o || o.level < o.maxLevel; });
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+  let pick = shuffled.slice(0, size);
+  if (deck.length >= DECK_SIZE && !pick.some((s) => owned.has(s.id))) {
+    const up = shuffled.find((s) => owned.has(s.id));
+    if (up && pick.length) pick = [...pick.slice(0, pick.length - 1), up];
+  }
+  return pick.map((s) => ({ skill: fresh(s), levelUp: owned.has(s.id) }));
+}
+
+/** How good a draft option is for this deck (used for the highlighted pick and the auto-pick) */
+export function draftScore(skill: Skill, deck: Skill[]): number {
+  const owned = deck.find((s) => s.id === skill.id);
+  const sameFamily = deck.filter((s) => s.category === skill.category && s.id !== skill.id).length;
+  const rank = RARITY_RANK[skill.rarity] || 1;
+  if (owned) return 3 + (sameFamily >= 1 ? 1.5 : 0) + rank * 0.3 - owned.level * 0.2;
+  if (deck.length >= DECK_SIZE) return 0.5 + rank * 0.1; // would need a replacement
+  return 3.5 + rank * 0.4 + (sameFamily === 1 ? 1.5 : 0);
+}
+
+export function recommendedDraftIndex(options: { skill: Skill }[], deck: Skill[]): number {
+  let best = 0;
+  options.forEach((o, i) => { if (draftScore(o.skill, deck) > draftScore(options[best].skill, deck)) best = i; });
+  return best;
 }

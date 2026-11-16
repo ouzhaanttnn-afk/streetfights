@@ -206,6 +206,91 @@ export const SKILL_TEXT: Record<string, { name: L8; description: L8; quote: L8 }
     ],
     quote: ['"Beni görecek kadar bile hızlı değilsin."', '"Too slow to even see me."', '"Eres demasiado lento para verme."', '„Zu langsam, um mich überhaupt zu sehen.“', '« Trop lent pour même me voir. »', '"Lento demais até pra me ver."', '"Troppo lento per vedermi."', '「遅すぎて俺の姿も見えないだろ。」'],
   },
+  // Build 19: one new skill per family. Descriptions state the mechanic exactly (rules in src/core/combat.ts).
+  skill_armor_breaker: {
+    name: ['Zırh Kıran', 'Armor Breaker', 'Rompecorazas', 'Panzerbrecher', 'Brise-Armure', 'Quebra-Armadura', 'Spaccacorazze', 'アーマーブレイカー'],
+    description: [
+      'İsabet eden her vuruş rakibin savunmasını %5 düşürür (en fazla %40, dövüş boyunca).',
+      'Every landed hit lowers the opponent\'s DEF by 5% for the rest of the fight (up to 40%).',
+      'Cada golpe que acierta reduce la DEF rival un 5% durante el combate (hasta 40%).',
+      'Jeder Treffer senkt die VER des Gegners für den Rest des Kampfes um 5% (bis 40%).',
+      'Chaque coup réussi réduit la DÉF adverse de 5 % jusqu\'à la fin du combat (jusqu\'à 40 %).',
+      'Cada golpe acertado reduz a DEF do rival em 5% até o fim da luta (até 40%).',
+      'Ogni colpo a segno riduce la DIF avversaria del 5% per il resto dello scontro (fino al 40%).',
+      '攻撃が当たるたびに相手の防御を5%下げる（試合中、最大40%）。',
+    ],
+    quote: ['"Duvar dediğin, henüz vurmadığın bir kapıdır."', '"Walls are just doors you have not hit yet."', '"Un muro es una puerta que aún no golpeaste."', '„Mauern sind Türen, die du noch nicht getroffen hast.“', '« Un mur, c\'est une porte pas encore frappée. »', '"Parede é só uma porta que você ainda não bateu."', '"Un muro è solo una porta che non hai ancora colpito."', '「壁なんて、まだ殴ってない扉さ。」'],
+  },
+  skill_chain_lightning: {
+    name: ['Zincirleme Şimşek', 'Chain Lightning', 'Rayo en Cadena', 'Kettenblitz', 'Éclair en Chaîne', 'Relâmpago em Cadeia', 'Fulmine a Catena', 'チェインライトニング'],
+    description: [
+      'Kombo vuruşu %45 ihtimalle bir kombo daha yapar (en fazla iki ek vuruş).',
+      'A combo follow-up has a 45% chance to chain into another one (up to two extra hits).',
+      'Un golpe de combo tiene un 45% de encadenar otro (hasta dos golpes extra).',
+      'Ein Kombotreffer kettet mit 45% einen weiteren an (bis zu zwei Extratreffer).',
+      'Un coup de combo a 45 % de chances d\'en enchaîner un autre (jusqu\'à deux coups en plus).',
+      'Um golpe de combo tem 45% de chance de emendar outro (até dois golpes extras).',
+      'Un colpo combo ha il 45% di probabilità di concatenarne un altro (fino a due colpi extra).',
+      'コンボ追撃が45%でさらに連鎖する（最大2回追加）。',
+    ],
+    quote: ['"Bir tane daha. Hep bir tane daha."', '"One more. Always one more."', '"Uno más. Siempre uno más."', '„Noch einer. Immer noch einer.“', '« Encore un. Toujours un de plus. »', '"Mais um. Sempre mais um."', '"Ancora uno. Sempre uno in più."', '「もう一発。いつだってもう一発だ。」'],
+  },
+  skill_second_wind: {
+    name: ['İkinci Nefes', 'Second Wind', 'Segundo Aliento', 'Zweiter Atem', 'Second Souffle', 'Segundo Fôlego', 'Secondo Fiato', 'セカンドウィンド'],
+    description: [
+      'Dövüş başına bir kez: canın %25\'in altına inince azami canının %35\'ini geri kazanırsın.',
+      'Once per fight: when your HP drops below 25%, heal 35% of your max HP.',
+      'Una vez por combate: si tu vida baja del 25%, recuperas el 35% de tu vida máxima.',
+      'Einmal pro Kampf: Fallen deine LP unter 25%, heilst du 35% deiner max. LP.',
+      'Une fois par combat : sous 25 % de PV, tu récupères 35 % de tes PV max.',
+      'Uma vez por luta: abaixo de 25% de vida, recupera 35% da vida máxima.',
+      'Una volta per scontro: sotto il 25% di PV recuperi il 35% dei PV massimi.',
+      '1試合に1回：HPが25%を下回ると最大HPの35%を回復。',
+    ],
+    quote: ['"Daha değil."', '"Not yet."', '"Todavía no."', '„Noch nicht.“', '« Pas encore. »', '"Ainda não."', '"Non ancora."', '「まだだ。」'],
+  },
+  skill_sixth_sense: {
+    name: ['Altıncı His', 'Sixth Sense', 'Sexto Sentido', 'Sechster Sinn', 'Sixième Sens', 'Sexto Sentido', 'Sesto Senso', 'シックスセンス'],
+    description: [
+      'Ağır, kritik ve yüklü darbelerden %50 ihtimalle tamamen sıyrılırsın.',
+      '50% chance to slip heavy, critical and charged strikes completely.',
+      '50% de esquivar por completo golpes pesados, críticos y cargados.',
+      '50% Chance, schweren, kritischen und Ladeschlägen ganz auszuweichen.',
+      '50 % de chances d\'esquiver totalement les coups lourds, critiques et chargés.',
+      '50% de chance de escapar totalmente de golpes pesados, críticos e carregados.',
+      '50% di probabilità di schivare del tutto colpi pesanti, critici e caricati.',
+      '重い攻撃・会心・チャージ攻撃を50%で完全に回避。',
+    ],
+    quote: ['"Bunu dün gördüm zaten."', '"I saw that one yesterday."', '"Ese ya lo vi ayer."', '„Den hab ich gestern schon gesehen.“', '« Celui-là, je l\'ai vu hier. »', '"Esse eu vi ontem."', '"Quello l\'ho visto ieri."', '「その一撃は昨日見た。」'],
+  },
+  skill_grievous_bite: {
+    name: ['Kapanmayan Yara', 'Grievous Strikes', 'Golpes Desgarradores', 'Klaffende Wunden', 'Plaies Profondes', 'Golpes Dilacerantes', 'Ferite Profonde', '深手の一撃'],
+    description: [
+      'Rakibin iyileşmesi (can çalma, ısırıklar) yarıya iner.',
+      'The opponent heals only half as much (lifesteal, leech bites).',
+      'El rival se cura solo la mitad (robo de vida, mordiscos).',
+      'Der Gegner heilt nur halb so viel (Lebensraub, Blutbisse).',
+      'L\'adversaire ne se soigne qu\'à moitié (vol de vie, morsures).',
+      'O rival cura só metade (roubo de vida, mordidas).',
+      'L\'avversario si cura solo la metà (furto vita, morsi).',
+      '相手の回復量（吸血・バイト）が半分になる。',
+    ],
+    quote: ['"Sar bakalım. Hadi."', '"Patch that up. I dare you."', '"Cúrate eso. Te reto."', '„Flick das. Na los.“', '« Soigne ça. Je t\'en défie. »', '"Cura isso. Duvido."', '"Prova a ricucirla. Ti sfido."', '「治せるもんなら治してみな。」'],
+  },
+  skill_fury_engine: {
+    name: ['Öfke Motoru', 'Fury Engine', 'Motor de Furia', 'Wutmotor', 'Moteur de Rage', 'Motor da Fúria', 'Motore di Rabbia', 'フューリーエンジン'],
+    description: [
+      'Öfke barın %50 daha hızlı dolar: daha sık SÜPER.',
+      'Your rage bar fills 50% faster: more SUPER moves.',
+      'Tu barra de furia se llena un 50% más rápido: más SÚPER.',
+      'Deine Wutleiste füllt sich 50% schneller: mehr SUPER-Moves.',
+      'Ta jauge de rage se remplit 50 % plus vite : plus de SUPER.',
+      'Sua barra de fúria enche 50% mais rápido: mais SUPER.',
+      'La barra della rabbia si riempie il 50% più in fretta: più SUPER.',
+      '怒りゲージが50%速く溜まる。スーパーを多く撃てる。',
+    ],
+    quote: ['"Dürtmeye devam et. Görürsün."', '"Keep poking. See what happens."', '"Sigue provocando. Ya verás."', '„Stich ruhig weiter. Wirst schon sehen.“', '« Continue de titiller. Tu vas voir. »', '"Continua cutucando. Você vai ver."', '"Continua a provocare. Vedrai."', '「まだ突っつくか？どうなっても知らんぞ。」'],
+  },
 };
 
 // Stat labels used inside bonus templates; abbreviations match the stat panel (translations.ts stat_*).
@@ -245,6 +330,12 @@ function bonus(...parts: (string | L8)[]): L8 {
 }
 
 const COUNTER_STRIKE: L8 = ['Kontra Vuruş', 'Counter Strike', 'Contragolpe', 'Konterschlag', 'Contre-attaque', 'Contragolpe', 'Contrattacco', 'カウンター攻撃'];
+const ARMOR_BREAK: L8 = ['Zırh Kırma', 'Armor Break', 'Rompe defensa', 'Panzerbruch', 'Brise-armure', 'Quebra-armadura', 'Rompi-difesa', '防御破壊'];
+const CHAIN_COMBO: L8 = ['Zincir Kombo', 'Chain Combo', 'Combo en cadena', 'Kettenkombo', 'Combo en chaîne', 'Combo em cadeia', 'Combo a catena', '連鎖コンボ'];
+const SECOND_WIND: L8 = ['İkinci Nefes', 'Second Wind', 'Segundo aliento', 'Zweiter Atem', 'Second souffle', 'Segundo fôlego', 'Secondo fiato', '起死回生'];
+const SIXTH_SENSE: L8 = ['Altıncı His', 'Sixth Sense', 'Sexto sentido', 'Sechster Sinn', 'Sixième sens', 'Sexto sentido', 'Sesto senso', '第六感'];
+const GRIEVOUS: L8 = ['Kapanmayan Yara', 'Grievous Wounds', 'Heridas graves', 'Klaffende Wunden', 'Plaies profondes', 'Feridas graves', 'Ferite profonde', '深手'];
+const FURY: L8 = ['Öfke Motoru', 'Fury', 'Furia', 'Wut', 'Rage', 'Fúria', 'Rabbia', '激怒'];
 
 // Templates for the skill card's bonus line; placeholders are exactly the keys of each skill's statBonus.
 export const SKILL_BONUS_TEMPLATE: Record<string, L8> = {
@@ -260,6 +351,12 @@ export const SKILL_BONUS_TEMPLATE: Record<string, L8> = {
   skill_golden_curve: bonus('critRate', 'comboRate', 'atk'),
   skill_berserk_trance: bonus('atk', 'critRate', 'comboRate', '-def'),
   skill_mach_speed: bonus('spd', 'dodgeRate'),
+  skill_armor_breaker: bonus('atk', 'critRate', ARMOR_BREAK),
+  skill_chain_lightning: bonus('comboRate', 'spd', CHAIN_COMBO),
+  skill_second_wind: bonus('hp', 'def', SECOND_WIND),
+  skill_sixth_sense: bonus('dodgeRate', 'spd', SIXTH_SENSE),
+  skill_grievous_bite: bonus('lifesteal', 'atk', GRIEVOUS),
+  skill_fury_engine: bonus('atk', 'critDmg', FURY),
 };
 
 // Skill families (set bonuses). Lifesteal uses the stat name ("Can Çalma") rather than "Vampire".
@@ -408,7 +505,7 @@ export const RARITY_NAME: Record<string, L8> = {
 // WORLDS & OPPONENTS
 // ---------------------------------------------------------------------------------------------
 
-// World number 1..5 (endless loops add " ∞n" on the caller side). Turkish keeps the names from the original data.
+// World number 1..5 (each league repeats them; the league name is shown next to it). Turkish keeps the original names.
 export const WORLD_NAME: Record<number, L8> = {
   1: ['Sokak Köşesi', 'The Back Alley', 'El Callejón', 'Die Hintergasse', 'La Ruelle', 'O Beco', 'Il Vicolo', '裏路地'],
   2: ['Yeraltı Kafesi', 'The Concrete Cage', 'La Jaula de Cemento', 'Der Betonkäfig', 'La Cage de Béton', 'A Jaula de Concreto', 'La Gabbia di Cemento', 'コンクリートの檻'],

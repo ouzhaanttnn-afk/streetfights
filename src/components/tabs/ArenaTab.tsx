@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { GameStateData, gameManager } from '../../core/gameState';
 import { getStageData, getWorldName, WORLD_COUNT } from '../../core/stageDatabase';
+import { leagueOfWorld, leagueModifier, worldInLeague, WORLDS_PER_LEAGUE } from '../../core/leagues';
+import { WORLD_MECHANICS } from '../../core/combat';
+import { LeagueBadge } from '../LeagueBadge';
 import { DailyQuestsCard } from '../DailyQuestsCard';
 import { AchievementsCard } from '../AchievementsCard';
 import { Segmented } from '../Segmented';
 import { claimableRewards } from '../../core/guidance';
 import { ui } from '../../i18n/ui';
-import { opponentName, worldName } from '../../i18n/content-helpers';
+import { leagueLabel, leagueModText, opponentName, worldName } from '../../i18n/content-helpers';
 import { t } from '../../i18n/translations';
 import { 
   Trophy, 
@@ -26,13 +29,17 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
 
   const worldDescs = [1, 2, 3, 4, 5].map((n) => ui(state.lang, 'world_desc_' + n));
   const view = state.arenaView || 'stages';
-  // Worlds beyond the fifth loop endlessly with tougher opponents
-  const worldCount = Math.max(WORLD_COUNT, state.highestWorld, state.currentWorld);
-  const worlds = Array.from({ length: worldCount }, (_, i) => ({
-    num: i + 1,
-    name: worldName(i + 1, getWorldName(i + 1).replace(/\s*\(.*\)/, ''), state.lang),
-    desc: worldDescs[i % WORLD_COUNT],
-  }));
+  // Leagues: the five worlds repeat once per league (world numbers keep counting: world 6 = Silver world 1)
+  const selectedLeague = leagueOfWorld(selectedWorld);
+  const maxLeague = Math.max(state.league || 0, leagueOfWorld(state.highestWorld), leagueOfWorld(state.currentWorld));
+  const leagues = Array.from({ length: maxLeague + 2 }, (_, i) => i);
+  const worlds = Array.from({ length: WORLDS_PER_LEAGUE }, (_, i) => {
+    const num = selectedLeague * WORLDS_PER_LEAGUE + i + 1;
+    return { num, rel: i + 1, name: worldName(num, getWorldName(num).replace(/\s*\(.*\)/, ''), state.lang), desc: worldDescs[i % WORLD_COUNT] };
+  });
+  const selected = worlds[worldInLeague(selectedWorld) - 1];
+  const mod = leagueModifier(selectedWorld);
+  const bossMech = WORLD_MECHANICS[worldInLeague(selectedWorld) - 1];
 
   const highestTotal = (state.highestWorld - 1) * 10 + state.highestSubStage;
 
@@ -78,6 +85,27 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
         </span>
       </button>
 
+      {/* League selector (Bronze ... Legend) */}
+      <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar" data-league-tabs>
+        {leagues.map((lg) => {
+          const unlocked = lg <= maxLeague;
+          const active = lg === selectedLeague;
+          return (
+            <button
+              key={lg}
+              disabled={!unlocked}
+              onClick={() => setSelectedWorld(lg === leagueOfWorld(state.currentWorld) ? state.currentWorld : lg * WORLDS_PER_LEAGUE + 1)}
+              className={`min-h-10 px-3 rounded-2xl shrink-0 flex items-center gap-1.5 border text-[11px] font-black active:scale-95 ${
+                active ? 'bg-white/10 border-white/40 text-white' : unlocked ? 'game-card border-white/10 text-zinc-300' : 'bg-neutral-950/80 border-zinc-900 text-zinc-600'
+              }`}
+            >
+              {unlocked ? <LeagueBadge league={lg} lang={state.lang} compact /> : <Lock className="w-3.5 h-3.5" />}
+              <span>{leagueLabel(lg, state.lang)}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* World Selector Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
         {worlds.map((w) => {
@@ -101,7 +129,7 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
               ) : (
                 <Trophy className={`w-3.5 h-3.5 ${isSelected ? 'text-black' : 'text-amber-400'}`} />
               )}
-              <span>{t('world', state.lang)} {w.num}</span>
+              <span>{t('world', state.lang)} {w.rel}</span>
             </button>
           );
         })}
@@ -111,11 +139,22 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
       <div className="game-card rounded-3xl p-4 shadow-2xl border border-white/10">
         <h3 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
           <Trophy className="w-4 h-4 text-amber-400" />
-          <span>{t('world', state.lang)} {selectedWorld}: {worlds[selectedWorld - 1].name}</span>
+          <span>{t('world', state.lang)} {selected.rel}: {selected.name}</span>
         </h3>
         <p className="text-[11px] text-zinc-400 mt-1 font-medium">
-          {worlds[selectedWorld - 1].desc}
+          {selected.desc}
         </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-black">
+          <LeagueBadge league={selectedLeague} lang={state.lang} />
+          <span className="px-1.5 py-px rounded-md bg-rose-950/70 border border-rose-500/40 text-rose-200 uppercase">
+            {t('boss', state.lang)}: {ui(state.lang, 'boss_mech_' + bossMech)}
+          </span>
+          {mod && (
+            <span className="px-1.5 py-px rounded-md bg-black/60 border border-white/15 text-zinc-200" data-league-mod={mod.id}>
+              {ui(state.lang, 'league_twist')}: {leagueModText(mod, state.lang)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 10 Sub-stages List */}
@@ -146,7 +185,7 @@ export const ArenaTab: React.FC<ArenaTabProps> = ({ state }) => {
                       ? 'game-btn-gold text-black border-amber-300'
                       : 'bg-neutral-900 border-white/15 text-zinc-300'
                 }`}>
-                  {stageData.isBoss ? <Skull className="w-6 h-6 text-white drop-shadow" /> : `${selectedWorld}-${subNum}`}
+                  {stageData.isBoss ? <Skull className="w-6 h-6 text-white drop-shadow" /> : `${selected.rel}-${subNum}`}
                 </div>
 
                 <div>

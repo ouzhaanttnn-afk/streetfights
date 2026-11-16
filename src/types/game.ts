@@ -120,7 +120,14 @@ export interface Stage {
   coinReward: number;
   gemReward: number;
   xpReward: number;
+  /** Signature boss mechanic (docs/PLAN_BUILD_19.md B2). Bosses and sub-bosses only; strength 1 = boss, <1 = sub-boss.
+   *  Strings: ui keys `boss_mech_<id>` (name) and `boss_mech_<id>_hint` (one-line counter tip). */
+  bossMechanic?: { id: BossMechanicId; strength: number };
+  /** League index (0 = Bronze) once the world loop is formalised (PLAN_BUILD_19.md C1). */
+  league?: number;
 }
+
+export type BossMechanicId = 'enrage' | 'leech' | 'evade' | 'shell' | 'charged';
 
 export interface GymTraining {
   id: string;

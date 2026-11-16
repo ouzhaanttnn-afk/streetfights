@@ -25,6 +25,11 @@
   (the robot uses them when present; its log line shows which key ran). Never ask the owner to paste keys into the chat.
 - Development branch: `claude/stoic-clarke-qjgg6b`. Do not open pull requests unless asked.
 
+## Next work
+- **`docs/PLAN_BUILD_19.md`** (2026-11-16): the owner asked for a visual + gameplay upgrade and wants the improved
+  build sent to review. Implement its P0 packages in order, then follow its section 7 to upload and submit.
+  Version 1.0 (build 18) was still WAITING_FOR_REVIEW on 2026-11-16.
+
 ## Status (2026-11-04)
 - 2026-11-04 15:29 UTC: version 1.0 with build 18 is WAITING_FOR_REVIEW. Build 17 had gone to Invalid Binary right after
   submission (`NSPrivacyTracking` true with no tracking domains); build 18 fixes the privacy manifest only.

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { GameStateData, gameManager } from './core/gameState';
 import { HeaderNav } from './components/HeaderNav';
 import { BattleCanvas } from './components/BattleCanvas';
-import { StatBar } from './components/StatBar';
 import { BottomNav } from './components/BottomNav';
 import { FighterTab } from './components/tabs/FighterTab';
 import { GymTab } from './components/tabs/GymTab';
@@ -20,8 +19,6 @@ import { TutorialHint } from './components/TutorialHint';
 import { NextStepCard } from './components/NextStepCard';
 import { BossBonusCard, BuffOfferCard, NotifyAskCard } from './components/OfferCards';
 import { ToastStack } from './components/ToastStack';
-import { getStageData } from './core/stageDatabase';
-import { fightOdds } from './core/combat';
 import { ui } from './i18n/ui';
 import { Stage } from './types/game';
 
@@ -122,17 +119,8 @@ export function App() {
           />
 
           {/* 2. Top Half: 2.5D Combat Canvas Viewport */}
+          {/* (The POWER / stats chip lives in the fight's HUD overlay since build 19) */}
           <BattleCanvas state={state} onVictory={handleStageVictory} reviveToken={reviveToken} paused={isBattlePaused} />
-
-          {/* 3. Mid Section: Real-time Stats Strip */}
-          <StatBar
-            stats={state.playerFighter.stats}
-            lang={state.lang}
-            odds={(() => {
-              const opp = getStageData(state.currentWorld, state.currentSubStage).opponent;
-              return fightOdds(state.playerFighter.stats, opp.stats, opp.profile);
-            })()}
-          />
         </div>
 
         {/* Scrollable Center: Only Interactive Tab Views Scroll */}

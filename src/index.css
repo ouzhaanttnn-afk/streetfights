@@ -16,6 +16,11 @@
   }
 }
 
+/* The fight view: about 40% of the screen on normal phones. Names and HP bars are an overlay inside it. */
+.battle-viewport {
+  height: clamp(190px, 40dvh, 360px);
+}
+
 /* Keep every game action reachable on short phones and landscape screens. */
 @media (max-height: 700px) {
   .app-shell {
@@ -38,13 +43,9 @@
     transform: translateX(-50%);
   }
 
-  /* Small phones (iPhone SE): a shorter fight view and slimmer cards leave room for the tabs */
+  /* Small phones (iPhone SE): a shorter fight view (the HUD is inside it) leaves room for the first tab card */
   .app-shell .battle-viewport {
-    height: clamp(128px, 24dvh, 160px);
-  }
-  .app-shell .stat-bar {
-    padding-top: 2px;
-    padding-bottom: 2px;
+    height: clamp(180px, 36dvh, 250px);
   }
   .app-shell [data-next-step] {
     min-height: 36px;
@@ -362,3 +363,54 @@
   border-radius: 9999px;
 }
 
+
+/* Fight HUD overlay: names + HP bars on top of the 3D scene, fighting-game style */
+.battle-hud {
+  background: linear-gradient(180deg, rgba(3, 4, 8, 0.82) 0%, rgba(3, 4, 8, 0.55) 70%, rgba(3, 4, 8, 0) 100%);
+}
+
+/* Boss intro VS card (1.5 s at 1x; --vs-dur is shortened at 2x / 4x). Static under reduced motion. */
+.vs-card .vs-bg {
+  background:
+    linear-gradient(100deg, rgba(7, 33, 56, 0.97) 0%, rgba(7, 33, 56, 0.93) 47%, rgba(251, 191, 36, 0.95) 49.5%, rgba(251, 191, 36, 0.95) 50.5%, rgba(70, 6, 24, 0.93) 53%, rgba(70, 6, 24, 0.97) 100%);
+}
+.vs-anim {
+  animation: vs-card-life var(--vs-dur) linear both;
+}
+.vs-anim .vs-left {
+  animation: vs-in-left var(--vs-dur) cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+.vs-anim .vs-right {
+  animation: vs-in-right var(--vs-dur) cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+.vs-anim .vs-mark {
+  animation: vs-slam var(--vs-dur) cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+.vs-anim .vs-foot {
+  animation: vs-foot var(--vs-dur) ease-out both;
+}
+@keyframes vs-card-life {
+  0% { opacity: 0; }
+  7% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes vs-in-left {
+  0% { transform: translateX(-115%); }
+  24% { transform: translateX(0); }
+  100% { transform: translateX(-3%); }
+}
+@keyframes vs-in-right {
+  0% { transform: translateX(115%); }
+  24% { transform: translateX(0); }
+  100% { transform: translateX(3%); }
+}
+@keyframes vs-slam {
+  0%, 18% { transform: scale(2.6) rotate(-8deg); opacity: 0; }
+  32% { transform: scale(0.92) rotate(2deg); opacity: 1; }
+  40%, 100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes vs-foot {
+  0%, 30% { transform: translateY(8px); opacity: 0; }
+  42%, 100% { transform: translateY(0); opacity: 1; }
+}

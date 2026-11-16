@@ -207,6 +207,9 @@ const S: Record<string, string[]> = {
   off_earn: ['AFK kazancı', 'AFK earnings', 'Ganancias AFK', 'AFK-Gewinn', 'Gains AFK', 'Ganhos AFK', 'Guadagni AFK', '放置報酬'],
   off_claim: ['AL', 'CLAIM', 'COBRAR', 'ABHOLEN', 'PRENDRE', 'PEGAR', 'PRENDI', '受取'],
   off_double: ['REKLAMLA 2X', '2X WITH AD', '2X CON ANUNCIO', '2X MIT WERBUNG', '2X AVEC PUB', '2X COM ANÚNCIO', '2X CON ANNUNCIO', '広告で2倍'],
+  // Build 19 (P0-A): boss intro VS card
+  vs_signature: ['İmza hamlesi', 'Signature move', 'Movimiento estrella', 'Spezialtechnik', 'Coup signature', 'Golpe especial', 'Mossa speciale', '得意技'],
+  tap_skip: ['Geçmek için dokun', 'Tap to skip', 'Toca para saltar', 'Tippen zum Überspringen', 'Touche pour passer', 'Toque para pular', 'Tocca per saltare', 'タップでスキップ'],
 };
 
 export function ui(lang: Language, key: string, vars?: Record<string, string | number>): string {

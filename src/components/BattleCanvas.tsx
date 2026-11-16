@@ -3,7 +3,7 @@ import { FloatingText, OpponentProfile, Stage } from '../types/game';
 import { GameStateData, gameManager } from '../core/gameState';
 import { soundFx } from '../core/audio';
 import { haptics } from '../core/haptics';
-import { battleRig, FighterCmd } from '../game/battleRig';
+import { battleRig, CineKind, FighterCmd } from '../game/battleRig';
 import { impactTime } from '../game/fighter3d/clips';
 import { opponentAppearance, playerAppearance } from '../game/appearance';
 import { t } from '../i18n/translations';
@@ -13,6 +13,9 @@ import { opponentName, opponentTitle, skillName, stageLabel } from '../i18n/cont
 import { DAMAGE_MULT, damageMult, fightOdds, opponentInterval, playerInterval } from '../core/combat';
 import confetti from 'canvas-confetti';
 import { Hand, Shield, Tv, Zap } from 'lucide-react';
+import { StatBar } from './StatBar';
+import { FitText } from './FitText';
+import { BossIntroCard } from './BossIntroCard';
 
 const BattleScene3D = lazy(() => import('./BattleScene3D').then((module) => ({ default: module.BattleScene3D })));
 
@@ -44,8 +47,19 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   // Idle game: in auto mode a boss defeat retries by itself after a short countdown
   const [retryIn, setRetryIn] = useState<number | null>(null);
   const [comboStreak, setComboStreak] = useState<number>(0);
-  const [bossIntro, setBossIntro] = useState<boolean>(false);
-  const introTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Running cinematic (boss intro VS card / SUPER / KO), mirrored from battleRig for the overlays
+  const [cine, setCine] = useState<{ kind: CineKind; dur: number } | null>(null);
+  useEffect(() => battleRig.onCine(() => setCine(battleRig.cine ? { kind: battleRig.cine.kind, dur: battleRig.cine.dur } : null)), []);
+  // Height of the HUD overlay, so the 3D camera frames the fighters below it
+  const hudRef = useRef<HTMLDivElement | null>(null);
+  const [hudH, setHudH] = useState(56);
+  useEffect(() => {
+    const el = hudRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHudH(Math.round(el.offsetHeight)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [manualAttackReady, setManualAttackReady] = useState(false);
   const [guardReady, setGuardReady] = useState(true);
   const [isGuarding, setIsGuarding] = useState(false);
@@ -172,26 +186,39 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     battleRig.command('player', 'idle', { instant: true });
     battleRig.command('opp', 'idle', { instant: true });
 
-    // Boss tutorial beat: show a short intro and hold both fighters' first strikes
-    if (introTimerRef.current !== null) clearTimeout(introTimerRef.current);
-    if (stage.isBoss) {
-      setBossIntro(true);
-      playerCooldownRef.current = 1900;
-      opponentCooldownRef.current = 2100;
-      soundFx.playWhistle();
-      introTimerRef.current = setTimeout(() => {
-        introTimerRef.current = null;
-        setBossIntro(false);
-      }, 1700);
-    } else {
-      setBossIntro(false);
-    }
+    // Boss fight: VS card first (the fight clock waits while it shows)
+    if (stage.isBoss) soundFx.playWhistle();
+    cueBossIntro(stage);
   };
 
   useEffect(() => () => {
     if (resultTimerRef.current !== null) clearTimeout(resultTimerRef.current);
-    if (introTimerRef.current !== null) clearTimeout(introTimerRef.current);
+    battleRig.skipCine();
   }, []);
+
+  // --- Cinematic hooks (build 19) -------------------------------------------------------------
+  // They only start a camera moment. The fight loop multiplies its clock by battleRig.tickCine(), so cooldowns,
+  // scheduled impacts and animations slow down (or wait) together and the fight never desyncs.
+  const cueBossIntro = (stage: Stage) => {
+    if (stage.isBoss) battleRig.startCine('boss_intro', 'opp', state.battleSpeed);
+    else battleRig.skipCine();
+  };
+  const cueSuper = () => battleRig.startCine('super', 'player', state.battleSpeed);
+  const cueKo = (winner: 'player' | 'opp') => battleRig.startCine('ko', winner, state.battleSpeed);
+  // Dev builds only: lets scripts (e2e, store screenshots) fill the SUPER gauge; auto mode fires it on its next swing
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { __fight?: object }).__fight = {
+      fillRage: () => {
+        playerRageRef.current = 100;
+        setPlayerRageDisplay(100);
+      },
+    };
+  }, []);
+  // Tap on the fight skips a SUPER / KO moment (the VS card has its own tap target)
+  const skipMoment = () => {
+    if (battleRig.cine && battleRig.cine.kind !== 'boss_intro') battleRig.skipCine();
+  };
 
   const addFloatingText = (text: string, x: number, y: number, color: string, type: FloatingText['type'] = 'damage') => {
     // Stack numbers that spawn close together in time and place instead of drawing them on top of each other
@@ -281,7 +308,10 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
       attackType: isSpecialRage ? 'special' : move === 'kick' ? 'kick' : 'punch',
     };
     battleRig.command('player', move);
-    if (isSpecialRage) soundFx.playSuperCharge();
+    if (isSpecialRage) {
+      soundFx.playSuperCharge();
+      cueSuper();
+    }
     schedule(impactTime(move), () => resolvePlayerAttack(isSpecialRage, isCrit, move));
   };
 
@@ -602,6 +632,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     isGuardingRef.current = false;
     setIsGuarding(false);
     setMatchStatus('victory');
+    cueKo('player');
     battleRig.command('player', 'victory');
     soundFx.playVictoryFanfare();
     addCallout(ui(state.lang, 'c_ko'), 160, 75, '#fbbf24', 5);
@@ -635,6 +666,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
     isGuardingRef.current = false;
     setIsGuarding(false);
     setMatchStatus('defeat');
+    cueKo('opp');
     battleRig.command('opp', 'victory');
     soundFx.playKnockdown();
     addFloatingText(t('knockout', state.lang), 160, 90, '#ef4444', 'crit');
@@ -721,8 +753,12 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
         isHitStopActive = true;
       }
 
-      const simDt = isHitStopActive || paused ? 0 : dt * state.battleSpeed;
-      battleRig.timeScale = simDt === 0 ? 0 : state.battleSpeed;
+      // Cinematics scale the fight clock (0 during the VS card, slower during SUPER / KO)
+      const cineScale = battleRig.tickCine(paused ? 0 : dt);
+      const frozen = isHitStopActive || paused;
+      const simDt = frozen ? 0 : dt * state.battleSpeed * cineScale;
+      // Idle animations keep breathing behind the VS card
+      battleRig.timeScale = frozen ? 0 : state.battleSpeed * (battleRig.cine?.kind === 'boss_intro' ? 1 : cineScale);
 
       // Fire animation-synced impacts whose time has come
       if (isMatchOverRef.current) {
@@ -1349,93 +1385,24 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
   const oppStats = currentStageData.opponent.stats;
   const playerHpPct = Math.max(0, Math.min(100, (playerHpDisplay / pStats.maxHp) * 100));
   const oppHpPct = Math.max(0, Math.min(100, (opponentHpDisplay / oppStats.maxHp) * 100));
+  const lang = state.lang;
+  const oppDisplayName = opponentName(currentStageData.opponent.name, lang);
+  // How the fight should go (expected time-to-kill on both sides): tells the player when to upgrade first
+  const difficulty = difficultyOf(fightOdds(state.playerFighter.stats, currentStageData.opponent.stats, currentStageData.opponent.profile));
+  // The boss's signature move for the VS card (the name comes from the boss mechanic data, when the stage has one)
+  const mechId = currentStageData.bossMechanic?.id;
+  const mechName = mechId && ui(lang, 'boss_mech_' + mechId) !== 'boss_mech_' + mechId ? ui(lang, 'boss_mech_' + mechId) : null;
+  const pLook = state.playerFighter.avatarStyle;
+  const oLook = currentStageData.opponent.avatarStyle;
 
   return (
     <div className="relative w-full bg-[#06070a] flex flex-col border-b border-white/10 select-none">
-      {/* Top Combat HUD with Frosted Titanium Panel */}
-      <div className="px-3 pt-3 pb-2.5 bg-gradient-to-b from-[#10121a]/95 to-[#08090e]/95 backdrop-blur-md border-b border-white/10 flex items-center justify-between text-xs z-20 shadow-lg">
-        {/* Player Header Info */}
-        <div className="flex-1 min-w-0 pr-1.5">
-          <div className="flex items-center justify-between font-black text-zinc-100 truncate">
-            <span className="truncate tracking-wide text-xs">{state.playerFighter.name}</span>
-            <span className="text-[10px] text-amber-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-amber-500/30">★ Lv.{state.playerLevel}</span>
-          </div>
-          
-          {/* Angled Modern HP Gauge */}
-          <div className="relative w-full h-4 bg-black/80 rounded-xl overflow-hidden mt-1 border border-emerald-500/40 shadow-inner p-0.5">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-300 rounded-lg transition-all duration-150 ease-out shadow-sm shadow-emerald-400/50"
-              style={{ width: `${playerHpPct}%` }}
-            />
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-              {playerHpDisplay} / {pStats.maxHp}
-            </span>
-          </div>
-
-          {/* Electric Rage Bar */}
-          <div className="relative w-full h-1.5 bg-black/80 rounded-full overflow-hidden mt-1 border border-amber-500/30">
-            <div
-              className={`h-full transition-all duration-150 ${
-                playerRageDisplay >= 100 
-                  ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 animate-pulse shadow-sm shadow-amber-400' 
-                  : 'bg-gradient-to-r from-amber-600 to-amber-500'
-              }`}
-              style={{ width: `${playerRageDisplay}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Center Stage VS Badge */}
-        <div className="flex shrink-0 flex-col items-center px-1">
-          <span className="font-black text-[12px] bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent drop-shadow font-mono tracking-tight">
-            {stageLabel(currentStageData.world, currentStageData.subStage, state.lang)}
-          </span>
-          <div className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-lg ${
-            currentStageData.isBoss 
-              ? 'game-btn-crimson text-white animate-pulse border border-rose-400' 
-              : 'bg-neutral-900 text-zinc-300 border border-white/15'
-          }`}>
-            {currentStageData.isBoss ? t('boss', state.lang) : t('vs', state.lang)}
-          </div>
-        </div>
-
-        {/* Opponent Header Info */}
-        <div className="flex-1 min-w-0 pl-1.5 text-right">
-          <div className="flex items-center justify-between font-black text-zinc-100 truncate flex-row-reverse">
-            <span className="truncate tracking-wide text-xs">{opponentName(currentStageData.opponent.name, state.lang)}</span>
-            <span className="text-[10px] text-rose-400 font-mono font-bold bg-black/50 px-1.5 py-0.2 rounded border border-rose-500/30 mr-1">★ Lv.{currentStageData.opponent.level}</span>
-          </div>
-
-          {/* Opponent HP Gauge */}
-          <div className="relative w-full h-4 bg-black/80 rounded-xl overflow-hidden mt-1 border border-rose-500/40 shadow-inner p-0.5">
-            <div
-              className="h-full bg-gradient-to-r from-rose-600 via-rose-500 to-red-400 rounded-lg transition-all duration-150 ease-out float-right shadow-sm shadow-rose-500/50"
-              style={{ width: `${oppHpPct}%` }}
-            />
-            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-              {opponentHpDisplay} / {oppStats.maxHp}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-end gap-1.5 mt-1 min-w-0">
-            {(() => {
-              // How the fight should go (expected time-to-kill on both sides): tells the player when to upgrade first
-              const d = difficultyOf(fightOdds(state.playerFighter.stats, currentStageData.opponent.stats, currentStageData.opponent.profile));
-              return (
-                <span className={`shrink-0 px-1.5 rounded bg-black/60 border text-[10px] font-black tracking-wider ${d[1]}`}>
-                  {ui(state.lang, d[0])}
-                </span>
-              );
-            })()}
-            <span className="shrink-0 px-1.5 rounded bg-black/60 border border-white/15 text-[10px] font-black tracking-wider text-zinc-300 uppercase">
-              {ui(state.lang, 'p_' + currentStageData.opponent.profile)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2.5D Hybrid WebGL Viewport */}
-      <div className="battle-viewport arena-backdrop relative w-full flex justify-center overflow-hidden h-[clamp(148px,28dvh,215px)]" data-environment={currentStageData.environment}>
+      {/* Fight view: the 3D scene with the HUD (names, HP, power) as an overlay on top */}
+      <div
+        className="battle-viewport arena-backdrop relative w-full flex justify-center overflow-hidden"
+        data-environment={currentStageData.environment}
+        onPointerDown={skipMoment}
+      >
         <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/45 via-transparent to-sky-950/20" />
         {/* 1. 3D WebGL Arena Backdrop */}
         <Suspense fallback={null}>
@@ -1445,6 +1412,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             screenShakeRef={screenShakeRef}
             player={playerAppearance(state.playerFighter)}
             opponent={opponentAppearance(currentStageData)}
+            hudTop={hudH}
           />
         </Suspense>
 
@@ -1456,27 +1424,96 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
           className="w-full h-full block object-contain z-10"
         />
 
-        {/* Fight controls: battle speed + auto/manual */}
-        <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5">
-          <button
-            type="button"
-            data-speed
-            onClick={() => gameManager.cycleBattleSpeed()}
-            className="min-h-8 px-2.5 rounded-full bg-black/75 border border-amber-400/40 text-[10px] font-black font-mono text-amber-300 shadow-lg backdrop-blur-md active:scale-95 flex items-center gap-0.5"
-            aria-label={ui(state.lang, 'aria_speed')}
-          >
-            <Zap className="w-3 h-3" />
-            {state.battleSpeed}X
-          </button>
-          <button
-            type="button"
-            data-auto-toggle
-            onClick={() => gameManager.toggleAutoBattle()}
-            className="min-h-8 px-2.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wider text-white shadow-lg backdrop-blur-md active:scale-95"
-            aria-label={ui(state.lang, state.autoBattle ? 'aria_to_manual' : 'aria_to_auto')}
-          >
-            {ui(state.lang, state.autoBattle ? 'auto_btn' : 'manual_btn')}
-          </button>
+        {/* 3. HUD overlay: player left, stage + fight controls centre, opponent right. One grid, so both HP bars
+            stay on the same line when a long name wraps. */}
+        <div ref={hudRef} className="battle-hud absolute inset-x-0 top-0 z-30 px-2 pt-1.5 pb-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-x-1.5 gap-y-[3px] pointer-events-none">
+          {/* Row 1: names + levels, stage */}
+          <div className="min-w-0 flex items-end gap-1" data-hud-player>
+            <span className="shrink-0 mb-[1px] px-1 rounded bg-black/60 border border-amber-500/40 text-[9px] leading-[12px] font-black text-amber-300 tabular-nums">{state.playerLevel}</span>
+            <FitText text={state.playerFighter.name} max={12} oneLineMin={10} min={9} className="min-w-0 flex-1 font-black text-zinc-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]" />
+          </div>
+          <span className="justify-self-center text-[11px] leading-none font-black text-amber-300 tabular-nums whitespace-nowrap drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">
+            {stageLabel(currentStageData.world, currentStageData.subStage, lang)}
+          </span>
+          <div className="min-w-0 flex items-end justify-end gap-1 text-right" data-hud-opponent>
+            <FitText text={oppDisplayName} max={12} oneLineMin={10} min={8.5} className="min-w-0 flex-1 font-black text-zinc-50 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]" />
+            <span className="shrink-0 mb-[1px] px-1 rounded bg-black/60 border border-rose-500/40 text-[9px] leading-[12px] font-black text-rose-300 tabular-nums">{currentStageData.opponent.level}</span>
+          </div>
+
+          {/* Row 2: HP bars (+ the player's SUPER gauge), boss badge */}
+          <div className="min-w-0 self-start flex flex-col gap-[3px]">
+            <div className="relative w-full h-[15px] bg-black/80 rounded-md overflow-hidden border border-emerald-400/50 p-[2px]">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-teal-300 rounded-[3px] transition-all duration-150 ease-out"
+                style={{ width: `${playerHpPct}%` }}
+              />
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                {playerHpDisplay} / {pStats.maxHp}
+              </span>
+            </div>
+            <div className="relative w-full h-[5px] bg-black/80 rounded-full overflow-hidden border border-amber-500/30">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  playerRageDisplay >= 100
+                    ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 animate-pulse'
+                    : 'bg-gradient-to-r from-amber-600 to-amber-500'
+                }`}
+                style={{ width: `${playerRageDisplay}%` }}
+              />
+            </div>
+          </div>
+          <div className="self-start justify-self-center">
+            {currentStageData.isBoss && (
+              <span className="block px-2 rounded-md text-[9px] leading-[14px] font-black uppercase tracking-wider game-btn-crimson text-white border border-rose-400">
+                {t('boss', lang)}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 self-start">
+            <div className="relative w-full h-[15px] bg-black/80 rounded-md overflow-hidden border border-rose-500/50 p-[2px]">
+              <div
+                className="h-full bg-gradient-to-r from-rose-600 via-rose-500 to-red-400 rounded-[3px] transition-all duration-150 ease-out float-right"
+                style={{ width: `${oppHpPct}%` }}
+              />
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                {opponentHpDisplay} / {oppStats.maxHp}
+              </span>
+            </div>
+          </div>
+
+          {/* Row 3: power / stats, battle speed + auto/manual, rival difficulty + style */}
+          <div className="min-w-0 self-start">
+            <StatBar stats={state.playerFighter.stats} lang={lang} />
+          </div>
+          <div className="self-start flex items-center gap-1 pointer-events-auto">
+            <button
+              type="button"
+              data-speed
+              onClick={() => gameManager.cycleBattleSpeed()}
+              className="h-6 px-1.5 rounded-full bg-black/75 border border-amber-400/40 text-[10px] font-black font-mono text-amber-300 shadow-lg active:scale-95 flex items-center justify-center gap-0.5"
+              aria-label={ui(lang, 'aria_speed')}
+            >
+              <Zap className="w-3 h-3" />
+              {state.battleSpeed}X
+            </button>
+            <button
+              type="button"
+              data-auto-toggle
+              onClick={() => gameManager.toggleAutoBattle()}
+              className="h-6 px-1.5 rounded-full bg-black/75 border border-white/20 text-[10px] font-black tracking-wide text-white shadow-lg active:scale-95 whitespace-nowrap"
+              aria-label={ui(lang, state.autoBattle ? 'aria_to_manual' : 'aria_to_auto')}
+            >
+              {ui(lang, state.autoBattle ? 'auto_btn' : 'manual_btn')}
+            </button>
+          </div>
+          <div className="min-w-0 self-start flex flex-wrap items-center justify-end gap-1">
+            <span className={`shrink-0 px-1 rounded-md bg-black/70 border text-[9px] leading-[16px] font-black tracking-wide ${difficulty[1]}`}>
+              {ui(lang, difficulty[0])}
+            </span>
+            <span className="shrink-0 px-1 rounded-md bg-black/70 border border-white/15 text-[9px] leading-[16px] font-black tracking-wide text-zinc-300 uppercase">
+              {ui(lang, 'p_' + currentStageData.opponent.profile)}
+            </span>
+          </div>
         </div>
 
         {isGuarding && !state.autoBattle && (
@@ -1491,7 +1528,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               disabled={!guardReady || paused}
               className="min-h-11 px-3 rounded-xl border border-cyan-300/60 bg-cyan-950/90 text-cyan-100 shadow-lg flex items-center gap-1.5 text-xs font-black disabled:opacity-45 active:scale-95"
             >
-              <Shield className="w-4 h-4" /> {ui(state.lang, 'guard_btn')}
+              <Shield className="w-4 h-4" /> {ui(lang, 'guard_btn')}
             </button>
             <button
               type="button"
@@ -1499,25 +1536,35 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               disabled={!manualAttackReady || paused}
               className="min-h-11 px-4 rounded-xl game-btn-crimson border border-rose-300/70 text-white shadow-lg flex items-center gap-1.5 text-xs font-black disabled:opacity-45 active:scale-95"
             >
-              <Hand className="w-4 h-4" /> {ui(state.lang, 'hit_btn')}
+              <Hand className="w-4 h-4" /> {ui(lang, 'hit_btn')}
             </button>
           </div>
         )}
 
-        {/* Boss intro banner */}
-        {bossIntro && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-b from-black/70 via-rose-950/55 to-black/70 animate-fadeIn">
-            <span className="text-[11px] font-black tracking-[0.35em] text-rose-300">{ui(state.lang, 'boss_fight')}</span>
-            <span className="mt-1 text-2xl font-black italic text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">{opponentName(currentStageData.opponent.name, state.lang)}</span>
-            <span className="text-[11px] font-bold text-amber-300">{opponentTitle(currentStageData.opponent.name, currentStageData.opponent.title, state.lang)}</span>
-          </div>
+        {/* Boss intro: VS card (tap to skip) */}
+        {cine?.kind === 'boss_intro' && currentStageData.isBoss && (
+          <BossIntroCard
+            lang={lang}
+            durationMs={cine.dur}
+            reducedMotion={battleRig.reducedMotion}
+            stage={stageLabel(currentStageData.world, currentStageData.subStage, lang)}
+            player={{ name: state.playerFighter.name, level: state.playerLevel, look: pLook }}
+            boss={{
+              name: oppDisplayName,
+              level: currentStageData.opponent.level,
+              title: opponentTitle(currentStageData.opponent.name, currentStageData.opponent.title, lang),
+              look: oLook,
+            }}
+            mechanic={mechName}
+            onSkip={() => battleRig.skipCine()}
+          />
         )}
 
-        {/* Combo Streak Multiplier Badge */}
+        {/* Combo Streak Multiplier Badge (under the player's HUD) */}
         {comboStreak > 1 && (
-          <div className="absolute top-2.5 left-3 px-2.5 py-1 rounded-xl bg-black/75 border border-amber-400 text-[11px] font-black text-amber-300 shadow-xl flex items-center gap-1.5 z-20 backdrop-blur-sm">
+          <div className="absolute left-2 px-2 py-0.5 rounded-lg bg-black/75 border border-amber-400 text-[11px] font-black text-amber-300 shadow-xl flex items-center gap-1 z-20" style={{ top: hudH + 2 }}>
             <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span className="tabular-nums">x{comboStreak} {ui(state.lang, 'c_combo')}</span>
+            <span className="tabular-nums">x{comboStreak} {ui(lang, 'c_combo')}</span>
           </div>
         )}
 
@@ -1528,29 +1575,28 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
             className={`absolute left-2 bottom-2 px-3.5 min-h-11 game-btn-gold text-black font-black text-xs rounded-xl shadow-2xl active:scale-95 transition-transform flex items-center gap-1.5 shine-effect z-30 border border-amber-300/80`}
           >
             <Zap className="w-4 h-4 text-black" />
-            <span>{t('superMove', state.lang)}</span>
+            <span>{t('superMove', lang)}</span>
           </button>
         )}
 
-        {/* Revive with Ad in Boss Fights */}
         {/* Boss defeat: why it happened, what to do, and an optional ad revive. Auto mode retries by itself. */}
         {showReviveAd && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/60 px-6 text-center">
-            <span className="text-2xl font-black italic text-rose-500 drop-shadow-2xl">{t('knockout', state.lang)}</span>
-            <span className="text-[11px] font-bold text-zinc-100">{ui(state.lang, 'defeat_hint')}</span>
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/60 px-6 text-center" style={{ paddingTop: hudH }}>
+            <span className="text-2xl font-black italic text-rose-500 drop-shadow-2xl">{t('knockout', lang)}</span>
+            <span className="text-[11px] font-bold text-zinc-100">{ui(lang, 'defeat_hint')}</span>
             <div className="flex items-center gap-2 mt-1">
               <button
                 data-retry
                 onClick={() => resetBattle(stageRef.current)}
                 className="min-h-11 px-4 rounded-2xl game-btn-gold text-black font-black text-xs active:scale-95"
               >
-                {ui(state.lang, 'retry')}{retryIn !== null ? ` (${retryIn})` : ''}
+                {ui(lang, 'retry')}{retryIn !== null ? ` (${retryIn})` : ''}
               </button>
               <button
                 onClick={() => gameManager.setActiveTab('gym')}
                 className="min-h-11 px-4 rounded-2xl bg-black/80 text-zinc-100 font-black text-xs border border-white/25 active:scale-95"
               >
-                {ui(state.lang, 'go_gym')}
+                {ui(lang, 'go_gym')}
               </button>
             </div>
             <button
@@ -1558,29 +1604,29 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
               className="mt-1 min-h-11 px-4 rounded-2xl bg-rose-950/80 text-rose-100 font-black text-xs border border-rose-400/60 flex items-center gap-1.5 active:scale-95"
             >
               <Tv className="w-4 h-4" />
-              <span>{t('adRevive', state.lang)}</span>
+              <span>{t('adRevive', lang)}</span>
             </button>
           </div>
         )}
 
-        {/* Match Result Overlay */}
+        {/* Match Result Overlay (light, so the winner pose stays visible) */}
         {matchStatus !== 'fighting' && !showReviveAd && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-6 text-center" style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.7) 100%)' }}>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-6 text-center" style={{ paddingTop: hudH, background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.55) 100%)' }}>
             <span className={`result-slam text-3xl font-black italic tracking-wider drop-shadow-2xl ${
-              matchStatus === 'victory' 
-                ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent' 
+              matchStatus === 'victory'
+                ? 'bg-gradient-to-r from-amber-300 via-yellow-200 to-orange-400 bg-clip-text text-transparent'
                 : 'text-rose-500'
             }`}>
-              {matchStatus === 'victory' ? (currentStageData.isBoss ? t('bossDefeated', state.lang) : t('victory', state.lang)) : t('knockout', state.lang)}
+              {matchStatus === 'victory' ? (currentStageData.isBoss ? t('bossDefeated', lang) : t('victory', lang)) : t('knockout', lang)}
             </span>
             {matchStatus === 'defeat' && (
               <>
-                <span className="mt-1.5 text-[11px] font-bold text-zinc-200">{ui(state.lang, 'defeat_hint')}</span>
+                <span className="mt-1.5 text-[11px] font-bold text-zinc-200">{ui(lang, 'defeat_hint')}</span>
                 <button
                   onClick={() => gameManager.setActiveTab('gym')}
                   className="pointer-events-auto mt-2 min-h-9 px-4 rounded-xl game-btn-gold text-black text-[11px] font-black active:scale-95"
                 >
-                  {ui(state.lang, 'go_gym')}
+                  {ui(lang, 'go_gym')}
                 </button>
               </>
             )}

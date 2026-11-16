@@ -4,6 +4,7 @@ import { t } from '../i18n/translations';
 import { ui } from '../i18n/ui';
 import { useIslandLayout } from '../core/useIslandLayout';
 import { FitText } from './FitText';
+import { LeagueBadge } from './LeagueBadge';
 import { Coins, Gem, Settings, Gift, ChevronRight } from 'lucide-react';
 
 interface HeaderNavProps {
@@ -107,7 +108,10 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({ state, onOpenSettings }) =
         <LevelRing level={state.playerLevel} pct={xpPct} size={30} />
         <div className="flex flex-col justify-center min-w-0 w-[118px] leading-none">
           <FitText text={state.playerFighter.name} max={11} oneLineMin={9} min={8.5} className="font-black text-zinc-100" />
-          <span className="text-[10px] font-bold tabular-nums text-amber-400 mt-0.5">XP {xpPct}%</span>
+          <span className="flex items-center gap-1 mt-0.5">
+            <LeagueBadge league={state.league || 0} lang={state.lang} compact />
+            <span className="text-[10px] font-bold tabular-nums text-amber-400">XP {xpPct}%</span>
+          </span>
         </div>
         <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
       </button>

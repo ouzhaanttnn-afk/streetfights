@@ -24,7 +24,8 @@ const PITCH = 0.045; // camera height above the look-at point per unit of distan
 
 // Finds the closest camera (distance d, look-at height) that keeps both fighters below the HUD overlay and the arena
 // sign in frame, inside small side and bottom margins. The sign should sit below the HUD too; when that would push
-// the camera back by more than 12% (short screens), it may sit behind the HUD's see-through gradient instead.
+// the camera back by more than 20% (short screens such as the iPhone SE), it may sit behind the HUD's see-through
+// gradient instead.
 // Runs on resize only.
 function frameCamera(cam: THREE.PerspectiveCamera, w: number, h: number, hudTop: number, sign: Arena['sign']) {
   const top = 1 - (2 * (hudTop + 4)) / h;
@@ -79,7 +80,7 @@ function frameCamera(cam: THREE.PerspectiveCamera, w: number, h: number, hudTop:
   };
   const strict = search(top);
   const loose = search(screenTop);
-  return strict.d <= loose.d * 1.12 ? strict : loose;
+  return strict.d <= loose.d * 1.2 ? strict : loose;
 }
 
 export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef, player, opponent, hudTop = 56 }) => {

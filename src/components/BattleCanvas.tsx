@@ -1475,7 +1475,7 @@ export const BattleCanvas: React.FC<BattleCanvasProps> = ({ state, onVictory, re
                 className="h-full bg-gradient-to-r from-rose-600 via-rose-500 to-red-400 rounded-[3px] transition-all duration-150 ease-out float-right"
                 style={{ width: `${oppHpPct}%` }}
               />
-              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              <span data-hp="opp" className="absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
                 {opponentHpDisplay} / {oppStats.maxHp}
               </span>
             </div>

@@ -22,54 +22,64 @@ const FOV = 34;
 const FIGHT_BOX = { x: 1.62, y0: 0.0, y1: 2.45, z: 0.35 };
 const PITCH = 0.045; // camera height above the look-at point per unit of distance (a slight top-down view)
 
-// Finds the closest camera (distance d, look-at height) that keeps both fighters and the arena sign inside the
-// free part of the view: below the HUD overlay, inside small side and bottom margins. Runs on resize only.
+// Finds the closest camera (distance d, look-at height) that keeps both fighters below the HUD overlay and the arena
+// sign in frame, inside small side and bottom margins. The sign should sit below the HUD too; when that would push
+// the camera back by more than 12% (short screens), it may sit behind the HUD's see-through gradient instead.
+// Runs on resize only.
 function frameCamera(cam: THREE.PerspectiveCamera, w: number, h: number, hudTop: number, sign: Arena['sign']) {
   const top = 1 - (2 * (hudTop + 4)) / h;
+  const screenTop = 1 - (2 * 3) / h;
   const bottom = -1 + (2 * 4) / h;
   const side = 1 - (2 * 6) / w;
-  const pts: THREE.Vector3[] = [];
+  const fighters: THREE.Vector3[] = [];
   for (const x of [-FIGHT_BOX.x, FIGHT_BOX.x]) {
     for (const y of [FIGHT_BOX.y0, FIGHT_BOX.y1]) {
-      for (const z of [-FIGHT_BOX.z, FIGHT_BOX.z]) pts.push(new THREE.Vector3(x, y, z));
+      for (const z of [-FIGHT_BOX.z, FIGHT_BOX.z]) fighters.push(new THREE.Vector3(x, y, z));
     }
   }
-  if (sign) {
-    pts.push(new THREE.Vector3(sign.x0, sign.y0, sign.z), new THREE.Vector3(sign.x1, sign.y1, sign.z));
-    pts.push(new THREE.Vector3(sign.x0, sign.y1, sign.z), new THREE.Vector3(sign.x1, sign.y0, sign.z));
-  }
+  const signPts = sign
+    ? [new THREE.Vector3(sign.x0, sign.y0, sign.z), new THREE.Vector3(sign.x1, sign.y1, sign.z), new THREE.Vector3(sign.x0, sign.y1, sign.z), new THREE.Vector3(sign.x1, sign.y0, sign.z)]
+    : [];
   const probe = cam.clone();
   probe.aspect = w / h;
   probe.fov = FOV;
   probe.updateProjectionMatrix();
   const v = new THREE.Vector3();
-  const fits = (d: number, lookY: number) => {
-    probe.position.set(0, lookY + d * PITCH, d);
-    probe.lookAt(0, lookY, 0);
-    probe.updateMatrixWorld();
+  const inside = (pts: THREE.Vector3[], maxY: number) => {
     for (const p of pts) {
       v.copy(p).project(probe);
-      if (v.x < -side || v.x > side || v.y < bottom || v.y > top) return false;
+      if (v.x < -side || v.x > side || v.y < bottom || v.y > maxY) return false;
     }
     return true;
   };
-  let best = { d: 9, lookY: 1.4 };
-  let bestD = Infinity;
-  for (let lookY = 0.9; lookY <= 2.3; lookY += 0.05) {
-    let lo = 3;
-    let hi = 18;
-    if (!fits(hi, lookY)) continue;
-    for (let i = 0; i < 22; i++) {
-      const mid = (lo + hi) / 2;
-      if (fits(mid, lookY)) hi = mid;
-      else lo = mid;
+  const search = (signTop: number) => {
+    const fits = (d: number, lookY: number) => {
+      probe.position.set(0, lookY + d * PITCH, d);
+      probe.lookAt(0, lookY, 0);
+      probe.updateMatrixWorld();
+      return inside(fighters, top) && inside(signPts, signTop);
+    };
+    let best = { d: 9, lookY: 1.4 };
+    let bestD = Infinity;
+    for (let lookY = 0.9; lookY <= 2.3; lookY += 0.05) {
+      let lo = 3;
+      let hi = 18;
+      if (!fits(hi, lookY)) continue;
+      for (let i = 0; i < 22; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid, lookY)) hi = mid;
+        else lo = mid;
+      }
+      if (hi < bestD) {
+        bestD = hi;
+        best = { d: hi, lookY };
+      }
     }
-    if (hi < bestD) {
-      bestD = hi;
-      best = { d: hi, lookY };
-    }
-  }
-  return best;
+    return best;
+  };
+  const strict = search(top);
+  const loose = search(screenTop);
+  return strict.d <= loose.d * 1.12 ? strict : loose;
 }
 
 export const BattleScene3D: React.FC<BattleScene3DProps> = ({ environment, screenShakeRef, player, opponent, hudTop = 56 }) => {

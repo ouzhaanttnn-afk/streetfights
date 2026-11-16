@@ -315,6 +315,57 @@ const ready = (p) => p.waitForFunction(() => { try { return JSON.parse(localStor
     ok('malformed save loads (no white screen, no errors)', await p.locator('nav button').count() === 4 && errs.length === 0, errs.join('|'));
     await b.close();
   }
+  // ---- 12. Build 19 fight view: HUD overlay, VS card, SUPER / KO moments stay in sync with the fight clock
+  {
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage(); const errs=[]; p.on('pageerror', e=>errs.push(e.message));
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'de', lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, currentWorld:4, currentSubStage:10, highestWorld:4, highestSubStage:10, playerLevel:30, battleSpeed:1 })); }, today());
+    await p.goto(URL); await ready(p);
+    await p.waitForSelector('[data-boss-intro]', { timeout: 15000 }).catch(() => {});
+    // Hold the card and check that nobody is hit while it shows
+    const held = await p.evaluate(async () => {
+      const r = window.__battleRig; if (!r.cine) return { ok: false };
+      r.cine.dur = 1e9;
+      const hp = () => document.querySelector('[data-hud-opponent]')?.parentElement?.textContent;
+      const before = hp(); await new Promise((res) => setTimeout(res, 1500));
+      return { ok: r.cine?.kind === 'boss_intro', same: hp() === before };
+    });
+    ok('boss VS card shows and pauses the fight clock', held.ok && held.same, JSON.stringify(held));
+    await p.locator('[data-boss-intro]').click({ force: true }); await p.waitForTimeout(400);
+    ok('VS card is skipped by a tap', await p.locator('[data-boss-intro]').count() === 0 && await p.evaluate(() => window.__battleRig.cine === null));
+    // HUD overlay: names not cut off on a 375 pt screen
+    const cut = await p.evaluate(() => [...document.querySelectorAll('.battle-hud span, header span')].filter((e) => !e.children.length && (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 2)).map((e) => e.textContent));
+    ok('fight HUD and header show full names at 375 pt (de)', cut.length === 0, cut.join('|'));
+    // SUPER: the cinematic runs and its hit still lands (opponent HP drops right after it)
+    const sup = await p.evaluate(async () => {
+      const r = window.__battleRig; const seen = [];
+      const until = performance.now() + 12000;
+      while (performance.now() < until && !seen.includes('super')) { window.__fight.fillRage(); if (r.cine) seen.push(r.cine.kind); await new Promise((res) => setTimeout(res, 16)); }
+      const hpText = () => document.querySelector('[data-hp=opp]')?.textContent || '';
+      const before = hpText();
+      const t0 = performance.now(); while (r.cine?.kind === 'super' && performance.now() - t0 < 3000) await new Promise((res) => setTimeout(res, 16));
+      await new Promise((res) => setTimeout(res, 250));
+      return { seen: seen.includes('super'), dur: Math.round(performance.now() - t0), changed: hpText() !== before };
+    });
+    ok('SUPER cinematic plays (~0.8 s at 1x) and its hit lands', sup.seen && sup.changed && sup.dur < 2500, JSON.stringify(sup));
+    ok('no page errors in the build 19 fight view', errs.length === 0, errs.join('|'));
+    await b.close();
+  }
+  {
+    // Reduced motion: static VS card, no SUPER cinematic
+    const b = await chromium.launch({ args: GL });
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const p = await ctx.newPage();
+    await p.addInitScript((d) => { localStorage.setItem('street_striker_rpg_save_v2', JSON.stringify({ lang:'en', reducedMotion:true, lastDailyLoginDate:d, dailyLoginStreak:1, claimedDailyDays:[1], tutorialStep:99, currentWorld:1, currentSubStage:10, highestWorld:1, highestSubStage:10, playerLevel:30, battleSpeed:1 })); }, today());
+    await p.goto(URL); await ready(p);
+    const card = await p.waitForSelector('[data-boss-intro]', { timeout: 15000 }).then(() => true).catch(() => false);
+    ok('reduced motion: VS card is a static card', card && await p.locator('[data-boss-intro].vs-anim').count() === 0);
+    await p.locator('[data-boss-intro]').click({ force: true }).catch(() => {});
+    const r = await p.evaluate(async () => { let sup = false; const until = performance.now() + 6000; while (performance.now() < until) { window.__fight.fillRage(); if (window.__battleRig.cine?.kind === 'super') sup = true; await new Promise((res) => setTimeout(res, 16)); } return sup; });
+    ok('reduced motion: no SUPER cinematic', r === false);
+    await b.close();
+  }
   // ---- 10. Dynamic Island: header splits left/right of the island, nothing under it; notch phones keep the classic header
   for (const [w, h, top, island] of [[393, 852, 59, true], [402, 874, 62, true], [390, 844, 47, false]]) {
     const b = await chromium.launch({ args: GL });

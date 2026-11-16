@@ -12,7 +12,7 @@
 - Apple rejected build 8 for simulated gambling: no wheels, loot boxes or paid random rewards.
 
 ## How to verify
-- Dev server: `npm run dev -- --port 5199`; e2e: `NODE_PATH=$(npm root -g) node scripts/e2e.cjs` (103 checks, all must pass).
+- Dev server: `npm run dev -- --port 5199`; e2e: `NODE_PATH=$(npm root -g) node scripts/e2e.cjs` (110 checks, all must pass).
 - Balance: `node scripts/run-balance-sim.mjs` (see `docs/BALANCE.md`).
 - Store screenshots: `scripts/store-screenshots.cjs` -> `store/screenshots/<lang>/<65|69>`.
 
